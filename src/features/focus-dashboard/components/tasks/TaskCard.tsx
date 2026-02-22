@@ -60,7 +60,7 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteT
           <p className="mt-1 truncate text-xs text-slate-400">{task.details}</p>
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl bg-slate-950/25 p-1 ring-1 ring-inset ring-slate-800/45 backdrop-blur-sm">
+        <div className="flex items-center gap-1 rounded-xl bg-slate-950/20 p-1 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.28)] backdrop-blur-sm">
           <button
             aria-label={`Play ${task.title}`}
             className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
@@ -100,7 +100,7 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteT
             <span>{task.duration}</span>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 rounded-md bg-slate-950/35 px-2 py-1 text-xs text-slate-300 ring-1 ring-inset ring-slate-800/50">
+          <div className="inline-flex items-center gap-1.5 rounded-md bg-slate-950/25 px-2 py-1 text-xs text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]">
             <FontAwesomeIcon className="text-[10px] text-slate-400" icon={faListOl} />
             <span className="font-semibold tabular-nums text-slate-200">{sessionCount}</span>
             <span className="text-[10px] uppercase tracking-wide text-slate-400">sessions</span>
