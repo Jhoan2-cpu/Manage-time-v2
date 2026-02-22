@@ -10,9 +10,18 @@ type TaskCarouselProps = {
   sessionCountByTaskId: Record<string, number>
   onAddTask: () => void
   onPlayTask?: (task: Task) => void
+  onEditTask?: (task: Task) => void
+  onDeleteTask?: (task: Task) => void
 }
 
-export function TaskCarousel({ tasks, sessionCountByTaskId, onAddTask, onPlayTask }: TaskCarouselProps) {
+export function TaskCarousel({
+  tasks,
+  sessionCountByTaskId,
+  onAddTask,
+  onPlayTask,
+  onEditTask,
+  onDeleteTask,
+}: TaskCarouselProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -179,6 +188,8 @@ export function TaskCarousel({ tasks, sessionCountByTaskId, onAddTask, onPlayTas
               {tasks.map((task) => (
                 <div className="snap-start" key={task.id}>
                   <TaskCard
+                    onDeleteTask={onDeleteTask}
+                    onEditTask={onEditTask}
                     onPlayTask={onPlayTask}
                     sessionCount={sessionCountByTaskId[task.id] ?? 0}
                     task={task}

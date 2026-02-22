@@ -2,7 +2,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { taskColorOptions, taskIconOptions } from '../../constants/taskOptions'
-import type { TaskColorKey, TaskIconKey } from '../../types'
+import type { Task, TaskColorKey, TaskIconKey } from '../../types'
 import { classNames } from '../../utils/classNames'
 
 export type NewTaskPayload = {
@@ -16,6 +16,7 @@ type NewTaskModalProps = {
   isOpen: boolean
   onClose: () => void
   onCreateTask: (payload: NewTaskPayload) => void
+  editingTask?: Task | null
 }
 
 const defaultColorTag: TaskColorKey = taskColorOptions[0]?.id ?? 'blue'
@@ -24,7 +25,7 @@ const defaultIconTag: TaskIconKey = taskIconOptions[0]?.id ?? 'briefcase'
 const fieldClassName =
   'w-full rounded-lg border border-slate-700/90 bg-slate-900/55 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-blue-400/70 focus:ring-2 focus:ring-blue-500/20'
 
-export function NewTaskModal({ isOpen, onClose, onCreateTask }: NewTaskModalProps) {
+export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null }: NewTaskModalProps) {
   const titleId = useId()
   const detailsId = useId()
 
@@ -38,11 +39,19 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask }: NewTaskModalProp
       return
     }
 
+    if (editingTask) {
+      setTitle(editingTask.title)
+      setDetails(editingTask.details)
+      setIconTag(editingTask.iconTag)
+      setColorTag(editingTask.colorTag)
+      return
+    }
+
     setTitle('')
     setDetails('')
     setIconTag(defaultIconTag)
     setColorTag(defaultColorTag)
-  }, [isOpen])
+  }, [editingTask, isOpen])
 
   useEffect(() => {
     if (!isOpen) {
@@ -69,6 +78,7 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask }: NewTaskModalProp
     return null
   }
 
+  const isEditing = editingTask !== null
   const canSubmit = title.trim().length > 0
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -101,7 +111,7 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask }: NewTaskModalProp
         <form onSubmit={handleSubmit}>
           <header className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
             <h2 className="text-2xl font-semibold tracking-tight text-slate-100" id="new-task-modal-title">
-              New Task
+              {isEditing ? 'Edit Task' : 'New Task'}
             </h2>
             <button
               aria-label="Close modal"
@@ -212,7 +222,7 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask }: NewTaskModalProp
               disabled={!canSubmit}
               type="submit"
             >
-              Create Task
+              {isEditing ? 'Save Changes' : 'Create Task'}
             </button>
           </footer>
         </form>

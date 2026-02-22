@@ -14,6 +14,8 @@ type TaskCardProps = {
   task: Task
   sessionCount: number
   onPlayTask?: (task: Task) => void
+  onEditTask?: (task: Task) => void
+  onDeleteTask?: (task: Task) => void
 }
 
 const taskStateStyles: Record<TaskState, { shell: string }> = {
@@ -28,7 +30,7 @@ const taskStateStyles: Record<TaskState, { shell: string }> = {
   },
 }
 
-export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
+export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteTask }: TaskCardProps) {
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
@@ -70,6 +72,7 @@ export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
           <button
             aria-label={`Edit ${task.title}`}
             className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-800/80 hover:text-blue-300"
+            onClick={() => onEditTask?.(task)}
             type="button"
           >
             <FontAwesomeIcon className="text-[11px]" icon={faPenToSquare} />
@@ -77,6 +80,7 @@ export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
           <button
             aria-label={`Delete ${task.title}`}
             className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-800/80 hover:text-red-300"
+            onClick={() => onDeleteTask?.(task)}
             type="button"
           >
             <FontAwesomeIcon className="text-[11px]" icon={faTrashCan} />

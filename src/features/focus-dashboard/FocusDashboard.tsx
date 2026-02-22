@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
+import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModal'
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
@@ -14,6 +15,8 @@ import { formatMinutesCompact, parseDurationLabelToMinutes } from './utils/time'
 export function FocusDashboard() {
   const [taskList, setTaskList] = useState<Task[]>(tasks)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [taskPendingDelete, setTaskPendingDelete] = useState<Task | null>(null)
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
   )
@@ -47,12 +50,31 @@ export function FocusDashboard() {
     : '0M'
 
   const handleAddTask = () => {
+    setEditingTask(null)
     setIsNewTaskModalOpen(true)
   }
   const handleCloseNewTaskModal = () => {
     setIsNewTaskModalOpen(false)
+    setEditingTask(null)
   }
   const handleCreateTask = ({ title, details, colorTag, iconTag }: NewTaskPayload) => {
+    if (editingTask) {
+      setTaskList((currentTasks) =>
+        currentTasks.map((task) =>
+          task.id === editingTask.id
+            ? {
+                ...task,
+                title,
+                details: details || 'No details yet',
+                colorTag,
+                iconTag,
+              }
+            : task,
+        ),
+      )
+      return
+    }
+
     const createdAtLabel = new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -71,6 +93,43 @@ export function FocusDashboard() {
       },
       ...currentTasks,
     ])
+  }
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task)
+    setIsNewTaskModalOpen(true)
+  }
+  const handleRequestDeleteTask = (task: Task) => {
+    setTaskPendingDelete(task)
+  }
+  const handleCloseDeleteTaskModal = () => {
+    setTaskPendingDelete(null)
+  }
+  const handleConfirmDeleteTask = () => {
+    if (!taskPendingDelete) {
+      return
+    }
+
+    setTaskList((currentTasks) => {
+      const remainingTasks = currentTasks.filter((task) => task.id !== taskPendingDelete.id)
+
+      if (remainingTasks.length === 0) {
+        return remainingTasks
+      }
+
+      const hasActiveTask = remainingTasks.some((task) => task.state === 'active')
+      if (hasActiveTask) {
+        return remainingTasks
+      }
+
+      const [firstTask, ...rest] = remainingTasks
+      return [{ ...firstTask, state: 'active' }, ...rest]
+    })
+
+    if (editingTask?.id === taskPendingDelete.id) {
+      setIsNewTaskModalOpen(false)
+      setEditingTask(null)
+    }
+    setTaskPendingDelete(null)
   }
   const handleOpenSettings = () => undefined
   const handleStartFocus = () => undefined
@@ -124,6 +183,8 @@ export function FocusDashboard() {
           <div className="mx-auto flex w-full flex-1 flex-col px-4 pb-8 pt-5 md:px-6">
             <TaskCarousel
               onAddTask={handleAddTask}
+              onDeleteTask={handleRequestDeleteTask}
+              onEditTask={handleEditTask}
               onPlayTask={handlePlayTask}
               sessionCountByTaskId={sessionCountByTaskId}
               tasks={taskList}
@@ -164,9 +225,16 @@ export function FocusDashboard() {
       </button>
 
       <NewTaskModal
+        editingTask={editingTask}
         isOpen={isNewTaskModalOpen}
         onClose={handleCloseNewTaskModal}
         onCreateTask={handleCreateTask}
+      />
+      <DeleteTaskConfirmModal
+        isOpen={taskPendingDelete !== null}
+        onClose={handleCloseDeleteTaskModal}
+        onConfirm={handleConfirmDeleteTask}
+        task={taskPendingDelete}
       />
     </div>
   )
