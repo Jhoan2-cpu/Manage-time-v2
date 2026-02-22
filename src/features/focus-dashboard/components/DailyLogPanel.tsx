@@ -1,8 +1,7 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
-import { AmbientSoundPanel } from './AmbientSoundPanel'
 import { taskIconMap } from '../constants/taskOptions'
-import type { LogEntry, LogTone, SoundOption, Task, TaskColorKey } from '../types'
+import type { LogEntry, LogTone, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
 
 type DailyLogPanelProps = {
@@ -10,11 +9,6 @@ type DailyLogPanelProps = {
   tasks: Task[]
   totalTracked: string
   isOpen: boolean
-  sounds: SoundOption[]
-  selectedSoundId: string
-  isAmbientPlaying: boolean
-  onSoundSelect: (soundId: string) => void
-  onToggleAmbientPlayback: () => void
 }
 
 const logToneStyles: Record<LogTone, { row: string; time: string; duration: string; activity: string; icon: string }> = {
@@ -98,88 +92,84 @@ export function DailyLogPanel({
   tasks,
   totalTracked,
   isOpen,
-  sounds,
-  selectedSoundId,
-  isAmbientPlaying,
-  onSoundSelect,
-  onToggleAmbientPlayback,
 }: DailyLogPanelProps) {
   const taskMap = new Map(tasks.map((task) => [task.id, task]))
 
   return (
     <aside
       className={classNames(
-        'hidden shrink-0 overflow-hidden bg-[#050d1d]/85 transition-[width,opacity,transform,border-color] duration-300 ease-out xl:flex xl:flex-col',
-        isOpen
-          ? 'w-[340px] border-r border-slate-800 opacity-100'
-          : 'pointer-events-none w-0 -translate-x-3 border-r border-transparent opacity-0',
+        'z-40 overflow-hidden xl:relative xl:shrink-0',
+        'fixed inset-x-0 bottom-0 top-16 max-h-none xl:static xl:inset-auto xl:bottom-auto xl:max-h-none',
+        'transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+        isOpen ? 'pointer-events-auto xl:w-[340px]' : 'pointer-events-none xl:w-0',
       )}
     >
-      <div className="border-b border-slate-800 px-4 py-4">
-        <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-100">
-          <FontAwesomeIcon className="text-slate-300" icon={faClockRotateLeft} />
-          Daily Log
-        </h2>
-        <div className="mt-4 grid grid-cols-12 gap-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          <span className="col-span-3">Start</span>
-          <span className="col-span-3 text-center">Duration</span>
-          <span className="col-span-6">Activity</span>
+      <div
+        className={classNames(
+          'flex h-full flex-col border border-slate-800 bg-[#050d1d]/95 shadow-[0_24px_60px_rgba(1,8,22,0.55)] backdrop-blur will-change-transform',
+          'rounded-none xl:h-full xl:w-[340px] xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:border-slate-800 xl:bg-[#050d1d] xl:shadow-none xl:backdrop-blur-0',
+          'transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+          isOpen ? 'translate-x-0 translate-y-0 xl:translate-x-0' : '-translate-x-[10%] translate-y-[104%] xl:-translate-x-full xl:translate-y-0',
+        )}
+      >
+        <div className="border-b border-slate-800 px-4 py-4">
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-100">
+            <FontAwesomeIcon className="text-slate-300" icon={faClockRotateLeft} />
+            Daily Log
+          </h2>
+          <div className="mt-4 grid grid-cols-12 gap-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <span className="col-span-3">Start</span>
+            <span className="col-span-3 text-center">Duration</span>
+            <span className="col-span-6">Activity</span>
+          </div>
         </div>
-      </div>
 
-      <div className="app-scroll flex-1 space-y-1 overflow-y-auto p-4">
-        {entries.map((entry) => {
-          const task = entry.taskId ? taskMap.get(entry.taskId) : undefined
-          const styles = task ? taskLogColorStyles[task.colorTag] : logToneStyles[entry.tone ?? 'default']
-          const taskIcon = task ? taskIconMap[task.iconTag] : undefined
-          const activityLabel = task?.title ?? entry.activity ?? 'Unknown Activity'
+        <div className="app-scroll flex-1 space-y-1 overflow-y-auto p-4">
+          {entries.map((entry) => {
+            const task = entry.taskId ? taskMap.get(entry.taskId) : undefined
+            const styles = task ? taskLogColorStyles[task.colorTag] : logToneStyles[entry.tone ?? 'default']
+            const taskIcon = task ? taskIconMap[task.iconTag] : undefined
+            const activityLabel = task?.title ?? entry.activity ?? 'Unknown Activity'
 
-          return (
-            <article
-              className={classNames('grid grid-cols-12 items-center gap-2 rounded-lg p-2 text-xs', styles.row)}
-              key={entry.id}
-            >
-              <span className={classNames('col-span-3 font-mono tabular-nums', styles.time)}>{entry.start}</span>
-              <span
-                className={classNames(
-                  'col-span-3 rounded py-0.5 text-center font-medium tabular-nums',
-                  styles.duration,
-                )}
+            return (
+              <article
+                className={classNames('grid grid-cols-12 items-center gap-2 rounded-lg p-2 text-xs', styles.row)}
+                key={entry.id}
               >
-                {entry.duration}
-              </span>
-              <span className={classNames('col-span-6 flex min-w-0 items-center gap-2', styles.activity)}>
-                {taskIcon ? (
-                  <span
-                    className={classNames(
-                      'grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[10px]',
-                      styles.icon,
-                    )}
-                  >
-                    <FontAwesomeIcon icon={taskIcon.icon} />
-                  </span>
-                ) : null}
-                <span className="truncate">{activityLabel}</span>
-              </span>
-            </article>
-          )
-        })}
-      </div>
+                <span className={classNames('col-span-3 font-mono tabular-nums', styles.time)}>{entry.start}</span>
+                <span
+                  className={classNames(
+                    'col-span-3 rounded py-0.5 text-center font-medium tabular-nums',
+                    styles.duration,
+                  )}
+                >
+                  {entry.duration}
+                </span>
+                <span className={classNames('col-span-6 flex min-w-0 items-center gap-2', styles.activity)}>
+                  {taskIcon ? (
+                    <span
+                      className={classNames(
+                        'grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[10px]',
+                        styles.icon,
+                      )}
+                    >
+                      <FontAwesomeIcon icon={taskIcon.icon} />
+                    </span>
+                  ) : null}
+                  <span className="truncate">{activityLabel}</span>
+                </span>
+              </article>
+            )
+          })}
+        </div>
 
-      <div className="border-t border-slate-800 bg-[#040b18] px-4 py-3">
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <span>Total Tracked</span>
-          <span className="font-mono font-medium tabular-nums text-slate-300">{totalTracked}</span>
+        <div className="border-t border-slate-800 bg-[#040b18] px-4 py-3">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Total Tracked</span>
+            <span className="font-mono font-medium tabular-nums text-slate-300">{totalTracked}</span>
+          </div>
         </div>
       </div>
-
-      <AmbientSoundPanel
-        isPlaying={isAmbientPlaying}
-        onSoundSelect={onSoundSelect}
-        onTogglePlayback={onToggleAmbientPlayback}
-        selectedSoundId={selectedSoundId}
-        sounds={sounds}
-      />
     </aside>
   )
 }

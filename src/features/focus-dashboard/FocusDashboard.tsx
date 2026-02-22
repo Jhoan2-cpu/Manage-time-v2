@@ -6,7 +6,7 @@ import { FocusHeader } from './components/FocusHeader'
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
-import { dashboardStats, logEntries, soundOptions, tasks, timerPreset } from './data/mockData'
+import { dashboardStats, logEntries, tasks, timerPreset } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
 import type { Task } from './types'
 import { formatMinutesCompact, parseDurationLabelToMinutes } from './utils/time'
@@ -14,9 +14,9 @@ import { formatMinutesCompact, parseDurationLabelToMinutes } from './utils/time'
 export function FocusDashboard() {
   const [taskList, setTaskList] = useState<Task[]>(tasks)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
-  const [isDailyLogOpen, setIsDailyLogOpen] = useState(true)
-  const [selectedSoundId, setSelectedSoundId] = useState(soundOptions[0]?.id ?? '')
-  const [isAmbientPlaying, setIsAmbientPlaying] = useState(true)
+  const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
+  )
 
   const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime()
   const sessionCountByTaskId = useMemo(() => {
@@ -93,9 +93,6 @@ export function FocusDashboard() {
   const handleToggleDailyLog = () => {
     setIsDailyLogOpen((current) => !current)
   }
-  const handleToggleAmbientPlayback = () => {
-    setIsAmbientPlaying((current) => !current)
-  }
 
   return (
     <div className="min-h-screen bg-[#060e1d] text-slate-100">
@@ -106,15 +103,19 @@ export function FocusDashboard() {
         utcOffsetLabel={utcOffsetLabel}
       />
 
-      <main className="flex h-screen pt-16">
+      {isDailyLogOpen ? (
+        <button
+          aria-label="Close Daily Log overlay"
+          className="fixed inset-0 top-16 z-30 bg-[#020814]/55 backdrop-blur-[2px] xl:hidden"
+          onClick={handleToggleDailyLog}
+          type="button"
+        />
+      ) : null}
+
+      <main className="flex h-[100svh] min-h-[100svh] pt-16">
         <DailyLogPanel
           entries={logEntries}
-          isAmbientPlaying={isAmbientPlaying}
           isOpen={isDailyLogOpen}
-          onSoundSelect={setSelectedSoundId}
-          onToggleAmbientPlayback={handleToggleAmbientPlayback}
-          selectedSoundId={selectedSoundId}
-          sounds={soundOptions}
           tasks={taskList}
           totalTracked={dashboardStats.totalTracked}
         />
@@ -139,7 +140,18 @@ export function FocusDashboard() {
 
       <button
         aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
-        className="fixed top-1/2 z-40 hidden h-12 w-9 -translate-y-1/2 place-items-center rounded-r-xl border border-l-0 border-slate-700/80 bg-[#0a1427]/95 text-slate-300 shadow-[0_10px_30px_rgba(1,8,22,0.45)] transition hover:border-blue-500/40 hover:text-blue-300 xl:grid"
+        className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#0a1427]/95 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden"
+        onClick={handleToggleDailyLog}
+        type="button"
+      >
+        <FontAwesomeIcon className="text-[12px] text-slate-300" icon={faClockRotateLeft} />
+        <span className="font-medium">{isDailyLogOpen ? 'Hide Log' : 'Daily Log'}</span>
+        <FontAwesomeIcon className="text-[10px]" icon={isDailyLogOpen ? faChevronLeft : faChevronRight} />
+      </button>
+
+      <button
+        aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
+        className="fixed top-1/2 z-40 hidden h-12 w-9 -translate-y-1/2 place-items-center rounded-r-xl border border-l-0 border-slate-700/80 bg-[#0a1427]/95 text-slate-300 shadow-[0_10px_30px_rgba(1,8,22,0.45)] transition-[left,border-color,color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-blue-500/40 hover:text-blue-300 xl:grid"
         onClick={handleToggleDailyLog}
         style={{ left: isDailyLogOpen ? 340 : 0 }}
         title={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
