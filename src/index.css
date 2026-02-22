@@ -1,0 +1,120 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import "tailwindcss";
+
+:root {
+  font-family: "Inter", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #e2e8f0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, #0d1b38 0%, rgba(13, 27, 56, 0) 30%),
+    radial-gradient(circle at top right, #0b1833 0%, rgba(11, 24, 51, 0) 30%),
+    #060e1d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.app-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #2f3b53 transparent;
+}
+
+.app-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.app-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-scroll::-webkit-scrollbar-thumb {
+  background: #2f3b53;
+  border-radius: 999px;
+}
+
+.app-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3c4d6a;
+}
+
+.task-carousel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #2c4f8e #091426;
+}
+
+.task-carousel-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+
+.task-carousel-scroll::-webkit-scrollbar-track {
+  background: #091426;
+  border-radius: 999px;
+}
+
+.task-carousel-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #24457a, #3779f1);
+  border-radius: 999px;
+  border: 2px solid #091426;
+}
+
+.task-carousel-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #2f5ba0, #4f8fff);
+}
+
+.progress-ring__circle {
+  transform-origin: 50% 50%;
+  transform: rotate(-90deg);
+  transition: stroke-dashoffset 0.35s ease;
+}
+
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-overlay-animate {
+  animation: modal-fade 180ms ease-out;
+}
+
+.modal-card-animate {
+  animation: modal-pop 230ms cubic-bezier(0.16, 1, 0.3, 1);
+}
