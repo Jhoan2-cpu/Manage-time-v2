@@ -91,8 +91,8 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
 
   return (
     <>
-      <div className="mb-8 flex justify-center">
-        <div className="w-full max-w-[760px] rounded-[28px] border border-slate-800/80 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.05),transparent_45%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))] px-4 py-6 sm:px-8 sm:py-8">
+      <div className="mb-8 flex min-h-0 flex-1 justify-center">
+        <div className="flex h-full w-full flex-col rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.05),transparent_45%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))] px-4 py-6 sm:px-8 sm:py-8">
           <div className="flex justify-center">
             <div className="flex max-w-full items-center gap-3 sm:gap-4">
               <span
@@ -122,7 +122,7 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
             </div>
           </div>
 
-          <div className="relative mt-5 flex flex-col items-center justify-center py-6 sm:py-8">
+          <div className="relative mt-5 flex flex-1 flex-col items-center justify-center py-6 sm:py-8">
             <div className={classNames('absolute inset-x-6 top-1/2 h-24 -translate-y-1/2 rounded-full blur-3xl sm:h-32', accents.blurClassName)} />
 
             <p
