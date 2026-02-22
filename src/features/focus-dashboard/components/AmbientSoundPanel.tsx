@@ -1,62 +1,173 @@
+import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faVolumeHigh } from '@fortawesome/free-solid-svg-icons'
+import {
+  faBackwardStep,
+  faForwardStep,
+  faPause,
+  faPlay,
+} from '@fortawesome/free-solid-svg-icons'
 import type { SoundOption } from '../types'
 import { classNames } from '../utils/classNames'
 
 type AmbientSoundPanelProps = {
   sounds: SoundOption[]
   selectedSoundId: string
-  volume: number
+  isPlaying: boolean
   onSoundSelect: (soundId: string) => void
-  onVolumeChange: (volume: number) => void
+  onTogglePlayback: () => void
 }
 
 export function AmbientSoundPanel({
   sounds,
   selectedSoundId,
-  volume,
+  isPlaying,
   onSoundSelect,
-  onVolumeChange,
+  onTogglePlayback,
 }: AmbientSoundPanelProps) {
+  const [playbackProgress, setPlaybackProgress] = useState(28)
+  const selectedIndex = Math.max(
+    0,
+    sounds.findIndex((sound) => sound.id === selectedSoundId),
+  )
+  const selectedSound = sounds[selectedIndex] ?? sounds[0]
+  const trackDurationSeconds = 18 * 60
+
+  useEffect(() => {
+    if (!isPlaying) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setPlaybackProgress((current) => {
+        const next = current + 100 / trackDurationSeconds
+        return next >= 100 ? 0 : next
+      })
+    }, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [isPlaying, trackDurationSeconds])
+
+  useEffect(() => {
+    setPlaybackProgress(0)
+  }, [selectedSoundId])
+
+  const handleSelectPrevious = () => {
+    if (sounds.length === 0) {
+      return
+    }
+
+    const nextIndex = (selectedIndex - 1 + sounds.length) % sounds.length
+    onSoundSelect(sounds[nextIndex].id)
+  }
+
+  const handleSelectNext = () => {
+    if (sounds.length === 0) {
+      return
+    }
+
+    const nextIndex = (selectedIndex + 1) % sounds.length
+    onSoundSelect(sounds[nextIndex].id)
+  }
+
+  const currentSeconds = Math.round((playbackProgress / 100) * trackDurationSeconds)
+
+  const formatClock = (totalSeconds: number) => {
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
   return (
-    <section className="mx-auto w-full max-w-[640px] rounded-2xl border border-slate-800 bg-slate-900/45 p-4 shadow-2xl shadow-slate-950/40">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-400">Ambient Sound</h3>
-        <div className="flex items-center gap-3">
-          <FontAwesomeIcon className="text-blue-400" icon={faVolumeHigh} />
+    <section className="border-t border-slate-800 bg-[#040b18] px-4 py-4">
+      <div className="rounded-2xl border border-slate-800/80 bg-[linear-gradient(180deg,rgba(9,16,31,0.9),rgba(6,12,24,0.95))] p-3 shadow-[0_12px_34px_rgba(2,8,20,0.35)]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Ambient Audio</p>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-blue-500/25 bg-blue-500/10 text-blue-300">
+                <FontAwesomeIcon icon={selectedSound?.icon ?? faPlay} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-100">{selectedSound?.label ?? 'No sound'}</p>
+                <p className="text-[11px] text-slate-500">{isPlaying ? 'Playing' : 'Paused'} - Focus mix</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900/70 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
+            Youtube-style
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <button
+            aria-label="Previous ambient sound"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+            onClick={handleSelectPrevious}
+            type="button"
+          >
+            <FontAwesomeIcon className="text-sm" icon={faBackwardStep} />
+          </button>
+
+          <button
+            aria-label={isPlaying ? 'Pause ambient sound' : 'Play ambient sound'}
+            className="grid h-11 w-11 place-items-center rounded-full border border-blue-500/35 bg-blue-500/15 text-blue-100 shadow-[0_8px_20px_rgba(59,130,246,0.2)] transition hover:border-blue-400/55 hover:bg-blue-500/25"
+            onClick={onTogglePlayback}
+            type="button"
+          >
+            <FontAwesomeIcon className={classNames('text-base', !isPlaying && 'translate-x-[1px]')} icon={isPlaying ? faPause : faPlay} />
+          </button>
+
+          <button
+            aria-label="Next ambient sound"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+            onClick={handleSelectNext}
+            type="button"
+          >
+            <FontAwesomeIcon className="text-sm" icon={faForwardStep} />
+          </button>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/35 px-3 py-2">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium tabular-nums text-slate-500">
+            <span>{formatClock(currentSeconds)}</span>
+            <span>{formatClock(trackDurationSeconds)}</span>
+          </div>
           <input
-            className="h-1 w-28 cursor-pointer appearance-none rounded-lg bg-slate-700 accent-blue-500"
+            aria-label="Ambient audio timeline"
+            className="ambient-progress-slider h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-800"
             max={100}
             min={0}
-            onChange={(event) => onVolumeChange(Number(event.target.value))}
+            onChange={(event) => setPlaybackProgress(Number(event.target.value))}
             type="range"
-            value={volume}
+            value={playbackProgress}
           />
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {sounds.map((sound) => {
-          const selected = selectedSoundId === sound.id
+        <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
+          {sounds.map((sound) => {
+            const selected = selectedSoundId === sound.id
 
-          return (
-            <button
-              className={classNames(
-                'relative flex flex-col items-center justify-center gap-2 rounded-xl border p-4 transition',
-                selected
-                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 ring-1 ring-blue-500/40'
-                  : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:bg-slate-800 hover:text-slate-200',
-              )}
-              key={sound.id}
-              onClick={() => onSoundSelect(sound.id)}
-              type="button"
-            >
-              {selected ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-400" /> : null}
-              <FontAwesomeIcon className="text-xl" icon={sound.icon} />
-              <span className="text-sm font-medium">{sound.label}</span>
-            </button>
-          )
-        })}
+            return (
+              <button
+                aria-label={sound.label}
+                className={classNames(
+                  'relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm transition',
+                  selected
+                    ? 'border-blue-500/45 bg-blue-500/12 text-blue-200'
+                    : 'border-slate-700/80 bg-slate-900/70 text-slate-400 hover:border-slate-500 hover:text-slate-200',
+                )}
+                key={sound.id}
+                onClick={() => onSoundSelect(sound.id)}
+                title={sound.label}
+                type="button"
+              >
+                {selected ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-blue-400" /> : null}
+                <FontAwesomeIcon className="text-[11px]" icon={sound.icon} />
+              </button>
+            )
+          })}
+        </div>
       </div>
     </section>
   )

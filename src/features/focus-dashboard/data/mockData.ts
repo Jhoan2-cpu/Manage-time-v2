@@ -35,60 +35,16 @@ export const tasks: Task[] = [
 ]
 
 export const logEntries: LogEntry[] = [
-  { id: 'log-1', start: '10:00 AM', duration: '10 min', activity: 'Descanso', tone: 'break' },
-  {
-    id: 'log-2',
-    start: '10:10 AM',
-    duration: '10 min',
-    activity: 'Cocina y Lavanderia',
-    tone: 'default',
-  },
-  {
-    id: 'log-3',
-    start: '11:40 AM',
-    duration: '1:20 hrs',
-    activity: 'BUSQUEDA EMPLEO',
-    tone: 'warning',
-  },
-  {
-    id: 'log-4',
-    start: '1:00 PM',
-    duration: '1:20 hrs',
-    activity: 'COMER, LAVAR PLATO...',
-    tone: 'default',
-  },
-  {
-    id: 'log-5',
-    start: '2:40 PM',
-    duration: '1:40 hrs',
-    activity: 'LAVANDERIA, BANO...',
-    tone: 'default',
-  },
-  {
-    id: 'log-6',
-    start: '5:15 PM',
-    duration: '2:45 hrs',
-    activity: 'PASAJE HASTA SANT.',
-    tone: 'warning',
-  },
-  { id: 'log-7', start: '6:15 PM', duration: '1 hr', activity: 'JUEGUITOS', tone: 'warning' },
-  { id: 'log-8', start: '6:25 PM', duration: '10 min', activity: 'Descanso', tone: 'break' },
-  { id: 'log-9', start: '6:50 PM', duration: '25 min', activity: 'ingles', tone: 'default' },
-  {
-    id: 'log-10',
-    start: '7:25 PM',
-    duration: '35 min',
-    activity: 'ENTRETENIMIENTO',
-    tone: 'active',
-  },
-  { id: 'log-11', start: '8:14 PM', duration: '49 min', activity: 'ingles', tone: 'faded' },
-  {
-    id: 'log-12',
-    start: '9:50 PM',
-    duration: '1:36 hrs',
-    activity: 'DESCANSO',
-    tone: 'faded',
-  },
+  { id: 'log-1', start: '8:00 AM', duration: '45 min', taskId: 'task-email-cleanup' },
+  { id: 'log-2', start: '9:15 AM', duration: '25 min', taskId: 'task-q3-report' },
+  { id: 'log-3', start: '9:45 AM', duration: '20 min', taskId: 'task-email-cleanup' },
+  { id: 'log-4', start: '10:20 AM', duration: '40 min', taskId: 'task-q3-report' },
+  { id: 'log-5', start: '11:30 AM', duration: '30 min', taskId: 'task-design-review' },
+  { id: 'log-6', start: '1:10 PM', duration: '35 min', taskId: 'task-q3-report' },
+  { id: 'log-7', start: '2:00 PM', duration: '1:30 hrs', taskId: 'task-design-review' },
+  { id: 'log-8', start: '4:10 PM', duration: '15 min', taskId: 'task-email-cleanup' },
+  { id: 'log-9', start: '5:00 PM', duration: '50 min', taskId: 'task-q3-report' },
+  { id: 'log-10', start: '6:10 PM', duration: '30 min', taskId: 'task-design-review' },
 ]
 
 export const soundOptions: SoundOption[] = [

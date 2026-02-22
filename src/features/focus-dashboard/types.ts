@@ -20,8 +20,9 @@ export interface LogEntry {
   id: string
   start: string
   duration: string
-  activity: string
-  tone: LogTone
+  activity?: string
+  taskId?: string
+  tone?: LogTone
 }
 
 export interface SoundOption {

@@ -1,11 +1,9 @@
-import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faCalendarCheck,
-  faCheckCircle,
-  faClock,
   faHourglassHalf,
+  faListOl,
   faPenToSquare,
+  faPlay,
   faTrashCan,
 } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
@@ -14,30 +12,23 @@ import { classNames } from '../../utils/classNames'
 
 type TaskCardProps = {
   task: Task
+  sessionCount: number
+  onPlayTask?: (task: Task) => void
 }
 
-const taskStateStyles: Record<TaskState, { shell: string; status: string }> = {
+const taskStateStyles: Record<TaskState, { shell: string }> = {
   active: {
     shell: 'shadow-lg shadow-blue-900/20',
-    status: 'text-blue-400',
   },
   done: {
     shell: '',
-    status: 'text-slate-400',
   },
   scheduled: {
     shell: '',
-    status: 'text-amber-400/80',
   },
 }
 
-const taskStateIcons: Record<TaskState, IconDefinition> = {
-  active: faClock,
-  done: faCheckCircle,
-  scheduled: faCalendarCheck,
-}
-
-export function TaskCard({ task }: TaskCardProps) {
+export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
@@ -65,44 +56,51 @@ export function TaskCard({ task }: TaskCardProps) {
           </div>
           <h3 className="truncate text-xl font-semibold leading-tight text-slate-100">{task.title}</h3>
           <p className="mt-1 truncate text-xs text-slate-400">{task.details}</p>
-          <p
-            className={classNames(
-              'mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium',
-              stateStyles.status,
-            )}
-          >
-            <FontAwesomeIcon icon={taskStateIcons[task.state]} />
-            {task.statusText}
-          </p>
         </div>
 
-        <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+        <div className="flex items-center gap-1">
           <button
-            aria-label={`Edit ${task.title}`}
-            className="p-1 text-slate-500 transition hover:text-blue-400"
+            aria-label={`Play ${task.title}`}
+            className="grid h-7 w-7 place-items-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 transition hover:border-emerald-400/50 hover:bg-emerald-500/20 hover:text-emerald-200"
+            onClick={() => onPlayTask?.(task)}
             type="button"
           >
-            <FontAwesomeIcon icon={faPenToSquare} />
+            <FontAwesomeIcon className="text-[11px]" icon={faPlay} />
+          </button>
+          <button
+            aria-label={`Edit ${task.title}`}
+            className="grid h-7 w-7 place-items-center rounded-md border border-slate-700/80 bg-slate-900/60 text-slate-400 transition hover:border-blue-500/40 hover:bg-slate-800/80 hover:text-blue-300"
+            type="button"
+          >
+            <FontAwesomeIcon className="text-[11px]" icon={faPenToSquare} />
           </button>
           <button
             aria-label={`Delete ${task.title}`}
-            className="p-1 text-slate-500 transition hover:text-red-400"
+            className="grid h-7 w-7 place-items-center rounded-md border border-slate-700/80 bg-slate-900/60 text-slate-400 transition hover:border-red-500/40 hover:bg-slate-800/80 hover:text-red-300"
             type="button"
           >
-            <FontAwesomeIcon icon={faTrashCan} />
+            <FontAwesomeIcon className="text-[11px]" icon={faTrashCan} />
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div
-          className={classNames(
-            'inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs tabular-nums',
-            colorStyles.badgeClassName,
-          )}
-        >
-          <FontAwesomeIcon icon={faHourglassHalf} />
-          <span>{task.duration}</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div
+            className={classNames(
+              'inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs tabular-nums',
+              colorStyles.badgeClassName,
+            )}
+          >
+            <FontAwesomeIcon icon={faHourglassHalf} />
+            <span>{task.duration}</span>
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
+            <FontAwesomeIcon className="text-[10px] text-slate-400" icon={faListOl} />
+            <span className="font-semibold tabular-nums text-slate-200">{sessionCount}</span>
+            <span className="text-[10px] uppercase tracking-wide text-slate-400">sessions</span>
+          </div>
         </div>
 
         {task.state === 'active' ? (
