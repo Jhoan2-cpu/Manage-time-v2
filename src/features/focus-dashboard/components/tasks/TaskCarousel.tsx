@@ -112,6 +112,15 @@ export function TaskCarousel({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600/15 px-3 py-2 text-sm font-medium text-blue-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)] transition hover:bg-blue-500/20 hover:text-white"
+              onClick={onAddTask}
+              type="button"
+            >
+              <FontAwesomeIcon className="text-[12px]" icon={faPlus} />
+              <span className="hidden sm:inline">Add Task</span>
+            </button>
+
             <span className="hidden rounded-full bg-slate-900/45 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500 sm:inline-flex">
               Scroll horizontally
             </span>
@@ -167,35 +176,29 @@ export function TaskCarousel({
             onWheel={handleWheelScroll}
             ref={scrollerRef}
           >
-            <div className="flex min-w-max snap-x snap-mandatory gap-4 pr-2">
-              <div className="snap-start">
-                <button
-                  className="group relative flex h-36 w-64 shrink-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),transparent_58%),rgba(15,23,42,0.38)] text-slate-400 shadow-[inset_0_0_0_1px_rgba(71,85,105,0.32)] transition hover:text-blue-300 hover:shadow-[inset_0_0_0_1px_rgba(59,130,246,0.35),0_10px_24px_rgba(2,8,20,0.2)]"
-                  onClick={onAddTask}
-                  type="button"
-                >
-                  <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(37,99,235,0.08),transparent_55%)] opacity-0 transition group-hover:opacity-100" />
-                  <span className="relative grid h-11 w-11 place-items-center rounded-xl bg-slate-800/60 text-base shadow-[inset_0_0_0_1px_rgba(71,85,105,0.35)] transition group-hover:bg-blue-600/20 group-hover:text-blue-100 group-hover:shadow-[inset_0_0_0_1px_rgba(59,130,246,0.35)]">
-                    <FontAwesomeIcon icon={faPlus} />
-                  </span>
-                  <span className="relative text-sm font-semibold tracking-tight">Add Task</span>
-                  <span className="relative text-[10px] uppercase tracking-[0.16em] text-slate-500 group-hover:text-slate-400">
-                    Quick create
-                  </span>
-                </button>
-              </div>
-
-              {tasks.map((task) => (
-                <div className="snap-start" key={task.id}>
-                  <TaskCard
-                    onDeleteTask={onDeleteTask}
-                    onEditTask={onEditTask}
-                    onPlayTask={onPlayTask}
-                    sessionCount={sessionCountByTaskId[task.id] ?? 0}
-                    task={task}
-                  />
+            <div
+              className={classNames(
+                'gap-4 pr-2',
+                tasks.length > 0 ? 'flex min-w-max snap-x snap-mandatory' : 'grid min-w-full',
+              )}
+            >
+              {tasks.length === 0 ? (
+                <div className="grid h-36 w-full place-items-center rounded-2xl bg-slate-900/20 px-4 text-center text-sm text-slate-400 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.28)]">
+                  No tasks yet. Use the Add Task button to create your first task.
                 </div>
-              ))}
+              ) : (
+                tasks.map((task) => (
+                  <div className="snap-start" key={task.id}>
+                    <TaskCard
+                      onDeleteTask={onDeleteTask}
+                      onEditTask={onEditTask}
+                      onPlayTask={onPlayTask}
+                      sessionCount={sessionCountByTaskId[task.id] ?? 0}
+                      task={task}
+                    />
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
