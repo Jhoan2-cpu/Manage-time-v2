@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
+import { SettingsModal } from './components/SettingsModal'
 import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModal'
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { TimerPanel } from './components/TimerPanel'
@@ -17,6 +18,7 @@ export function FocusDashboard() {
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [taskPendingDelete, setTaskPendingDelete] = useState<Task | null>(null)
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
   )
@@ -131,7 +133,12 @@ export function FocusDashboard() {
     }
     setTaskPendingDelete(null)
   }
-  const handleOpenSettings = () => undefined
+  const handleOpenSettings = () => {
+    setIsSettingsModalOpen(true)
+  }
+  const handleCloseSettings = () => {
+    setIsSettingsModalOpen(false)
+  }
   const handleStartFocus = () => undefined
   const handlePlayTask = (selectedTask: Task) => {
     setTaskList((currentTasks) =>
@@ -235,6 +242,13 @@ export function FocusDashboard() {
         onClose={handleCloseDeleteTaskModal}
         onConfirm={handleConfirmDeleteTask}
         task={taskPendingDelete}
+      />
+      <SettingsModal
+        dashboardStats={dashboardStats}
+        entries={logEntries}
+        isOpen={isSettingsModalOpen}
+        onClose={handleCloseSettings}
+        tasks={taskList}
       />
     </div>
   )
