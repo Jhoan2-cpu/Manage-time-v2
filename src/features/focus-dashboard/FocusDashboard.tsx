@@ -3,7 +3,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
-import { FocusStatsFooter } from './components/FocusStatsFooter'
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
@@ -134,7 +133,6 @@ export function FocusDashboard() {
               timeLabel={timerPreset.timeLabel}
               totalTaskTimeLabel={activeTaskTotalTimeLabel}
             />
-            <FocusStatsFooter focusTime={dashboardStats.focusTime} sessions={dashboardStats.sessions} />
           </div>
         </section>
       </main>

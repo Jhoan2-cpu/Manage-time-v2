@@ -15,6 +15,7 @@ const timerAccentStyles: Record<
   TaskColorKey,
   {
     glowClassName: string
+    timeGlowClassName: string
     dividerClassName: string
     totalValueClassName: string
     chipClassName: string
@@ -25,6 +26,7 @@ const timerAccentStyles: Record<
 > = {
   blue: {
     glowClassName: 'shadow-[0_0_40px_rgba(59,130,246,0.18)]',
+    timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(59,130,246,0.18)]',
     dividerClassName: 'border-blue-500/15',
     totalValueClassName: 'text-blue-200',
     chipClassName: 'border-blue-500/20 bg-blue-500/8 text-blue-100',
@@ -35,6 +37,7 @@ const timerAccentStyles: Record<
   },
   green: {
     glowClassName: 'shadow-[0_0_40px_rgba(16,185,129,0.18)]',
+    timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(16,185,129,0.18)]',
     dividerClassName: 'border-emerald-500/15',
     totalValueClassName: 'text-emerald-200',
     chipClassName: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-100',
@@ -45,6 +48,7 @@ const timerAccentStyles: Record<
   },
   amber: {
     glowClassName: 'shadow-[0_0_40px_rgba(245,158,11,0.18)]',
+    timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(245,158,11,0.18)]',
     dividerClassName: 'border-amber-500/15',
     totalValueClassName: 'text-amber-200',
     chipClassName: 'border-amber-500/20 bg-amber-500/8 text-amber-100',
@@ -55,6 +59,7 @@ const timerAccentStyles: Record<
   },
   rose: {
     glowClassName: 'shadow-[0_0_40px_rgba(244,63,94,0.18)]',
+    timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(244,63,94,0.18)]',
     dividerClassName: 'border-rose-500/15',
     totalValueClassName: 'text-rose-200',
     chipClassName: 'border-rose-500/20 bg-rose-500/8 text-rose-100',
@@ -65,6 +70,7 @@ const timerAccentStyles: Record<
   },
   violet: {
     glowClassName: 'shadow-[0_0_40px_rgba(139,92,246,0.18)]',
+    timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(139,92,246,0.18)]',
     dividerClassName: 'border-violet-500/15',
     totalValueClassName: 'text-violet-200',
     chipClassName: 'border-violet-500/20 bg-violet-500/8 text-violet-100',
@@ -81,6 +87,7 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
   const accents = activeTask ? timerAccentStyles[activeTask.colorTag] : timerAccentStyles.blue
   const taskTitle = activeTask?.title ?? 'No Task Selected'
   const taskSubtitle = activeTask?.details ?? 'Choose a task to start a focus session'
+  const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
 
   return (
     <>
@@ -118,8 +125,13 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
           <div className="relative mt-5 flex flex-col items-center justify-center py-6 sm:py-8">
             <div className={classNames('absolute inset-x-6 top-1/2 h-24 -translate-y-1/2 rounded-full blur-3xl sm:h-32', accents.blurClassName)} />
 
-            <p className={classNames('relative select-none font-mono text-[78px] font-light leading-none tracking-tight text-slate-100 sm:text-[120px]', accents.glowClassName)}>
-              {timeLabel}
+            <p
+              className={classNames(
+                'relative select-none font-mono text-[48px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[84px]',
+                accents.timeGlowClassName,
+              )}
+            >
+              {stopwatchLabel}
             </p>
 
             <div className="relative mt-4 flex items-center gap-2">
@@ -156,4 +168,23 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
       </div>
     </>
   )
+}
+
+function normalizeStopwatchLabel(timeLabel: string) {
+  const parts = timeLabel.trim().split(':').filter(Boolean)
+
+  if (parts.length === 3) {
+    return parts.map((part) => part.padStart(2, '0')).join(':')
+  }
+
+  if (parts.length === 2) {
+    const [minutes, seconds] = parts
+    return ['00', minutes.padStart(2, '0'), seconds.padStart(2, '0')].join(':')
+  }
+
+  if (parts.length === 1 && /^\d+$/.test(parts[0])) {
+    return ['00', parts[0].padStart(2, '0'), '00'].join(':')
+  }
+
+  return '00:00:00'
 }

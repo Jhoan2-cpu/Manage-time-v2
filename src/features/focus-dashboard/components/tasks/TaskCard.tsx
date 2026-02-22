@@ -36,7 +36,7 @@ export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
   return (
     <article
       className={classNames(
-        'group flex h-36 w-64 shrink-0 flex-col justify-between rounded-2xl border p-4 transition',
+        'group flex h-36 w-64 shrink-0 flex-col justify-between rounded-2xl p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl',
         colorStyles.cardClassName,
         stateStyles.shell,
       )}
@@ -58,10 +58,10 @@ export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
           <p className="mt-1 truncate text-xs text-slate-400">{task.details}</p>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 rounded-xl bg-slate-950/25 p-1 ring-1 ring-inset ring-slate-800/45 backdrop-blur-sm">
           <button
             aria-label={`Play ${task.title}`}
-            className="grid h-7 w-7 place-items-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 transition hover:border-emerald-400/50 hover:bg-emerald-500/20 hover:text-emerald-200"
+            className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
             onClick={() => onPlayTask?.(task)}
             type="button"
           >
@@ -69,14 +69,14 @@ export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
           </button>
           <button
             aria-label={`Edit ${task.title}`}
-            className="grid h-7 w-7 place-items-center rounded-md border border-slate-700/80 bg-slate-900/60 text-slate-400 transition hover:border-blue-500/40 hover:bg-slate-800/80 hover:text-blue-300"
+            className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-800/80 hover:text-blue-300"
             type="button"
           >
             <FontAwesomeIcon className="text-[11px]" icon={faPenToSquare} />
           </button>
           <button
             aria-label={`Delete ${task.title}`}
-            className="grid h-7 w-7 place-items-center rounded-md border border-slate-700/80 bg-slate-900/60 text-slate-400 transition hover:border-red-500/40 hover:bg-slate-800/80 hover:text-red-300"
+            className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-800/80 hover:text-red-300"
             type="button"
           >
             <FontAwesomeIcon className="text-[11px]" icon={faTrashCan} />
@@ -96,7 +96,7 @@ export function TaskCard({ task, sessionCount, onPlayTask }: TaskCardProps) {
             <span>{task.duration}</span>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
+          <div className="inline-flex items-center gap-1.5 rounded-md bg-slate-950/35 px-2 py-1 text-xs text-slate-300 ring-1 ring-inset ring-slate-800/50">
             <FontAwesomeIcon className="text-[10px] text-slate-400" icon={faListOl} />
             <span className="font-semibold tabular-nums text-slate-200">{sessionCount}</span>
             <span className="text-[10px] uppercase tracking-wide text-slate-400">sessions</span>

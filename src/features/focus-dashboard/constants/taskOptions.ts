@@ -53,9 +53,10 @@ export const taskColorOptions: TaskColorOption[] = [
     label: 'Blue',
     swatchClassName: 'bg-blue-500',
     selectedRingClassName: 'ring-blue-300/80',
-    cardClassName: 'border-blue-500/35 bg-gradient-to-br from-blue-500/15 via-slate-900/85 to-slate-950/95',
-    iconShellClassName: 'border-blue-400/40 bg-blue-500/20 text-blue-100',
-    badgeClassName: 'bg-blue-500/20 text-blue-100',
+    cardClassName:
+      'ring-1 ring-inset ring-blue-400/28 bg-gradient-to-br from-blue-500/14 via-slate-900/88 to-slate-950/96 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)]',
+    iconShellClassName: 'border-blue-400/25 bg-blue-500/18 text-blue-100',
+    badgeClassName: 'bg-blue-500/16 text-blue-100',
     pulseClassName: 'bg-blue-400',
   },
   {
@@ -64,9 +65,9 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-emerald-500',
     selectedRingClassName: 'ring-emerald-300/80',
     cardClassName:
-      'border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-slate-900/85 to-slate-950/95',
-    iconShellClassName: 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100',
-    badgeClassName: 'bg-emerald-500/20 text-emerald-100',
+      'ring-1 ring-inset ring-emerald-400/24 bg-gradient-to-br from-emerald-500/14 via-slate-900/88 to-slate-950/96 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)]',
+    iconShellClassName: 'border-emerald-400/25 bg-emerald-500/18 text-emerald-100',
+    badgeClassName: 'bg-emerald-500/16 text-emerald-100',
     pulseClassName: 'bg-emerald-400',
   },
   {
@@ -74,9 +75,10 @@ export const taskColorOptions: TaskColorOption[] = [
     label: 'Amber',
     swatchClassName: 'bg-amber-500',
     selectedRingClassName: 'ring-amber-300/80',
-    cardClassName: 'border-amber-500/30 bg-gradient-to-br from-amber-500/15 via-slate-900/85 to-slate-950/95',
-    iconShellClassName: 'border-amber-400/40 bg-amber-500/20 text-amber-100',
-    badgeClassName: 'bg-amber-500/20 text-amber-100',
+    cardClassName:
+      'ring-1 ring-inset ring-amber-400/24 bg-gradient-to-br from-amber-500/14 via-slate-900/88 to-slate-950/96 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)]',
+    iconShellClassName: 'border-amber-400/25 bg-amber-500/18 text-amber-100',
+    badgeClassName: 'bg-amber-500/16 text-amber-100',
     pulseClassName: 'bg-amber-400',
   },
   {
@@ -84,9 +86,10 @@ export const taskColorOptions: TaskColorOption[] = [
     label: 'Rose',
     swatchClassName: 'bg-rose-500',
     selectedRingClassName: 'ring-rose-300/80',
-    cardClassName: 'border-rose-500/30 bg-gradient-to-br from-rose-500/15 via-slate-900/85 to-slate-950/95',
-    iconShellClassName: 'border-rose-400/40 bg-rose-500/20 text-rose-100',
-    badgeClassName: 'bg-rose-500/20 text-rose-100',
+    cardClassName:
+      'ring-1 ring-inset ring-rose-400/24 bg-gradient-to-br from-rose-500/14 via-slate-900/88 to-slate-950/96 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)]',
+    iconShellClassName: 'border-rose-400/25 bg-rose-500/18 text-rose-100',
+    badgeClassName: 'bg-rose-500/16 text-rose-100',
     pulseClassName: 'bg-rose-400',
   },
   {
@@ -95,9 +98,9 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-violet-500',
     selectedRingClassName: 'ring-violet-300/80',
     cardClassName:
-      'border-violet-500/30 bg-gradient-to-br from-violet-500/15 via-slate-900/85 to-slate-950/95',
-    iconShellClassName: 'border-violet-400/40 bg-violet-500/20 text-violet-100',
-    badgeClassName: 'bg-violet-500/20 text-violet-100',
+      'ring-1 ring-inset ring-violet-400/24 bg-gradient-to-br from-violet-500/14 via-slate-900/88 to-slate-950/96 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)]',
+    iconShellClassName: 'border-violet-400/25 bg-violet-500/18 text-violet-100',
+    badgeClassName: 'bg-violet-500/16 text-violet-100',
     pulseClassName: 'bg-violet-400',
   },
 ]
