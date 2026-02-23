@@ -5,17 +5,6 @@ import type { Task, TaskColorKey } from '../../types'
 import { classNames } from '../../utils/classNames'
 import { TaskCard } from './TaskCard'
 
-const carouselAccentClassNameByColor: Record<TaskColorKey, string> = {
-  blue: 'bg-[linear-gradient(180deg,rgba(59,130,246,0.03),rgba(7,14,29,0.66)_26%,rgba(5,11,22,0.74))]',
-  green:
-    'bg-[linear-gradient(180deg,rgba(16,185,129,0.03),rgba(7,14,29,0.66)_26%,rgba(5,11,22,0.74))]',
-  amber:
-    'bg-[linear-gradient(180deg,rgba(245,158,11,0.03),rgba(7,14,29,0.66)_26%,rgba(5,11,22,0.74))]',
-  rose: 'bg-[linear-gradient(180deg,rgba(244,63,94,0.03),rgba(7,14,29,0.66)_26%,rgba(5,11,22,0.74))]',
-  violet:
-    'bg-[linear-gradient(180deg,rgba(139,92,246,0.03),rgba(7,14,29,0.66)_26%,rgba(5,11,22,0.74))]',
-}
-
 type TaskCarouselProps = {
   tasks: Task[]
   sessionCountByTaskId: Record<string, number>
@@ -29,7 +18,7 @@ type TaskCarouselProps = {
 export function TaskCarousel({
   tasks,
   sessionCountByTaskId,
-  accentColorTag = 'blue',
+  accentColorTag: _accentColorTag = 'blue',
   onAddTask,
   onPlayTask,
   onEditTask,
@@ -113,8 +102,7 @@ export function TaskCarousel({
     <div className="mb-8">
       <section
         className={classNames(
-          'rounded-[24px] p-3 shadow-[0_22px_55px_rgba(2,8,20,0.35),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-4',
-          carouselAccentClassNameByColor[accentColorTag],
+          'rounded-[24px] bg-transparent p-3 shadow-none sm:p-4',
         )}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -190,7 +178,7 @@ export function TaskCarousel({
           />
 
           <div
-            className="task-carousel-scroll overflow-x-auto scroll-smooth rounded-2xl bg-slate-950/5 px-1.5 pb-2 pt-1.5"
+            className="task-carousel-scroll overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-2 pt-1.5"
             onWheel={handleWheelScroll}
             ref={scrollerRef}
           >
