@@ -1,5 +1,6 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
+  faBell,
   faHourglassHalf,
   faListOl,
   faPenToSquare,
@@ -9,6 +10,7 @@ import {
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
 import type { Task, TaskState } from '../../types'
 import { classNames } from '../../utils/classNames'
+import { formatMinutesCompact } from '../../utils/time'
 
 type TaskCardProps = {
   task: Task
@@ -34,6 +36,7 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteT
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
+  const hasAdvancedMeta = Boolean(task.targetDurationMinutes || task.alarmTime)
 
   return (
     <article
@@ -58,6 +61,22 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteT
           </div>
           <h3 className="truncate text-xl font-semibold leading-tight text-slate-100">{task.title}</h3>
           <p className="mt-1 truncate text-xs text-slate-400">{task.details}</p>
+          {hasAdvancedMeta ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {task.targetDurationMinutes ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+                  <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faHourglassHalf} />
+                  <span>{formatMinutesCompact(task.targetDurationMinutes).toUpperCase()}</span>
+                </span>
+              ) : null}
+              {task.alarmTime ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+                  <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faBell} />
+                  <span>{formatAlarmTimeChip(task.alarmTime)}</span>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1 rounded-xl bg-slate-950/20 p-1 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.28)] backdrop-blur-sm">
@@ -113,4 +132,17 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteT
       </div>
     </article>
   )
+}
+
+function formatAlarmTimeChip(alarmTime: string) {
+  const [hoursRaw, minutesRaw] = alarmTime.split(':')
+  const hours = Number.parseInt(hoursRaw ?? '', 10)
+  const minutes = Number.parseInt(minutesRaw ?? '', 10)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return alarmTime
+  }
+
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date)
 }

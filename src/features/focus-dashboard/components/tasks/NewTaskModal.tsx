@@ -10,6 +10,8 @@ export type NewTaskPayload = {
   details: string
   colorTag: TaskColorKey
   iconTag: TaskIconKey
+  targetDurationMinutes: number | null
+  alarmTime: string | null
 }
 
 type NewTaskModalProps = {
@@ -28,11 +30,15 @@ const fieldClassName =
 export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null }: NewTaskModalProps) {
   const titleId = useId()
   const detailsId = useId()
+  const targetDurationId = useId()
+  const alarmTimeId = useId()
 
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState('')
   const [iconTag, setIconTag] = useState<TaskIconKey>(defaultIconTag)
   const [colorTag, setColorTag] = useState<TaskColorKey>(defaultColorTag)
+  const [targetDurationMinutesInput, setTargetDurationMinutesInput] = useState('')
+  const [alarmTime, setAlarmTime] = useState('')
 
   useEffect(() => {
     if (!isOpen) {
@@ -44,6 +50,12 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
       setDetails(editingTask.details)
       setIconTag(editingTask.iconTag)
       setColorTag(editingTask.colorTag)
+      setTargetDurationMinutesInput(
+        editingTask.targetDurationMinutes && editingTask.targetDurationMinutes > 0
+          ? `${editingTask.targetDurationMinutes}`
+          : '',
+      )
+      setAlarmTime(editingTask.alarmTime ?? '')
       return
     }
 
@@ -51,6 +63,8 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
     setDetails('')
     setIconTag(defaultIconTag)
     setColorTag(defaultColorTag)
+    setTargetDurationMinutesInput('')
+    setAlarmTime('')
   }, [editingTask, isOpen])
 
   useEffect(() => {
@@ -87,11 +101,17 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
       return
     }
 
+    const parsedTargetDuration = Number.parseInt(targetDurationMinutesInput.trim(), 10)
+    const normalizedTargetDuration =
+      Number.isFinite(parsedTargetDuration) && parsedTargetDuration > 0 ? Math.min(parsedTargetDuration, 24 * 60) : null
+
     onCreateTask({
       title: title.trim(),
       details: details.trim(),
       colorTag,
       iconTag,
+      targetDurationMinutes: normalizedTargetDuration,
+      alarmTime: alarmTime.trim() ? alarmTime : null,
     })
     onClose()
   }
@@ -150,6 +170,45 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
                 rows={4}
                 value={details}
               />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"
+                  htmlFor={targetDurationId}
+                >
+                  Timer (Optional)
+                </label>
+                <input
+                  className={fieldClassName}
+                  id={targetDurationId}
+                  inputMode="numeric"
+                  min={1}
+                  onChange={(event) => setTargetDurationMinutesInput(event.target.value.replace(/[^\d]/g, ''))}
+                  placeholder="Minutes (e.g. 25)"
+                  type="text"
+                  value={targetDurationMinutesInput}
+                />
+                <p className="mt-1 text-[11px] text-slate-500">If set, the task can use countdown mode.</p>
+              </div>
+
+              <div>
+                <label
+                  className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"
+                  htmlFor={alarmTimeId}
+                >
+                  Alarm (Optional)
+                </label>
+                <input
+                  className={fieldClassName}
+                  id={alarmTimeId}
+                  onChange={(event) => setAlarmTime(event.target.value)}
+                  type="time"
+                  value={alarmTime}
+                />
+                <p className="mt-1 text-[11px] text-slate-500">Suggested time to start this task.</p>
+              </div>
             </div>
 
             <section>

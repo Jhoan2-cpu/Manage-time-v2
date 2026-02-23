@@ -1,14 +1,21 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLayerGroup, faPlay } from '@fortawesome/free-solid-svg-icons'
+import { faBell, faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../constants/taskOptions'
-import type { Task, TaskColorKey } from '../types'
+import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
 
 type TimerPanelProps = {
   timeLabel: string
   onStartFocus: () => void
+  onChangeMode: (mode: FocusTimerMode) => void
   activeTask: Task | null
   totalTaskTimeLabel: string
+  mode: FocusTimerMode
+  canUseTimerMode: boolean
+  timerProgressPercent: number | null
+  isRunning: boolean
+  targetDurationLabel: string | null
+  alarmTimeLabel: string | null
 }
 
 const timerAccentStyles: Record<
@@ -92,7 +99,19 @@ const timerAccentStyles: Record<
   },
 }
 
-export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeLabel }: TimerPanelProps) {
+export function TimerPanel({
+  timeLabel,
+  onStartFocus,
+  onChangeMode,
+  activeTask,
+  totalTaskTimeLabel,
+  mode,
+  canUseTimerMode,
+  timerProgressPercent,
+  isRunning,
+  targetDurationLabel,
+  alarmTimeLabel,
+}: TimerPanelProps) {
   const activeTaskColor = activeTask ? taskColorMap[activeTask.colorTag] : null
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
   const accents = activeTask ? timerAccentStyles[activeTask.colorTag] : timerAccentStyles.blue
@@ -129,6 +148,54 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
                   <span className={classNames('h-2 w-2 rounded-full', activeTaskColor?.swatchClassName ?? 'bg-slate-500')} />
                   <span className="truncate text-slate-300">{taskSubtitle}</span>
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                  <div className="inline-flex items-center rounded-xl bg-slate-950/25 p-1 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
+                    <button
+                      className={classNames(
+                        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
+                        mode === 'stopwatch'
+                          ? classNames('text-slate-100', accents.chipClassName)
+                          : 'text-slate-400 hover:text-slate-200',
+                      )}
+                      onClick={() => onChangeMode('stopwatch')}
+                      type="button"
+                    >
+                      <FontAwesomeIcon icon={faStopwatch} />
+                      <span>Cronometro</span>
+                    </button>
+                    <button
+                      className={classNames(
+                        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
+                        mode === 'timer'
+                          ? classNames('text-slate-100', accents.chipClassName)
+                          : canUseTimerMode
+                            ? 'text-slate-400 hover:text-slate-200'
+                            : 'cursor-not-allowed text-slate-600',
+                      )}
+                      disabled={!canUseTimerMode}
+                      onClick={() => onChangeMode('timer')}
+                      type="button"
+                    >
+                      <FontAwesomeIcon icon={faHourglassHalf} />
+                      <span>Temporizador</span>
+                    </button>
+                  </div>
+
+                  {targetDurationLabel ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)]">
+                      <FontAwesomeIcon className="text-slate-400" icon={faHourglassHalf} />
+                      <span>{targetDurationLabel}</span>
+                    </span>
+                  ) : null}
+
+                  {alarmTimeLabel ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)]">
+                      <FontAwesomeIcon className="text-slate-400" icon={faBell} />
+                      <span>{alarmTimeLabel}</span>
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
@@ -149,6 +216,27 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
               <span className="h-2 w-2 rounded-full bg-slate-700" />
               <span className="h-2 w-2 rounded-full bg-slate-700" />
             </div>
+
+            {mode === 'timer' && canUseTimerMode ? (
+              <div className="mt-5 w-full max-w-[520px] px-2">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-900/55 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
+                  <div
+                    className={classNames(
+                      'h-full rounded-full transition-[width] duration-500 ease-out',
+                      activeTaskColor?.swatchClassName ?? 'bg-blue-500',
+                    )}
+                    style={{ width: `${Math.max(0, Math.min(100, timerProgressPercent ?? 0))}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                  <span>0%</span>
+                  <span className={classNames('font-mono', accents.totalValueClassName)}>
+                    {Math.round(timerProgressPercent ?? 0)}%
+                  </span>
+                  <span>100%</span>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className={classNames('mx-auto mt-2 w-full max-w-[460px] border-t pt-4', accents.dividerClassName)}>
@@ -162,7 +250,7 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
 
           <div className="mt-6 flex justify-center">
             <button
-              aria-label="Start focus"
+              aria-label={isRunning ? 'Pause focus' : 'Start focus'}
               className={classNames(
                 'grid h-14 w-14 place-items-center rounded-2xl border transition hover:-translate-y-0.5 active:translate-y-0',
                 accents.playButtonClassName,
@@ -170,7 +258,10 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
               onClick={onStartFocus}
               type="button"
             >
-              <FontAwesomeIcon className={classNames('translate-x-[1px] text-xl', accents.playIconClassName)} icon={faPlay} />
+              <FontAwesomeIcon
+                className={classNames(isRunning ? 'text-[18px]' : 'translate-x-[1px] text-xl', accents.playIconClassName)}
+                icon={isRunning ? faPause : faPlay}
+              />
             </button>
           </div>
         </div>

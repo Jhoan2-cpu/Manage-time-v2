@@ -13,6 +13,8 @@ export const tasks: Task[] = [
     state: 'active',
     colorTag: 'blue',
     iconTag: 'briefcase',
+    targetDurationMinutes: 25,
+    alarmTime: '09:15',
   },
   {
     id: 'task-email-cleanup',
@@ -23,6 +25,8 @@ export const tasks: Task[] = [
     state: 'done',
     colorTag: 'green',
     iconTag: 'pen',
+    targetDurationMinutes: 45,
+    alarmTime: '08:00',
   },
   {
     id: 'task-design-review',
@@ -33,6 +37,8 @@ export const tasks: Task[] = [
     state: 'scheduled',
     colorTag: 'violet',
     iconTag: 'learning',
+    targetDurationMinutes: 90,
+    alarmTime: '14:00',
   },
 ]
 

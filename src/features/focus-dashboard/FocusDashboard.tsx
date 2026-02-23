@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
@@ -8,10 +8,10 @@ import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModa
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
-import { dashboardStats, historyLogEntries, logEntries, tasks, timerPreset } from './data/mockData'
+import { dashboardStats, historyLogEntries, logEntries, tasks } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
-import type { Task, TaskColorKey } from './types'
-import { formatMinutesCompact, parseDurationLabelToMinutes } from './utils/time'
+import type { FocusTimerMode, Task, TaskColorKey } from './types'
+import { formatMinutesCompact, formatSecondsHms, parseDurationLabelToMinutes } from './utils/time'
 
 const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   blue: '59,130,246',
@@ -19,6 +19,26 @@ const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   amber: '245,158,11',
   rose: '244,63,94',
   violet: '139,92,246',
+}
+
+function formatAlarmTimeLabel(alarmTime: string | null) {
+  if (!alarmTime) {
+    return null
+  }
+
+  const [hoursRaw, minutesRaw] = alarmTime.split(':')
+  const hours = Number.parseInt(hoursRaw ?? '', 10)
+  const minutes = Number.parseInt(minutesRaw ?? '', 10)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return alarmTime
+  }
+
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
 }
 
 export function FocusDashboard() {
@@ -30,6 +50,12 @@ export function FocusDashboard() {
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
   )
+  const [isFocusRunning, setIsFocusRunning] = useState(false)
+  const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0)
+  const [timerMode, setTimerMode] = useState<FocusTimerMode>(() => {
+    const initialActiveTask = tasks.find((task) => task.state === 'active') ?? tasks[0] ?? null
+    return initialActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch'
+  })
 
   const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime()
   const sessionCountByTaskId = useMemo(() => {
@@ -60,6 +86,57 @@ export function FocusDashboard() {
     : '0M'
   const activeWorkspaceAccentColor = activeTask?.colorTag ?? 'blue'
   const workspaceAccentRgb = workspaceAccentRgbByColor[activeWorkspaceAccentColor]
+  const activeTaskTargetSeconds = (activeTask?.targetDurationMinutes ?? 0) > 0 ? (activeTask?.targetDurationMinutes ?? 0) * 60 : null
+  const timerProgressPercent =
+    timerMode === 'timer' && activeTaskTargetSeconds
+      ? Math.max(0, Math.min(100, (sessionElapsedSeconds / activeTaskTargetSeconds) * 100))
+      : null
+  const timerDisplaySeconds =
+    timerMode === 'timer' && activeTaskTargetSeconds
+      ? Math.max(0, activeTaskTargetSeconds - sessionElapsedSeconds)
+      : sessionElapsedSeconds
+  const timerDisplayLabel = formatSecondsHms(timerDisplaySeconds)
+  const activeTaskTimerTargetLabel =
+    activeTask?.targetDurationMinutes && activeTask.targetDurationMinutes > 0
+      ? formatMinutesCompact(activeTask.targetDurationMinutes).toUpperCase()
+      : null
+  const activeTaskAlarmLabel = formatAlarmTimeLabel(activeTask?.alarmTime ?? null)
+
+  useEffect(() => {
+    if (!isFocusRunning) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setSessionElapsedSeconds((currentSeconds) => currentSeconds + 1)
+    }, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [isFocusRunning])
+
+  useEffect(() => {
+    if (timerMode !== 'timer' || !isFocusRunning || !activeTaskTargetSeconds) {
+      return
+    }
+
+    if (sessionElapsedSeconds >= activeTaskTargetSeconds) {
+      setSessionElapsedSeconds(activeTaskTargetSeconds)
+      setIsFocusRunning(false)
+    }
+  }, [activeTaskTargetSeconds, isFocusRunning, sessionElapsedSeconds, timerMode])
+
+  useEffect(() => {
+    if (timerMode === 'timer' && !activeTaskTargetSeconds) {
+      setTimerMode('stopwatch')
+      return
+    }
+
+    if (timerMode === 'timer' && activeTaskTargetSeconds) {
+      setSessionElapsedSeconds((currentSeconds) => Math.min(currentSeconds, activeTaskTargetSeconds))
+    }
+  }, [activeTaskTargetSeconds, timerMode])
 
   const handleAddTask = () => {
     setEditingTask(null)
@@ -69,7 +146,7 @@ export function FocusDashboard() {
     setIsNewTaskModalOpen(false)
     setEditingTask(null)
   }
-  const handleCreateTask = ({ title, details, colorTag, iconTag }: NewTaskPayload) => {
+  const handleCreateTask = ({ title, details, colorTag, iconTag, targetDurationMinutes, alarmTime }: NewTaskPayload) => {
     if (editingTask) {
       setTaskList((currentTasks) =>
         currentTasks.map((task) =>
@@ -80,6 +157,8 @@ export function FocusDashboard() {
                 details: details || 'No details yet',
                 colorTag,
                 iconTag,
+                targetDurationMinutes,
+                alarmTime,
               }
             : task,
         ),
@@ -102,6 +181,8 @@ export function FocusDashboard() {
         state: 'scheduled',
         colorTag,
         iconTag,
+        targetDurationMinutes,
+        alarmTime,
       },
       ...currentTasks,
     ])
@@ -120,6 +201,7 @@ export function FocusDashboard() {
     if (!taskPendingDelete) {
       return
     }
+    const deletingActiveTask = activeTask?.id === taskPendingDelete.id
 
     setTaskList((currentTasks) => {
       const remainingTasks = currentTasks.filter((task) => task.id !== taskPendingDelete.id)
@@ -137,6 +219,14 @@ export function FocusDashboard() {
       return [{ ...firstTask, state: 'active' }, ...rest]
     })
 
+    if (deletingActiveTask) {
+      const remainingTasks = taskList.filter((task) => task.id !== taskPendingDelete.id)
+      const nextActiveTask = remainingTasks.find((task) => task.state === 'active') ?? remainingTasks[0] ?? null
+      setIsFocusRunning(false)
+      setSessionElapsedSeconds(0)
+      setTimerMode(nextActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch')
+    }
+
     if (editingTask?.id === taskPendingDelete.id) {
       setIsNewTaskModalOpen(false)
       setEditingTask(null)
@@ -149,7 +239,24 @@ export function FocusDashboard() {
   const handleCloseSettings = () => {
     setIsSettingsModalOpen(false)
   }
-  const handleStartFocus = () => undefined
+  const handleStartFocus = () => {
+    if (!activeTask) {
+      return
+    }
+
+    if (timerMode === 'timer' && activeTaskTargetSeconds && sessionElapsedSeconds >= activeTaskTargetSeconds) {
+      setSessionElapsedSeconds(0)
+    }
+
+    setIsFocusRunning((current) => !current)
+  }
+  const handleChangeTimerMode = (nextMode: FocusTimerMode) => {
+    if (nextMode === 'timer' && !activeTaskTargetSeconds) {
+      return
+    }
+
+    setTimerMode(nextMode)
+  }
   const handlePlayTask = (selectedTask: Task) => {
     setTaskList((currentTasks) =>
       currentTasks.map((task) => {
@@ -164,7 +271,9 @@ export function FocusDashboard() {
         return task
       }),
     )
-    handleStartFocus()
+    setSessionElapsedSeconds(0)
+    setTimerMode(selectedTask.targetDurationMinutes ? 'timer' : 'stopwatch')
+    setIsFocusRunning(true)
   }
   const handleToggleDailyLog = () => {
     setIsDailyLogOpen((current) => !current)
@@ -219,8 +328,15 @@ export function FocusDashboard() {
             />
             <TimerPanel
               activeTask={activeTask}
+              alarmTimeLabel={activeTaskAlarmLabel}
+              canUseTimerMode={Boolean(activeTaskTargetSeconds)}
+              isRunning={isFocusRunning}
+              mode={timerMode}
+              onChangeMode={handleChangeTimerMode}
               onStartFocus={handleStartFocus}
-              timeLabel={timerPreset.timeLabel}
+              targetDurationLabel={activeTaskTimerTargetLabel}
+              timeLabel={timerDisplayLabel}
+              timerProgressPercent={timerProgressPercent}
               totalTaskTimeLabel={activeTaskTotalTimeLabel}
             />
           </div>

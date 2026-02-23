@@ -4,6 +4,7 @@ export type TaskState = 'active' | 'done' | 'scheduled'
 export type LogTone = 'break' | 'warning' | 'active' | 'faded' | 'default'
 export type TaskColorKey = 'blue' | 'green' | 'amber' | 'rose' | 'violet'
 export type TaskIconKey = 'briefcase' | 'learning' | 'tools' | 'code' | 'book' | 'pen' | 'cart'
+export type FocusTimerMode = 'stopwatch' | 'timer'
 
 export interface Task {
   id: string
@@ -14,6 +15,8 @@ export interface Task {
   state: TaskState
   colorTag: TaskColorKey
   iconTag: TaskIconKey
+  targetDurationMinutes: number | null
+  alarmTime: string | null
 }
 
 export interface LogEntry {
