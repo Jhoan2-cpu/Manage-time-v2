@@ -4,8 +4,9 @@ import {
   faClock,
   faLayerGroup,
   faTableCells,
-  faWaveSquare,
 } from '@fortawesome/free-solid-svg-icons'
+import { TaskCard } from '../../focus-dashboard/components/tasks/TaskCard'
+import type { Task } from '../../focus-dashboard/types'
 
 type HomePageProps = {
   hasSession?: boolean
@@ -78,15 +79,6 @@ export function HomePage({ hasSession = false, onOpenLogin, onOpenRegister, onOp
                 <span>{hasSession ? 'Open Workspace' : 'Start with Velor'}</span>
                 <FontAwesomeIcon className="text-xs" icon={faArrowRight} />
               </button>
-
-              <button
-                className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-4 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800/60"
-                data-sfx-type="off"
-                onClick={onOpenLogin}
-                type="button"
-              >
-                Log In
-              </button>
             </div>
 
             <div className="mt-7 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
@@ -97,53 +89,60 @@ export function HomePage({ hasSession = false, onOpenLogin, onOpenRegister, onOp
           </div>
 
           <div className="min-w-0">
-            <div className="relative mx-auto w-full max-w-[560px] rounded-3xl border border-slate-700/70 bg-[linear-gradient(180deg,rgba(9,17,33,0.94),rgba(5,11,22,0.94))] p-4 shadow-[0_28px_90px_rgba(1,8,22,0.65)]">
-              <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(65%_50%_at_50%_22%,rgba(59,130,246,0.10),transparent_100%)]" />
-              <div className="relative">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Velor Preview</p>
-                    <p className="mt-1 text-lg font-semibold tracking-tight text-slate-100">Focus workspace</p>
-                  </div>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-                    Live
-                  </span>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800/80 bg-slate-950/25 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="grid h-10 w-10 place-items-center rounded-xl border border-blue-400/20 bg-blue-500/10 text-blue-200">
-                        <FontAwesomeIcon icon={faWaveSquare} />
+            <div className="home-preview-float group/home-preview relative mx-auto w-full max-w-[560px] [perspective:1800px]">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-3xl border border-blue-400/10 bg-blue-500/4 shadow-[0_30px_70px_rgba(8,47,110,0.18)] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform:translate3d(18px,22px,-40px)_rotateX(6deg)_rotateY(-10deg)] group-hover/home-preview:[transform:translate3d(26px,30px,-56px)_rotateX(10deg)_rotateY(-16deg)]"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-3xl border border-slate-700/45 bg-slate-900/30 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform:translate3d(9px,12px,-20px)_rotateX(4deg)_rotateY(-7deg)] group-hover/home-preview:[transform:translate3d(14px,18px,-30px)_rotateX(7deg)_rotateY(-11deg)]"
+              />
+              <div
+                className="relative transform-gpu transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform-style:preserve-3d] [transform:rotateX(4deg)_rotateY(-8deg)_translateY(0px)] group-hover/home-preview:[transform:rotateX(8deg)_rotateY(-14deg)_translateY(-10px)]"
+              >
+                <div className="relative overflow-hidden rounded-3xl border border-slate-700/70 bg-[linear-gradient(180deg,rgba(9,17,33,0.94),rgba(5,11,22,0.94))] p-4 shadow-[0_28px_90px_rgba(1,8,22,0.65)]">
+                  <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(65%_50%_at_50%_22%,rgba(59,130,246,0.10),transparent_100%)]" />
+                  <div className="pointer-events-none absolute inset-x-10 top-0 h-20 rounded-b-[40px] bg-white/4 blur-xl transition-opacity duration-500 group-hover/home-preview:opacity-90" />
+                  <div className="relative transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform:translateZ(18px)] group-hover/home-preview:[transform:translateZ(26px)]">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Velor Preview</p>
+                        <p className="mt-1 text-lg font-semibold tracking-tight text-slate-100">Focus workspace</p>
+                      </div>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                        Live
                       </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-slate-100">Product Planning</p>
-                        <p className="truncate text-xs text-slate-500">Timer Mode</p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/25 p-3 shadow-[0_16px_30px_rgba(1,8,22,0.2)] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform:translateZ(26px)] group-hover/home-preview:[transform:translateZ(42px)]">
+                      <div className="pointer-events-none flex justify-center">
+                        <div className="origin-center scale-[0.96] sm:scale-[1.02]">
+                          <TaskCard isRunning={true} sessionCount={3} task={HOME_PREVIEW_TASK} />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 text-center">
+                        <p className="text-[42px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[56px]">
+                          00:24:31
+                        </p>
+                        <div className="mx-auto mt-4 h-2 w-full max-w-[360px] overflow-hidden rounded-full bg-slate-900/70">
+                          <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-blue-400 to-indigo-400" />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          <span>0%</span>
+                          <span className="text-blue-200">62%</span>
+                          <span>100%</span>
+                        </div>
                       </div>
                     </div>
-                    <span className="rounded-full border border-blue-400/20 bg-blue-500/8 px-2.5 py-1 text-xs font-semibold text-blue-100">
-                      03 sessions
-                    </span>
-                  </div>
-                  <div className="mt-5 text-center">
-                    <p className="text-[42px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[56px]">
-                      00:24:31
-                    </p>
-                    <div className="mx-auto mt-4 h-2 w-full max-w-[360px] overflow-hidden rounded-full bg-slate-900/70">
-                      <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-blue-400 to-indigo-400" />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      <span>0%</span>
-                      <span className="text-blue-200">62%</span>
-                      <span>100%</span>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <PreviewStat title="Tracked Today" value="10h 42m" />
-                  <PreviewStat title="Untracked Time" value="1h 18m" />
+                    <div className="mt-3 grid gap-3 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] sm:grid-cols-2 [transform:translateZ(20px)] group-hover/home-preview:[transform:translateZ(34px)]">
+                      <PreviewStat title="Tracked Today" value="10h 42m" />
+                      <PreviewStat title="Untracked Time" value="1h 18m" />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -152,6 +151,19 @@ export function HomePage({ hasSession = false, onOpenLogin, onOpenRegister, onOp
       </section>
     </div>
   )
+}
+
+const HOME_PREVIEW_TASK: Task = {
+  id: 'home-preview-task',
+  title: 'Product Planning',
+  details: '',
+  statusText: 'Preview',
+  duration: '00:24:31',
+  state: 'active',
+  colorTag: 'blue',
+  iconTag: 'code',
+  targetDurationMinutes: 40,
+  alarmTime: null,
 }
 
 type FeaturePillProps = {
