@@ -34,7 +34,7 @@ export function initUiSfx() {
   Howler.autoSuspend = true
 
   clickHowl = new Howl({
-    src: [createUiClickWavDataUri()],
+    src: ['/public/sfx/click.mp3', '/sfx/click.mp3', createUiClickWavDataUri()],
     volume: 0.12,
     preload: true,
   })
