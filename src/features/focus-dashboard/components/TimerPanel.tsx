@@ -127,8 +127,8 @@ export function TimerPanel({
 
   return (
     <>
-      <div className="mb-8 flex min-h-0 flex-1 justify-center">
-        <div className="flex h-full w-full flex-col px-4 py-6 sm:px-8 sm:py-8">
+      <div className="mb-2 flex min-h-0 flex-1 justify-center">
+        <div className="flex h-full w-full flex-col px-4 py-2 sm:px-8 sm:py-3">
           <div className="flex justify-center">
             <div className=" flex max-w-full items-center gap-3 sm:gap-4">
               <span
@@ -182,10 +182,10 @@ export function TimerPanel({
             </div>
           </div>
 
-          <div className="relative mt-4 flex flex-1 flex-col items-center justify-center py-4 sm:py-6">
+          <div className="relative mt-2 flex flex-1 flex-col items-center justify-center py-1 sm:py-2">
             <p
               className={classNames(
-                'relative select-none text-[72px] font-bold leading-none tracking-tight text-slate-100 tabular-nums sm:text-[124px] lg:text-[144px]',
+                'relative select-none text-[clamp(80px,12vw,220px)] font-bold leading-none tracking-tight text-slate-100 tabular-nums',
                 accents.timeGlowClassName,
               )}
             >
@@ -193,7 +193,7 @@ export function TimerPanel({
             </p>
           </div>
 
-          <div className={classNames('mx-auto mt-1 w-full max-w-[460px] border-t pt-4', accents.dividerClassName)}>
+          <div className={classNames('mx-auto mt-0.5 w-full max-w-[460px] border-t pt-3', accents.dividerClassName)}>
             <p className="text-center text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">
               Total Task Time:
               <span className={classNames('ml-2 font-mono tracking-[0.16em]', accents.totalValueClassName)}>
@@ -202,7 +202,7 @@ export function TimerPanel({
             </p>
           </div>
 
-          <div className="mt-6 flex justify-center">
+          <div className="mt-3 flex justify-center">
             <button
               aria-label={isRunning ? 'Pause focus' : 'Start focus'}
               className={classNames(

@@ -516,7 +516,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
             <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
           </div>
 
-          <div className="relative z-10 mx-auto flex w-full flex-1 flex-col px-4 pb-8 pt-5 md:px-6">
+          <div className="relative z-10 mx-auto flex w-full flex-1 flex-col px-4 pb-3 pt-4 md:px-6">
             <TaskCarousel
               accentColorTag={activeWorkspaceAccentColor}
               isFocusRunning={isFocusRunning}
