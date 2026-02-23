@@ -63,7 +63,7 @@ body {
 
 .task-carousel-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #2c4f8e #091426;
+  scrollbar-color: var(--task-carousel-scrollbar-thumb, #2c4f8e) var(--task-carousel-scrollbar-track, #091426);
 }
 
 .task-carousel-scroll::-webkit-scrollbar {
@@ -71,18 +71,26 @@ body {
 }
 
 .task-carousel-scroll::-webkit-scrollbar-track {
-  background: #091426;
+  background: var(--task-carousel-scrollbar-track, #091426);
   border-radius: 999px;
 }
 
 .task-carousel-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(90deg, #24457a, #3779f1);
+  background: linear-gradient(
+    90deg,
+    var(--task-carousel-scrollbar-thumb-start, #24457a),
+    var(--task-carousel-scrollbar-thumb-end, #3779f1)
+  );
   border-radius: 999px;
-  border: 2px solid #091426;
+  border: 2px solid var(--task-carousel-scrollbar-track, #091426);
 }
 
 .task-carousel-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(90deg, #2f5ba0, #4f8fff);
+  background: linear-gradient(
+    90deg,
+    var(--task-carousel-scrollbar-thumb-hover-start, #2f5ba0),
+    var(--task-carousel-scrollbar-thumb-hover-end, #4f8fff)
+  );
 }
 
 .ambient-volume-slider {

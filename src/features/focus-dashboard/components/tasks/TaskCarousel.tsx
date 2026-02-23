@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type WheelEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type WheelEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faLayerGroup, faPlus } from '@fortawesome/free-solid-svg-icons'
 import type { Task, TaskColorKey } from '../../types'
@@ -15,10 +15,53 @@ type TaskCarouselProps = {
   onDeleteTask?: (task: Task) => void
 }
 
+const carouselScrollbarStyleByColor: Record<TaskColorKey, CSSProperties> = {
+  blue: {
+    ['--task-carousel-scrollbar-track' as string]: 'rgba(9,20,38,0.72)',
+    ['--task-carousel-scrollbar-thumb' as string]: '#2f62b8',
+    ['--task-carousel-scrollbar-thumb-start' as string]: '#24457a',
+    ['--task-carousel-scrollbar-thumb-end' as string]: '#3779f1',
+    ['--task-carousel-scrollbar-thumb-hover-start' as string]: '#2f5ba0',
+    ['--task-carousel-scrollbar-thumb-hover-end' as string]: '#4f8fff',
+  },
+  green: {
+    ['--task-carousel-scrollbar-track' as string]: 'rgba(9,20,38,0.72)',
+    ['--task-carousel-scrollbar-thumb' as string]: '#168a67',
+    ['--task-carousel-scrollbar-thumb-start' as string]: '#0f5f49',
+    ['--task-carousel-scrollbar-thumb-end' as string]: '#1fc993',
+    ['--task-carousel-scrollbar-thumb-hover-start' as string]: '#13735a',
+    ['--task-carousel-scrollbar-thumb-hover-end' as string]: '#34d7a3',
+  },
+  amber: {
+    ['--task-carousel-scrollbar-track' as string]: 'rgba(9,20,38,0.72)',
+    ['--task-carousel-scrollbar-thumb' as string]: '#b87413',
+    ['--task-carousel-scrollbar-thumb-start' as string]: '#7a4b0c',
+    ['--task-carousel-scrollbar-thumb-end' as string]: '#f59e0b',
+    ['--task-carousel-scrollbar-thumb-hover-start' as string]: '#9d6010',
+    ['--task-carousel-scrollbar-thumb-hover-end' as string]: '#ffb22d',
+  },
+  rose: {
+    ['--task-carousel-scrollbar-track' as string]: 'rgba(9,20,38,0.72)',
+    ['--task-carousel-scrollbar-thumb' as string]: '#b83456',
+    ['--task-carousel-scrollbar-thumb-start' as string]: '#7d233a',
+    ['--task-carousel-scrollbar-thumb-end' as string]: '#f43f5e',
+    ['--task-carousel-scrollbar-thumb-hover-start' as string]: '#9e2b48',
+    ['--task-carousel-scrollbar-thumb-hover-end' as string]: '#ff6580',
+  },
+  violet: {
+    ['--task-carousel-scrollbar-track' as string]: 'rgba(9,20,38,0.72)',
+    ['--task-carousel-scrollbar-thumb' as string]: '#6e46c8',
+    ['--task-carousel-scrollbar-thumb-start' as string]: '#4e2f94',
+    ['--task-carousel-scrollbar-thumb-end' as string]: '#8b5cf6',
+    ['--task-carousel-scrollbar-thumb-hover-start' as string]: '#5c39af',
+    ['--task-carousel-scrollbar-thumb-hover-end' as string]: '#a37aff',
+  },
+}
+
 export function TaskCarousel({
   tasks,
   sessionCountByTaskId,
-  accentColorTag: _accentColorTag = 'blue',
+  accentColorTag = 'blue',
   onAddTask,
   onPlayTask,
   onEditTask,
@@ -181,6 +224,7 @@ export function TaskCarousel({
             className="task-carousel-scroll overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-2 pt-1.5"
             onWheel={handleWheelScroll}
             ref={scrollerRef}
+            style={carouselScrollbarStyleByColor[accentColorTag]}
           >
             <div
               className={classNames(
