@@ -201,7 +201,7 @@ export function FocusDashboard() {
             <div
               className="absolute inset-0"
               style={{
-                backgroundImage: `radial-gradient(82% 66% at 50% 34%, rgba(${workspaceAccentRgb},0.20), transparent 72%), linear-gradient(180deg, #040a16 0%, #030814 100%)`,
+                backgroundImage: `radial-gradient(88% 72% at 50% 56%, rgba(${workspaceAccentRgb},0.20), transparent 74%), linear-gradient(180deg, #040a16 0%, #030814 100%)`,
               }}
             />
             <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
