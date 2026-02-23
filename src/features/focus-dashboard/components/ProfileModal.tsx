@@ -20,7 +20,7 @@ export function ProfileModal({
   isOpen,
   onClose,
   userName = 'Anton Rivera',
-  userEmail = 'anton@focusflow.app',
+  userEmail = 'anton@velor.app',
 }: ProfileModalProps) {
   const [activeSection, setActiveSection] = useState<'profile' | 'password'>('profile')
   const [passwordForm, setPasswordForm] = useState({

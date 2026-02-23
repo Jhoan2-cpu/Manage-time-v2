@@ -31,7 +31,7 @@ export function FocusHeader({
   onToggleBackgroundMusic,
   isBackgroundMusicPlaying = false,
   userName = 'Anton',
-  userEmail = 'anton@focusflow.app',
+  userEmail = 'anton@velor.app',
 }: FocusHeaderProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
@@ -94,7 +94,7 @@ export function FocusHeader({
     <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-center justify-between border-b border-slate-800/80 bg-[#071125]/95 px-5 backdrop-blur">
       <div className="flex items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg">
-          <img alt="FocusFlow logo" className="h-6 w-6 object-contain" src="/brand/logo.png" />
+          <img alt="Velor logo" className="h-6 w-6 object-contain" src="/brand/logo.png" />
         </div>
         <h1 className="text-xl font-semibold tracking-tight text-slate-100">Velor</h1>
       </div>

@@ -258,7 +258,7 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
               <h2 className="truncate text-lg font-semibold tracking-tight text-slate-100 sm:text-xl">
                 Settings & History
               </h2>
-              <p className="truncate text-xs text-slate-500">FocusFlow preferences and Daily Log insights</p>
+              <p className="truncate text-xs text-slate-500">Velor preferences and Daily Log insights</p>
             </div>
           </div>
 
