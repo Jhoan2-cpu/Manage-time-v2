@@ -616,13 +616,19 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
             key={`daily-log-toggle-mobile-${dailyLogTogglePulseKey}`}
             aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
             className={classNames(
-              'fixed bottom-4 left-4 z-40 grid h-11 w-11 place-items-center rounded-full bg-[#0a1427]/95 text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden',
+              'fixed bottom-4 left-4 z-40 grid h-11 w-11 place-items-center rounded-full text-slate-200 transition xl:hidden',
+              isDailyLogOpen
+                ? 'daily-log-mobile-close-glow border border-rose-300/55 bg-rose-500/18 text-rose-50 ring-1 ring-rose-300/45 hover:border-rose-200/70 hover:ring-rose-200/60'
+                : 'bg-[#0a1427]/95 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 hover:ring-blue-500/40',
               dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
             )}
             onClick={handleToggleDailyLog}
             type="button"
           >
-            <FontAwesomeIcon className="text-[13px] text-slate-300" icon={faClockRotateLeft} />
+            <FontAwesomeIcon
+              className={classNames(isDailyLogOpen ? 'text-[14px] text-rose-100 drop-shadow-[0_0_10px_rgba(251,113,133,0.42)]' : 'text-[13px] text-slate-300')}
+              icon={isDailyLogOpen ? faXmark : faClockRotateLeft}
+            />
           </button>
 
           <button

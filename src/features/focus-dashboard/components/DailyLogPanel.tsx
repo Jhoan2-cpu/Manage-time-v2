@@ -411,7 +411,12 @@ export function DailyLogPanel({
           </table>
         </div>
 
-        <div className="border-t border-slate-800 bg-[#040b18] px-4 py-3">
+        <div
+          className={classNames(
+            'border-t border-slate-800 bg-[#040b18] py-3 pr-4',
+            isOpen ? 'pl-16 xl:px-4' : 'px-4',
+          )}
+        >
           <div className="space-y-2 text-xs text-slate-400">
             <div className="flex items-center justify-between">
               <span>Total Tracked</span>
