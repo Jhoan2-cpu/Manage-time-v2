@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
+  faArrowLeft,
   faEnvelope,
   faEye,
   faEyeSlash,
@@ -14,9 +15,10 @@ type RegisterPageProps = {
   onRegister: (payload: { displayName: string; email: string; password: string }) => void
   onRegisterWithGoogle?: () => void
   onOpenLogin?: () => void
+  onGoBack?: () => void
 }
 
-export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin }: RegisterPageProps) {
+export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, onGoBack }: RegisterPageProps) {
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -120,9 +122,20 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin }: 
                   <img alt="Velor logo" className="h-8 w-8 object-contain" src="/brand/logo.png" />
                   <span className="text-xl font-semibold tracking-tight text-slate-100">Velor</span>
                 </div>
-                <div className="mt-1">
-                  <p className="text-lg font-semibold tracking-tight text-slate-100">Register</p>
-                  <p className="text-sm text-slate-400">Create your Velor account.</p>
+                <div className="mt-1 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold tracking-tight text-slate-100">Register</p>
+                    <p className="text-sm text-slate-400">Create your Velor account.</p>
+                  </div>
+                  <button
+                    className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800/60 hover:text-slate-100"
+                    data-sfx-type="off"
+                    onClick={onGoBack}
+                    type="button"
+                  >
+                    <FontAwesomeIcon className="text-xs" icon={faArrowLeft} />
+                    Back
+                  </button>
                 </div>
               </div>
 

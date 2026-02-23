@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { LoginPage } from './features/auth/components/LoginPage'
 import { RegisterPage } from './features/auth/components/RegisterPage'
 import { FocusDashboard } from './features/focus-dashboard/FocusDashboard'
+import { HomePage } from './features/home/components/HomePage'
 
 type AppSessionUser = {
   displayName: string
@@ -9,11 +10,11 @@ type AppSessionUser = {
 }
 
 const SESSION_STORAGE_KEY = 'velor.session.user'
-type AuthScreen = 'login' | 'register'
+type AppRoute = 'home' | 'login' | 'register' | 'app'
 
 function App() {
   const [sessionUser, setSessionUser] = useState<AppSessionUser | null>(null)
-  const [authScreen, setAuthScreen] = useState<AuthScreen>('login')
+  const [currentPath, setCurrentPath] = useState(() => getBrowserPath())
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -43,6 +44,42 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const handlePopState = () => {
+      setCurrentPath(getBrowserPath())
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
+
+  useEffect(() => {
+    const route = resolveRoute(currentPath)
+
+    if (route === 'app' && !sessionUser) {
+      navigateTo('/login', true)
+      setCurrentPath('/login')
+      return
+    }
+
+    if ((route === 'login' || route === 'register') && sessionUser) {
+      navigateTo('/app', true)
+      setCurrentPath('/app')
+      return
+    }
+
+    if (!isKnownPath(currentPath)) {
+      navigateTo('/', true)
+      setCurrentPath('/')
+    }
+  }, [currentPath, sessionUser])
+
   const userForDashboard = useMemo(() => {
     return (
       sessionUser ?? {
@@ -58,11 +95,12 @@ function App() {
       displayName: deriveDisplayNameFromEmail(email),
     }
 
-    setAuthScreen('login')
     setSessionUser(nextUser)
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser))
     }
+    navigateTo('/app')
+    setCurrentPath('/app')
   }
   const handleRegister = ({
     displayName,
@@ -77,11 +115,12 @@ function App() {
       displayName: displayName.trim() || deriveDisplayNameFromEmail(email),
     }
 
-    setAuthScreen('login')
     setSessionUser(nextUser)
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser))
     }
+    navigateTo('/app')
+    setCurrentPath('/app')
   }
   const handleGoogleAuth = () => {
     const nextUser = {
@@ -89,37 +128,93 @@ function App() {
       displayName: 'Google User',
     }
 
-    setAuthScreen('login')
     setSessionUser(nextUser)
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser))
     }
+    navigateTo('/app')
+    setCurrentPath('/app')
   }
 
   const handleSignOut = () => {
     setSessionUser(null)
-    setAuthScreen('login')
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(SESSION_STORAGE_KEY)
     }
+    navigateTo('/login')
+    setCurrentPath('/login')
+  }
+
+  const route = resolveRoute(currentPath)
+  const handleGoBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back()
+      return
+    }
+
+    navigateTo('/')
+    setCurrentPath('/')
   }
 
   if (!sessionUser) {
-    if (authScreen === 'register') {
+    if (route === 'register') {
       return (
         <RegisterPage
-          onOpenLogin={() => setAuthScreen('login')}
+          onGoBack={handleGoBack}
+          onOpenLogin={() => {
+            navigateTo('/login')
+            setCurrentPath('/login')
+          }}
           onRegister={handleRegister}
           onRegisterWithGoogle={handleGoogleAuth}
         />
       )
     }
+    if (route === 'login') {
+      return (
+        <LoginPage
+          onGoBack={handleGoBack}
+          onLogin={handleLogin}
+          onLoginWithGoogle={handleGoogleAuth}
+          onOpenRegister={() => {
+            navigateTo('/register')
+            setCurrentPath('/register')
+          }}
+        />
+      )
+    }
 
     return (
-      <LoginPage
-        onLogin={handleLogin}
-        onLoginWithGoogle={handleGoogleAuth}
-        onOpenRegister={() => setAuthScreen('register')}
+      <HomePage
+        hasSession={false}
+        onOpenLogin={() => {
+          navigateTo('/login')
+          setCurrentPath('/login')
+        }}
+        onOpenRegister={() => {
+          navigateTo('/register')
+          setCurrentPath('/register')
+        }}
+      />
+    )
+  }
+
+  if (route !== 'app') {
+    return (
+      <HomePage
+        hasSession
+        onOpenApp={() => {
+          navigateTo('/app')
+          setCurrentPath('/app')
+        }}
+        onOpenLogin={() => {
+          navigateTo('/app')
+          setCurrentPath('/app')
+        }}
+        onOpenRegister={() => {
+          navigateTo('/app')
+          setCurrentPath('/app')
+        }}
       />
     )
   }
@@ -145,4 +240,50 @@ function deriveDisplayNameFromEmail(email: string) {
     .join(' ')
 
   return formatted || fallback
+}
+
+function getBrowserPath() {
+  if (typeof window === 'undefined') {
+    return '/'
+  }
+
+  return window.location.pathname || '/'
+}
+
+function isKnownPath(pathname: string) {
+  return pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/app'
+}
+
+function resolveRoute(pathname: string): AppRoute {
+  if (pathname === '/login') {
+    return 'login'
+  }
+
+  if (pathname === '/register') {
+    return 'register'
+  }
+
+  if (pathname === '/app') {
+    return 'app'
+  }
+
+  return 'home'
+}
+
+function navigateTo(pathname: string, replace = false) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const nextPath = pathname || '/'
+  if (window.location.pathname === nextPath) {
+    return
+  }
+
+  if (replace) {
+    window.history.replaceState(null, '', nextPath)
+    return
+  }
+
+  window.history.pushState(null, '', nextPath)
 }

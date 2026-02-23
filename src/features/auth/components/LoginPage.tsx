@@ -1,15 +1,16 @@
 import { FormEvent, useMemo, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket } from '@fortawesome/free-solid-svg-icons'
+import { faArrowLeft, faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
 
 type LoginPageProps = {
   onLogin: (payload: { email: string; password: string }) => void
   onLoginWithGoogle?: () => void
   onOpenRegister?: () => void
+  onGoBack?: () => void
 }
 
-export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister }: LoginPageProps) {
+export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack }: LoginPageProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -93,9 +94,20 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister }: LoginP
                   <img alt="Velor logo" className="h-8 w-8 object-contain" src="/brand/logo.png" />
                   <span className="text-xl font-semibold tracking-tight text-slate-100">Velor</span>
                 </div>
-                <div className="mt-1">
-                  <p className="text-lg font-semibold tracking-tight text-slate-100">Log In</p>
-                  <p className="text-sm text-slate-400">Access your focus workspace.</p>
+                <div className="mt-1 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold tracking-tight text-slate-100">Log In</p>
+                    <p className="text-sm text-slate-400">Access your focus workspace.</p>
+                  </div>
+                  <button
+                    className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800/60 hover:text-slate-100"
+                    data-sfx-type="off"
+                    onClick={onGoBack}
+                    type="button"
+                  >
+                    <FontAwesomeIcon className="text-xs" icon={faArrowLeft} />
+                    Back
+                  </button>
                 </div>
               </div>
 
