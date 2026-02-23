@@ -76,7 +76,7 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
   const [selectedTaskFilter, setSelectedTaskFilter] = useState<string>('all')
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'today' | 'last7' | 'last30'>('all')
   const [historyPage, setHistoryPage] = useState(1)
-  const [expandedHistoryDay, setExpandedHistoryDay] = useState<string | null>(null)
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) {
@@ -313,15 +313,25 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
   }, [historyPage, historyPagination.totalPages])
 
   useEffect(() => {
-    if (!expandedHistoryDay) {
+    if (!selectedHistoryDay) {
       return
     }
 
-    const existsInFiltered = filteredHistoryDays.some((day) => day.dateIso === expandedHistoryDay)
+    const existsInFiltered = filteredHistoryDays.some((day) => day.dateIso === selectedHistoryDay)
     if (!existsInFiltered) {
-      setExpandedHistoryDay(null)
+      setSelectedHistoryDay(null)
     }
-  }, [expandedHistoryDay, filteredHistoryDays])
+  }, [filteredHistoryDays, selectedHistoryDay])
+
+  const selectedHistoryDaySummary = useMemo(
+    () => (selectedHistoryDay ? historyDaySummaries.find((day) => day.dateIso === selectedHistoryDay) ?? null : null),
+    [historyDaySummaries, selectedHistoryDay],
+  )
+
+  const selectedHistoryDayStats = useMemo(
+    () => buildDayHistoryStatsFromRows(selectedHistoryDaySummary?.rows ?? []),
+    [selectedHistoryDaySummary],
+  )
 
   if (!isOpen) {
     return null
@@ -392,7 +402,7 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
               </div>
             </section>
 
-            <section className="rounded-2xl bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_44%),linear-gradient(180deg,rgba(8,16,34,0.93),rgba(5,12,25,0.96))] p-4 shadow-[0_20px_55px_rgba(2,8,20,0.32),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-5">
+            <section className="relative rounded-2xl bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_44%),linear-gradient(180deg,rgba(8,16,34,0.93),rgba(5,12,25,0.96))] p-4 shadow-[0_20px_55px_rgba(2,8,20,0.32),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-5">
               <div className="mb-5 flex items-center gap-2">
                 <FontAwesomeIcon className="text-slate-400" icon={faChartPie} />
                 <h3 className="text-base font-semibold text-slate-100">History</h3>
@@ -603,9 +613,22 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
                   <div className="divide-y divide-slate-800/70 bg-slate-950/15">
                     {historyPagination.pageRows.length > 0 ? (
                       historyPagination.pageRows.map((day) => {
-                        const isExpanded = expandedHistoryDay === day.dateIso
-                        const visibleIconTags = day.iconTags.slice(0, 6)
-                        const hiddenIconsCount = Math.max(0, day.iconTags.length - visibleIconTags.length)
+                        const visualTasks = Array.from(
+                          new Map(
+                            day.rows
+                              .filter((row) => row.taskIconTag)
+                              .map((row) => [
+                                row.taskId ?? `${row.taskIconTag}-${row.taskTitle}`,
+                                {
+                                  iconTag: row.taskIconTag!,
+                                  colorTag: row.taskColorTag,
+                                  title: row.taskTitle,
+                                },
+                              ]),
+                          ).values(),
+                        )
+                        const visibleVisualTasks = visualTasks.slice(0, 6)
+                        const hiddenIconsCount = Math.max(0, visualTasks.length - visibleVisualTasks.length)
                         return (
                           <div key={day.dateIso}>
                             <div className="grid gap-3 px-4 py-3 md:grid-cols-[170px_minmax(0,1fr)_140px_140px] md:items-center">
@@ -627,11 +650,10 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
                                 </div>
                                 <div className="mt-1 flex items-center gap-2 md:mt-0">
                                   <div className="flex min-w-0 items-center">
-                                    {visibleIconTags.length > 0 ? (
-                                      visibleIconTags.map((iconTag, index) => {
-                                        const taskIcon = taskIconMap[iconTag]
-                                        const colorTag = tasks.find((task) => task.iconTag === iconTag)?.colorTag
-                                        const taskColor = colorTag ? taskColorMap[colorTag] : null
+                                    {visibleVisualTasks.length > 0 ? (
+                                      visibleVisualTasks.map((visualTask, index) => {
+                                        const taskIcon = taskIconMap[visualTask.iconTag]
+                                        const taskColor = visualTask.colorTag ? taskColorMap[visualTask.colorTag] : null
                                         return (
                                           <span
                                             className={
@@ -639,8 +661,8 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
                                                 ? `-ml-1 grid h-7 w-7 place-items-center rounded-full border text-[10px] ${taskColor.iconShellClassName} ${index === 0 ? 'ml-0' : ''}`
                                                 : `-ml-1 grid h-7 w-7 place-items-center rounded-full bg-slate-800 text-[10px] text-slate-300 ${index === 0 ? 'ml-0' : ''}`
                                             }
-                                            key={`${day.dateIso}-${iconTag}-${index}`}
-                                            title={taskIcon.label}
+                                            key={`${day.dateIso}-${visualTask.title}-${index}`}
+                                            title={visualTask.title}
                                           >
                                             <FontAwesomeIcon icon={taskIcon.icon} />
                                           </span>
@@ -674,65 +696,14 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
                               <div className="flex justify-end md:justify-start">
                                 <button
                                   className="inline-flex items-center gap-2 rounded-xl bg-slate-900/45 px-3 py-2 text-sm text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.32)] transition hover:bg-slate-800/70 hover:text-slate-100"
-                                  onClick={() =>
-                                    setExpandedHistoryDay((current) => (current === day.dateIso ? null : day.dateIso))
-                                  }
+                                  onClick={() => setSelectedHistoryDay(day.dateIso)}
                                   type="button"
                                 >
-                                  <span>{isExpanded ? 'Hide details' : 'View details'}</span>
-                                  <FontAwesomeIcon
-                                    className={`text-[11px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                                    icon={faChevronRight}
-                                  />
+                                  <FontAwesomeIcon className="text-[11px]" icon={faChevronRight} />
+                                  <span>Details</span>
                                 </button>
                               </div>
                             </div>
-
-                            {isExpanded ? (
-                              <div className="border-t border-slate-800/70 bg-slate-950/15 px-4 py-3">
-                                <div className="mb-2 flex items-center justify-between gap-2">
-                                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                                    {formatIsoDateLong(day.dateIso)}
-                                  </p>
-                                  <p className="text-xs text-slate-500">{day.rows.length} detailed records</p>
-                                </div>
-
-                                <div className="space-y-2">
-                                  {day.rows.map((row) => {
-                                    const taskColor = row.taskColorTag ? taskColorMap[row.taskColorTag] : null
-                                    const taskIcon = row.taskIconTag ? taskIconMap[row.taskIconTag] : null
-                                    return (
-                                      <div
-                                        className="grid gap-2 rounded-xl bg-slate-900/25 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)] sm:grid-cols-[90px_110px_minmax(0,1fr)] sm:items-center"
-                                        key={row.id}
-                                      >
-                                        <span className="font-mono text-sm text-slate-300">{row.start}</span>
-                                        <span className="inline-flex w-fit items-center rounded-md bg-slate-900/55 px-2 py-1 font-mono text-xs text-slate-200 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
-                                          {row.duration}
-                                        </span>
-                                        <div className="flex min-w-0 items-center gap-2">
-                                          {taskIcon ? (
-                                            <span
-                                              className={
-                                                taskColor
-                                                  ? `grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] ${taskColor.iconShellClassName}`
-                                                  : 'grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-800 text-[10px] text-slate-300'
-                                              }
-                                            >
-                                              <FontAwesomeIcon icon={taskIcon.icon} />
-                                            </span>
-                                          ) : null}
-                                          <div className="min-w-0">
-                                            <p className="truncate text-sm font-medium text-slate-100">{row.taskTitle}</p>
-                                            <p className="truncate text-xs text-slate-500">{row.activityLabel}</p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            ) : null}
                           </div>
                         )
                       })
@@ -782,6 +753,224 @@ export function SettingsModal({ isOpen, onClose, tasks, entries, historyEntries,
                   </div>
                 </div>
               </div>
+
+              {selectedHistoryDaySummary ? (
+                <div className="fixed inset-x-0 bottom-0 top-16 z-[110] bg-[#040a16]/92 backdrop-blur-sm">
+                  <div className="h-full px-4 py-4 sm:px-6 sm:py-6">
+                    <div className="mx-auto flex h-full w-full max-w-7xl flex-col rounded-2xl bg-[linear-gradient(180deg,rgba(8,16,34,0.98),rgba(5,12,25,0.99))] p-4 shadow-[0_24px_70px_rgba(1,8,22,0.45),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-5">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="inline-flex items-center gap-2 rounded-xl bg-slate-900/50 px-3 py-2 text-sm text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.35)] transition hover:bg-slate-800/75 hover:text-slate-100"
+                          onClick={() => setSelectedHistoryDay(null)}
+                          type="button"
+                        >
+                          <FontAwesomeIcon icon={faChevronLeft} />
+                          <span>Back</span>
+                        </button>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Day Details</p>
+                          <p className="text-sm font-medium text-slate-200">
+                            {formatIsoDateLong(selectedHistoryDaySummary.dateIso)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {selectedHistoryDaySummary.sessionCount} sessions -{' '}
+                        {formatMinutesCompact(selectedHistoryDaySummary.totalMinutes).toUpperCase()} tracked
+                      </div>
+                    </div>
+
+                    <div className="app-scroll min-h-0 flex-1 overflow-y-auto pr-1">
+                      <div className="space-y-4">
+                        <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+                          <div className="rounded-2xl bg-slate-950/30 p-4 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.3)]">
+                            <div className="mb-4">
+                              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                <FontAwesomeIcon icon={faChartPie} />
+                                Daily Distribution
+                              </div>
+                              <p className="mt-2 text-xs text-slate-400">
+                                Tracked and {UNTRACKED_TIME_LABEL.toLowerCase()} for this day (24h total).
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col items-center">
+                              <div className="relative h-52 w-52 sm:h-60 sm:w-60">
+                                <div
+                                  className="absolute inset-0 rounded-full shadow-[0_0_0_1px_rgba(148,163,184,0.06),0_16px_45px_rgba(2,8,20,0.35)]"
+                                  style={{ background: buildPieChartBackground(selectedHistoryDayStats) }}
+                                />
+                                <div className="absolute inset-[18%] rounded-full bg-[#071122] shadow-[inset_0_1px_0_rgba(148,163,184,0.05),inset_0_-14px_24px_rgba(0,0,0,0.35)]" />
+                                <div className="absolute inset-0 grid place-items-center">
+                                  <div className="text-center">
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                      Tracked
+                                    </p>
+                                    <p className="mt-1 font-mono text-xl font-semibold text-slate-100">
+                                      {formatMinutesCompact(selectedHistoryDayStats.trackedMinutes).toUpperCase()}
+                                    </p>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {selectedHistoryDayStats.totalSessions} sessions
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 grid w-full grid-cols-2 gap-2">
+                                <div className="rounded-xl bg-slate-900/30 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Tracked Time</p>
+                                  <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
+                                    {formatMinutesCompact(selectedHistoryDayStats.trackedMinutes).toUpperCase()}
+                                  </p>
+                                  <p className="text-[11px] text-slate-400">
+                                    {selectedHistoryDayStats.trackedPercentage.toFixed(1)}%
+                                  </p>
+                                </div>
+                                <div className="rounded-xl bg-slate-900/30 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                    {UNTRACKED_TIME_LABEL}
+                                  </p>
+                                  <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
+                                    {formatMinutesCompact(selectedHistoryDayStats.untrackedMinutes).toUpperCase()}
+                                  </p>
+                                  <p className="text-[11px] text-slate-400">
+                                    {selectedHistoryDayStats.untrackedPercentage.toFixed(1)}%
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                              <HistoryStatCard
+                                label="Tracked Time"
+                                value={formatMinutesCompact(selectedHistoryDayStats.trackedMinutes).toUpperCase()}
+                              />
+                              <HistoryStatCard
+                                label={UNTRACKED_TIME_LABEL}
+                                value={formatMinutesCompact(selectedHistoryDayStats.untrackedMinutes).toUpperCase()}
+                              />
+                              <HistoryStatCard
+                                label="Sessions"
+                                value={`${selectedHistoryDayStats.totalSessions}`}
+                              />
+                              <HistoryStatCard
+                                label="Top Task"
+                                value={selectedHistoryDayStats.topTask ? selectedHistoryDayStats.topTask.title : 'No data'}
+                                valueClassName="text-sm"
+                              />
+                            </div>
+
+                            <div className="rounded-2xl bg-slate-950/25 p-4 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
+                              <div className="mb-3 flex items-center justify-between gap-2">
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Time by Task
+                                </p>
+                                <p className="text-xs text-slate-500">Icons + accumulated time + % of 24h day</p>
+                              </div>
+                              <div className="space-y-2">
+                                {selectedHistoryDayStats.slices.length > 0 ? (
+                                  selectedHistoryDayStats.slices.map((slice) => {
+                                    const taskColor = slice.colorTag ? taskColorMap[slice.colorTag] : null
+                                    const taskIcon = slice.iconTag ? taskIconMap[slice.iconTag] : null
+                                    return (
+                                      <div
+                                        className="flex items-center justify-between gap-3 rounded-xl bg-slate-900/30 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)]"
+                                        key={`detail-${slice.key}`}
+                                      >
+                                        <div className="flex min-w-0 items-center gap-2">
+                                          <span
+                                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                            style={{
+                                              backgroundColor: slice.colorTag ? chartColorHexByTag[slice.colorTag] : '#64748b',
+                                            }}
+                                          />
+                                          {taskIcon ? (
+                                            <span
+                                              className={
+                                                taskColor
+                                                  ? `grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] ${taskColor.iconShellClassName}`
+                                                  : 'grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-800 text-[10px] text-slate-300'
+                                              }
+                                            >
+                                              <FontAwesomeIcon icon={taskIcon.icon} />
+                                            </span>
+                                          ) : null}
+                                          <div className="min-w-0">
+                                            <p className="truncate text-sm font-medium text-slate-100">{slice.title}</p>
+                                            <p className="text-[11px] text-slate-500">{slice.sessionCount} sessions</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="font-mono text-sm font-semibold text-slate-200">
+                                            {formatMinutesCompact(slice.minutes).toUpperCase()}
+                                          </p>
+                                          <p className="text-xs text-slate-400">{slice.percentage.toFixed(1)}% of day</p>
+                                        </div>
+                                      </div>
+                                    )
+                                  })
+                                ) : (
+                                  <div className="rounded-xl bg-slate-900/25 px-3 py-4 text-sm text-slate-400 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.2)]">
+                                    No data for this day.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-slate-950/20 p-4 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.26)]">
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Daily Log</p>
+                            <p className="text-xs text-slate-500">
+                              {selectedHistoryDaySummary.rows.length} records for {formatIsoDateShort(selectedHistoryDaySummary.dateIso)}
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            {selectedHistoryDaySummary.rows.map((row) => {
+                              const taskColor = row.taskColorTag ? taskColorMap[row.taskColorTag] : null
+                              const taskIcon = row.taskIconTag ? taskIconMap[row.taskIconTag] : null
+                              return (
+                                <div
+                                  className="grid gap-2 rounded-xl bg-slate-900/25 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)] sm:grid-cols-[90px_110px_minmax(0,1fr)] sm:items-center"
+                                  key={`overlay-${row.id}`}
+                                >
+                                  <span className="font-mono text-sm text-slate-300">{row.start}</span>
+                                  <span className="inline-flex w-fit items-center rounded-md bg-slate-900/55 px-2 py-1 font-mono text-xs text-slate-200 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
+                                    {row.duration}
+                                  </span>
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    {taskIcon ? (
+                                      <span
+                                        className={
+                                          taskColor
+                                            ? `grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] ${taskColor.iconShellClassName}`
+                                            : 'grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-800 text-[10px] text-slate-300'
+                                        }
+                                      >
+                                        <FontAwesomeIcon icon={taskIcon.icon} />
+                                      </span>
+                                    ) : null}
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-slate-100">{row.taskTitle}</p>
+                                      <p className="truncate text-xs text-slate-500">{row.activityLabel}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                </div>
+              ) : null}
             </section>
           </div>
         </div>
@@ -832,6 +1021,18 @@ type HistoryStatCardProps = {
   valueClassName?: string
 }
 
+type DayHistoryStats = {
+  slices: HistorySlice[]
+  totalMinutes: number
+  trackedMinutes: number
+  trackedPercentage: number
+  untrackedMinutes: number
+  untrackedPercentage: number
+  totalSessions: number
+  topTask: HistorySlice | null
+  averageSessionMinutes: number
+}
+
 function HistoryStatCard({ label, value, valueClassName }: HistoryStatCardProps) {
   return (
     <div className="rounded-xl bg-slate-950/25 p-3 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
@@ -839,6 +1040,80 @@ function HistoryStatCard({ label, value, valueClassName }: HistoryStatCardProps)
       <p className={`mt-2 truncate font-mono text-base font-semibold text-slate-100 ${valueClassName ?? ''}`}>{value}</p>
     </div>
   )
+}
+
+function buildDayHistoryStatsFromRows(rows: HistoryRecordRow[]): DayHistoryStats {
+  const aggregated = new Map<string, Omit<HistorySlice, 'percentage'>>()
+
+  for (const row of rows) {
+    const minutes = Math.max(0, row.minutes || 0)
+    if (minutes <= 0) {
+      continue
+    }
+
+    const key = row.taskId ?? `activity-${row.taskTitle}`
+    const current = aggregated.get(key)
+    if (current) {
+      current.minutes += minutes
+      current.sessionCount += 1
+      continue
+    }
+
+    aggregated.set(key, {
+      key,
+      title: row.taskTitle,
+      minutes,
+      sessionCount: 1,
+      colorTag: row.taskColorTag,
+      iconTag: row.taskIconTag,
+    })
+  }
+
+  const slices = Array.from(aggregated.values())
+    .sort((a, b) => b.minutes - a.minutes)
+    .map((slice) => ({
+      ...slice,
+      percentage: (slice.minutes / DAY_TOTAL_MINUTES) * 100,
+    }))
+
+  const totalMinutes = slices.reduce((sum, slice) => sum + slice.minutes, 0)
+  const trackedMinutes = Math.min(DAY_TOTAL_MINUTES, totalMinutes)
+  const totalSessions = slices.reduce((sum, slice) => sum + slice.sessionCount, 0)
+  const untrackedMinutes = Math.max(0, DAY_TOTAL_MINUTES - trackedMinutes)
+
+  return {
+    slices,
+    totalMinutes,
+    trackedMinutes,
+    trackedPercentage: (trackedMinutes / DAY_TOTAL_MINUTES) * 100,
+    untrackedMinutes,
+    untrackedPercentage: (untrackedMinutes / DAY_TOTAL_MINUTES) * 100,
+    totalSessions,
+    topTask: slices[0] ?? null,
+    averageSessionMinutes: totalSessions > 0 ? totalMinutes / totalSessions : 0,
+  }
+}
+
+function buildPieChartBackground(history: Pick<DayHistoryStats, 'slices'>) {
+  if (history.slices.length === 0) {
+    return 'conic-gradient(rgba(71,85,105,0.45) 0deg 360deg)'
+  }
+
+  let cursor = 0
+  const segments = history.slices.map((slice) => {
+    const degrees = (Math.max(0, slice.minutes) / DAY_TOTAL_MINUTES) * 360
+    const start = cursor
+    const end = cursor + degrees
+    cursor = end
+    const color = slice.colorTag ? chartColorHexByTag[slice.colorTag] : '#64748b'
+    return `${color} ${start}deg ${end}deg`
+  })
+
+  if (cursor < 360) {
+    segments.push(`#334155 ${cursor}deg 360deg`)
+  }
+
+  return `conic-gradient(${segments.join(', ')})`
 }
 
 function toIsoDateString(date: Date) {
@@ -870,3 +1145,4 @@ function formatIsoDateShort(isoDate: string) {
     year: 'numeric',
   }).format(date)
 }
+
