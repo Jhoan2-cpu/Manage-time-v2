@@ -4,6 +4,7 @@ import { faChevronLeft, faChevronRight, faClockRotateLeft } from '@fortawesome/f
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
 import { ProfileModal } from './components/ProfileModal'
+import { SignOutConfirmModal } from './components/SignOutConfirmModal'
 import { SettingsModal } from './components/SettingsModal'
 import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModal'
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
@@ -24,7 +25,13 @@ const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   violet: '139,92,246',
 }
 
-export function FocusDashboard() {
+type FocusDashboardProps = {
+  userName?: string
+  userEmail?: string
+  onSignOut?: () => void
+}
+
+export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboardProps = {}) {
   const [taskList, setTaskList] = useState<Task[]>(tasks)
   const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(initialLogEntries)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
@@ -33,6 +40,7 @@ export function FocusDashboard() {
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<Task | null>(null)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false)
   const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false)
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
@@ -274,6 +282,16 @@ export function FocusDashboard() {
   const handleCloseProfile = () => {
     setIsProfileModalOpen(false)
   }
+  const handleRequestSignOut = () => {
+    setIsSignOutConfirmOpen(true)
+  }
+  const handleCloseSignOutConfirm = () => {
+    setIsSignOutConfirmOpen(false)
+  }
+  const handleConfirmSignOut = () => {
+    setIsSignOutConfirmOpen(false)
+    onSignOut?.()
+  }
   const handleCloseSettings = () => {
     setIsSettingsModalOpen(false)
   }
@@ -437,11 +455,14 @@ export function FocusDashboard() {
       <FocusHeader
         isBackgroundMusicPlaying={isBackgroundMusicPlaying}
         onOpenProfile={handleOpenProfile}
+        onSignOut={handleRequestSignOut}
         onOpenSettings={handleOpenSettings}
         onToggleBackgroundMusic={handleToggleBackgroundMusic}
         timeLabel={timeLabel}
         timeZoneName={timeZoneName}
         utcOffsetLabel={utcOffsetLabel}
+        userEmail={userEmail}
+        userName={userName}
       />
 
       {isDailyLogOpen ? (
@@ -545,7 +566,12 @@ export function FocusDashboard() {
         onClose={handleCloseSwitchTaskConfirm}
         onConfirm={handleConfirmSwitchTask}
       />
-      <ProfileModal isOpen={isProfileModalOpen} onClose={handleCloseProfile} />
+      <ProfileModal isOpen={isProfileModalOpen} onClose={handleCloseProfile} userEmail={userEmail} userName={userName} />
+      <SignOutConfirmModal
+        isOpen={isSignOutConfirmOpen}
+        onClose={handleCloseSignOutConfirm}
+        onConfirm={handleConfirmSignOut}
+      />
       <SettingsModal
         dashboardStats={dashboardStats}
         entries={dailyLogEntries}

@@ -16,6 +16,7 @@ type FocusHeaderProps = {
   utcOffsetLabel: string
   onOpenSettings?: () => void
   onOpenProfile?: () => void
+  onSignOut?: () => void
   onToggleBackgroundMusic?: () => void
   isBackgroundMusicPlaying?: boolean
   userName?: string
@@ -28,6 +29,7 @@ export function FocusHeader({
   utcOffsetLabel,
   onOpenSettings,
   onOpenProfile,
+  onSignOut,
   onToggleBackgroundMusic,
   isBackgroundMusicPlaying = false,
   userName = 'Anton',
@@ -89,12 +91,16 @@ export function FocusHeader({
     setIsUserMenuOpen(false)
     onOpenProfile?.()
   }
+  const handleSignOutFromMenu = () => {
+    setIsUserMenuOpen(false)
+    onSignOut?.()
+  }
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-center justify-between border-b border-slate-800/80 bg-[#071125]/95 px-5 backdrop-blur">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg">
-          <img alt="Velor logo" className="h-6 w-6 object-contain" src="/brand/logo.png" />
+        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
+          <img alt="Velor logo" className="h-9 w-9 object-contain" src="/brand/logo.png" />
         </div>
         <h1 className="text-xl font-semibold tracking-tight text-slate-100">Velor</h1>
       </div>
@@ -212,7 +218,7 @@ export function FocusHeader({
                 <div className="border-t border-slate-800/90 px-3 py-3">
                   <button
                     className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
-                    onClick={() => setIsUserMenuOpen(false)}
+                    onClick={handleSignOutFromMenu}
                     role="menuitem"
                     type="button"
                   >
