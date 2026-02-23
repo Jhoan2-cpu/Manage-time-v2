@@ -4,6 +4,7 @@ import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { taskIconMap } from '../constants/taskOptions'
 import type { LogEntry, LogTone, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
+import { formatMinutesCompact, parseDurationLabelToMinutes } from '../utils/time'
 
 type DailyLogPanelProps = {
   entries: LogEntry[]
@@ -18,6 +19,7 @@ type LogCellCoord = {
 }
 
 const HEADER_ROW_INDEX = 0
+const DAY_TOTAL_MINUTES = 24 * 60
 
 const logToneStyles: Record<LogTone, { row: string; time: string; duration: string; activity: string; icon: string }> = {
   break: {
@@ -126,6 +128,13 @@ export function DailyLogPanel({
       }),
     [entries, taskMap],
   )
+  const trackedMinutes = useMemo(
+    () => entries.reduce((sum, entry) => sum + parseDurationLabelToMinutes(entry.duration), 0),
+    [entries],
+  )
+  const untrackedMinutes = Math.max(0, DAY_TOTAL_MINUTES - trackedMinutes)
+  const trackedTimeLabel = entries.length > 0 ? formatMinutesCompact(trackedMinutes) : totalTracked
+  const untrackedTimeLabel = formatMinutesCompact(untrackedMinutes)
 
   const selectedRange = useMemo(() => {
     if (!selectionAnchor || !selectionFocus) {
@@ -382,9 +391,15 @@ export function DailyLogPanel({
         </div>
 
         <div className="border-t border-slate-800 bg-[#040b18] px-4 py-3">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Total Tracked</span>
-            <span className="font-mono font-medium tabular-nums text-slate-300">{totalTracked}</span>
+          <div className="space-y-2 text-xs text-slate-400">
+            <div className="flex items-center justify-between">
+              <span>Total Tracked</span>
+              <span className="font-mono font-medium tabular-nums text-slate-300">{trackedTimeLabel}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-800/70 pt-2">
+              <span>Untracked Time</span>
+              <span className="font-mono font-medium tabular-nums text-slate-400">{untrackedTimeLabel}</span>
+            </div>
           </div>
         </div>
       </div>
