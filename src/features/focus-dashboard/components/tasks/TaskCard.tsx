@@ -63,7 +63,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
   return (
     <article
       className={classNames(
-        'flex h-36 w-64 shrink-0 cursor-pointer flex-col justify-between rounded-2xl p-3.5 transition duration-200 hover:-translate-y-0.5',
+        'flex h-[7.5rem] w-64 shrink-0 cursor-pointer flex-col rounded-2xl p-2.5 transition duration-200 hover:-translate-y-0.5',
         'relative overflow-hidden',
         isActive && 'task-card-focus-ignite',
         colorStyles.cardClassName,
@@ -80,7 +80,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
       }}
       style={activeCardGlowStyle}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-2">
         <div className="min-w-0 flex flex-1 items-start gap-2">
           <span
             className={classNames(
@@ -91,7 +91,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
           >
             <FontAwesomeIcon icon={iconOption.icon} />
           </span>
-          <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-100">{task.title}</h3>
+          <h3 className="line-clamp-2 text-sm font-semibold leading-4 text-slate-100">{task.title}</h3>
         </div>
       </div>
 
@@ -120,7 +120,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="mt-auto flex items-center justify-between gap-2 pt-1">
         <div className="flex min-w-0 items-center">
           <div
             className={classNames(
