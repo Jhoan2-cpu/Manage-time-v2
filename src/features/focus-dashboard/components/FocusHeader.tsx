@@ -14,6 +14,7 @@ type FocusHeaderProps = {
   timeZoneName: string
   utcOffsetLabel: string
   onOpenSettings?: () => void
+  onOpenProfile?: () => void
   userName?: string
   userEmail?: string
 }
@@ -23,6 +24,7 @@ export function FocusHeader({
   timeZoneName,
   utcOffsetLabel,
   onOpenSettings,
+  onOpenProfile,
   userName = 'Anton',
   userEmail = 'anton@focusflow.app',
 }: FocusHeaderProps) {
@@ -77,6 +79,10 @@ export function FocusHeader({
   const handleOpenSettingsFromMenu = () => {
     setIsUserMenuOpen(false)
     onOpenSettings?.()
+  }
+  const handleOpenProfileFromMenu = () => {
+    setIsUserMenuOpen(false)
+    onOpenProfile?.()
   }
 
   return (
@@ -150,7 +156,7 @@ export function FocusHeader({
                 <div className="px-3 py-3">
                   <button
                     className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
-                    onClick={() => setIsUserMenuOpen(false)}
+                    onClick={handleOpenProfileFromMenu}
                     role="menuitem"
                     type="button"
                   >

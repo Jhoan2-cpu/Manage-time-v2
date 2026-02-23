@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
+import { ProfileModal } from './components/ProfileModal'
 import { SettingsModal } from './components/SettingsModal'
 import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModal'
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
@@ -29,6 +30,7 @@ export function FocusDashboard() {
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [taskPendingDelete, setTaskPendingDelete] = useState<Task | null>(null)
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<Task | null>(null)
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
@@ -257,6 +259,12 @@ export function FocusDashboard() {
   const handleOpenSettings = () => {
     setIsSettingsModalOpen(true)
   }
+  const handleOpenProfile = () => {
+    setIsProfileModalOpen(true)
+  }
+  const handleCloseProfile = () => {
+    setIsProfileModalOpen(false)
+  }
   const handleCloseSettings = () => {
     setIsSettingsModalOpen(false)
   }
@@ -418,6 +426,7 @@ export function FocusDashboard() {
   return (
     <div className="min-h-screen bg-[#060e1d] text-slate-100">
       <FocusHeader
+        onOpenProfile={handleOpenProfile}
         onOpenSettings={handleOpenSettings}
         timeLabel={timeLabel}
         timeZoneName={timeZoneName}
@@ -525,6 +534,7 @@ export function FocusDashboard() {
         onClose={handleCloseSwitchTaskConfirm}
         onConfirm={handleConfirmSwitchTask}
       />
+      <ProfileModal isOpen={isProfileModalOpen} onClose={handleCloseProfile} />
       <SettingsModal
         dashboardStats={dashboardStats}
         entries={dailyLogEntries}
