@@ -359,13 +359,11 @@ body {
   0% {
     opacity: 0;
     transform: translateY(18px) scale(0.985);
-    filter: blur(2px);
   }
 
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
-    filter: blur(0);
   }
 }
 

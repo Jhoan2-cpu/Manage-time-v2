@@ -514,7 +514,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       ) : null}
 
       {isFocusOnlyMode ? (
-        <section className="focus-only-overlay-enter app-scroll relative h-[100svh] overflow-x-hidden overflow-y-auto">
+        <section className="focus-only-overlay-enter app-scroll relative h-[100svh] overflow-x-hidden overflow-y-auto sm:overflow-y-hidden">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
             <div
