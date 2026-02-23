@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faBell,
@@ -19,7 +20,7 @@ type TaskCardProps = {
 
 const taskStateStyles: Record<TaskState, { shell: string }> = {
   active: {
-    shell: 'shadow-lg shadow-blue-900/20',
+    shell: '',
   },
   done: {
     shell: '',
@@ -37,20 +38,35 @@ const taskCardIconTextClassByColor: Record<Task['colorTag'], string> = {
   violet: 'text-violet-200',
 }
 
+const taskCardGlowRgbByColor: Record<Task['colorTag'], string> = {
+  blue: '59,130,246',
+  green: '16,185,129',
+  amber: '245,158,11',
+  rose: '244,63,94',
+  violet: '139,92,246',
+}
+
 export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCardProps) {
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
   const iconTextClassName = taskCardIconTextClassByColor[task.colorTag]
   const hasAdvancedMeta = Boolean(task.targetDurationMinutes || task.alarmTime)
+  const isActive = task.state === 'active'
+  const activeCardGlowStyle = isActive
+    ? ({ '--task-card-glow-rgb': taskCardGlowRgbByColor[task.colorTag] } as CSSProperties)
+    : undefined
 
   return (
     <article
       className={classNames(
         'flex h-36 w-64 shrink-0 flex-col justify-between rounded-2xl p-3.5 transition duration-200 hover:-translate-y-0.5',
+        'relative overflow-hidden',
+        isActive && 'task-card-focus-ignite',
         colorStyles.cardClassName,
         stateStyles.shell,
       )}
+      style={activeCardGlowStyle}
     >
       <div className="flex items-start gap-2.5">
         <div className="min-w-0 flex flex-1 items-start gap-2.5">
@@ -110,7 +126,7 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCar
         <div className="flex items-center gap-1">
           <button
             aria-label={`Play ${task.title}`}
-            className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
+            className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
             onClick={() => onPlayTask?.(task)}
             type="button"
           >
@@ -129,10 +145,6 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCar
             <FontAwesomeIcon className="text-[10px]" icon={faEye} />
             <span>Ver</span>
           </button>
-
-          {task.state === 'active' ? (
-            <span className={classNames('ml-1 h-2 w-2 animate-pulse rounded-full', colorStyles.pulseClassName)} />
-          ) : null}
         </div>
       </div>
     </article>
