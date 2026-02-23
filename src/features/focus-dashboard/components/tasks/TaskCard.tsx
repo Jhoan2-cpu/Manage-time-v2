@@ -29,10 +29,19 @@ const taskStateStyles: Record<TaskState, { shell: string }> = {
   },
 }
 
+const taskCardIconTextClassByColor: Record<Task['colorTag'], string> = {
+  blue: 'text-blue-200',
+  green: 'text-emerald-200',
+  amber: 'text-amber-200',
+  rose: 'text-rose-200',
+  violet: 'text-violet-200',
+}
+
 export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCardProps) {
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
+  const iconTextClassName = taskCardIconTextClassByColor[task.colorTag]
   const hasAdvancedMeta = Boolean(task.targetDurationMinutes || task.alarmTime)
 
   return (
@@ -47,9 +56,10 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCar
         <div className="min-w-0 flex flex-1 items-start gap-2.5">
           <span
             className={classNames(
-              'grid h-7 w-7 shrink-0 place-items-center rounded-md border text-[11px]',
-              colorStyles.iconShellClassName,
+              'grid h-7 w-7 shrink-0 place-items-center text-[12px]',
+              iconTextClassName,
             )}
+            aria-hidden="true"
           >
             <FontAwesomeIcon icon={iconOption.icon} />
           </span>
@@ -109,7 +119,10 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCar
 
           <button
             aria-label={`View ${task.title}`}
-            className="inline-flex items-center gap-1 rounded-lg bg-slate-950/20 px-2 py-1 text-[11px] font-medium text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)] transition hover:bg-slate-800/70 hover:text-slate-100"
+            className={classNames(
+              'inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:brightness-110',
+              colorStyles.iconShellClassName,
+            )}
             onClick={() => onEditTask?.(task)}
             type="button"
           >
