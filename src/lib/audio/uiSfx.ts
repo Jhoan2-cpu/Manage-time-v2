@@ -19,13 +19,27 @@ const TEXT_INPUT_TYPES = new Set([
 let clickHowl: Howl | null = null
 let typingHowl: Howl | null = null
 let backgroundMusicHowl: Howl | null = null
+let timerRingtoneHowl: Howl | null = null
+let timerRingtoneFallbackHowl: Howl | null = null
 const backgroundMusicListeners = new Set<(isPlaying: boolean) => void>()
+const timerRingtoneListeners = new Set<(isPlaying: boolean) => void>()
 let uiInteractionSfxEnabled = true
 let backgroundMusicVolume = 0.08
+let backgroundMusicFadeStopTimeoutId: number | null = null
+let timerRingtoneFallbackStartTimeoutId: number | null = null
 
 const BACKGROUND_MUSIC_SRC_CANDIDATES = [
   encodeURI('/loop/Dark Ambient No Copyright Music  c152 - missed call.mp3'),
   '/loop/background.mp3',
+]
+
+// Put your custom timer-end ringtones in `public/ringtones/` and use one of these names.
+// If none exists, Velor uses a generated fallback alarm tone.
+const TIMER_RINGTONE_SRC_CANDIDATES = [
+  '/ringtones/timer-end.mp3',
+  '/ringtones/alarm.mp3',
+  '/ringtones/ringtone.mp3',
+  '/ringtones/ringtone-1.mp3',
 ]
 
 export function initUiSfx() {
@@ -66,6 +80,33 @@ export function initUiSfx() {
     onend: emitBackgroundMusicState,
     onplayerror: emitBackgroundMusicState,
     onloaderror: emitBackgroundMusicState,
+  })
+
+  timerRingtoneHowl = new Howl({
+    src: TIMER_RINGTONE_SRC_CANDIDATES,
+    volume: 0.22,
+    loop: true,
+    preload: true,
+    html5: true,
+    onplay: emitTimerRingtoneState,
+    onpause: emitTimerRingtoneState,
+    onstop: emitTimerRingtoneState,
+    onend: emitTimerRingtoneState,
+    onplayerror: emitTimerRingtoneState,
+    onloaderror: emitTimerRingtoneState,
+  })
+
+  timerRingtoneFallbackHowl = new Howl({
+    src: [createTimerAlarmWavDataUri()],
+    volume: 0.22,
+    loop: true,
+    preload: true,
+    onplay: emitTimerRingtoneState,
+    onpause: emitTimerRingtoneState,
+    onstop: emitTimerRingtoneState,
+    onend: emitTimerRingtoneState,
+    onplayerror: emitTimerRingtoneState,
+    onloaderror: emitTimerRingtoneState,
   })
 
   let lastPlayAt = 0
@@ -166,6 +207,7 @@ export function toggleBackgroundMusic() {
   }
 
   try {
+    cancelPendingBackgroundMusicFadeStop()
     if (backgroundMusicHowl.playing()) {
       backgroundMusicHowl.pause()
       emitBackgroundMusicState()
@@ -183,6 +225,10 @@ export function toggleBackgroundMusic() {
 
 export function getBackgroundMusicPlaying() {
   return Boolean(backgroundMusicHowl?.playing())
+}
+
+export function getTimerRingtonePlaying() {
+  return Boolean(timerRingtoneHowl?.playing() || timerRingtoneFallbackHowl?.playing())
 }
 
 export function getBackgroundMusicVolume() {
@@ -222,9 +268,156 @@ export function subscribeBackgroundMusicState(listener: (isPlaying: boolean) => 
   }
 }
 
+export function subscribeTimerRingtoneState(listener: (isPlaying: boolean) => void) {
+  timerRingtoneListeners.add(listener)
+  listener(getTimerRingtonePlaying())
+
+  return () => {
+    timerRingtoneListeners.delete(listener)
+  }
+}
+
+export function triggerTimerEndAlarm() {
+  if (!timerRingtoneHowl && !timerRingtoneFallbackHowl) {
+    return false
+  }
+
+  try {
+    const playAlarm = () => {
+      cancelPendingTimerRingtoneFallbackStart()
+
+      const playFallbackIfNeeded = () => {
+        if (getTimerRingtonePlaying()) {
+          return
+        }
+        if (!timerRingtoneFallbackHowl) {
+          return
+        }
+
+        try {
+          timerRingtoneFallbackHowl.stop()
+          timerRingtoneFallbackHowl.play()
+        } catch {
+          // Ignore playback errors caused by platform autoplay restrictions.
+        } finally {
+          emitTimerRingtoneState()
+        }
+      }
+
+      try {
+        timerRingtoneHowl?.stop()
+        timerRingtoneFallbackHowl?.stop()
+      } catch {
+        // Ignore stop race conditions.
+      }
+
+      if (!timerRingtoneHowl) {
+        playFallbackIfNeeded()
+        return true
+      }
+
+      try {
+        timerRingtoneHowl.play()
+      } catch {
+        playFallbackIfNeeded()
+        return true
+      }
+
+      // If the MP3 source is missing or fails to start, fall back quickly to a generated alarm tone.
+      if (typeof window !== 'undefined') {
+        timerRingtoneFallbackStartTimeoutId = window.setTimeout(() => {
+          timerRingtoneFallbackStartTimeoutId = null
+          playFallbackIfNeeded()
+        }, 360)
+      }
+
+      emitTimerRingtoneState()
+      return true
+    }
+
+    if (!backgroundMusicHowl || !backgroundMusicHowl.playing()) {
+      return playAlarm()
+    }
+
+    cancelPendingBackgroundMusicFadeStop()
+    cancelPendingTimerRingtoneFallbackStart()
+
+    const currentVolume = clamp(backgroundMusicHowl.volume(), 0, 1)
+    if (currentVolume <= 0.001) {
+      backgroundMusicHowl.stop()
+      backgroundMusicHowl.volume(backgroundMusicVolume)
+      emitBackgroundMusicState()
+      return playAlarm()
+    }
+
+    backgroundMusicHowl.fade(currentVolume, 0, 650)
+    backgroundMusicFadeStopTimeoutId = window.setTimeout(() => {
+      if (!backgroundMusicHowl) {
+        return false
+      }
+
+      try {
+        backgroundMusicHowl.stop()
+        backgroundMusicHowl.volume(backgroundMusicVolume)
+      } catch {
+        // Ignore platform playback edge-cases.
+      } finally {
+        emitBackgroundMusicState()
+        backgroundMusicFadeStopTimeoutId = null
+        playAlarm()
+      }
+    }, 700)
+
+    return true
+  } catch {
+    emitTimerRingtoneState()
+    return false
+  }
+}
+
+export function stopTimerEndAlarm() {
+  if (!timerRingtoneHowl && !timerRingtoneFallbackHowl) {
+    return false
+  }
+
+  try {
+    cancelPendingTimerRingtoneFallbackStart()
+    timerRingtoneHowl?.stop()
+    timerRingtoneFallbackHowl?.stop()
+    emitTimerRingtoneState()
+    return false
+  } catch {
+    emitTimerRingtoneState()
+    return false
+  }
+}
+
 function emitBackgroundMusicState() {
   const isPlaying = getBackgroundMusicPlaying()
   backgroundMusicListeners.forEach((listener) => listener(isPlaying))
+}
+
+function emitTimerRingtoneState() {
+  const isPlaying = getTimerRingtonePlaying()
+  timerRingtoneListeners.forEach((listener) => listener(isPlaying))
+}
+
+function cancelPendingBackgroundMusicFadeStop() {
+  if (backgroundMusicFadeStopTimeoutId === null || typeof window === 'undefined') {
+    return
+  }
+
+  window.clearTimeout(backgroundMusicFadeStopTimeoutId)
+  backgroundMusicFadeStopTimeoutId = null
+}
+
+function cancelPendingTimerRingtoneFallbackStart() {
+  if (timerRingtoneFallbackStartTimeoutId === null || typeof window === 'undefined') {
+    return
+  }
+
+  window.clearTimeout(timerRingtoneFallbackStartTimeoutId)
+  timerRingtoneFallbackStartTimeoutId = null
 }
 
 function createUiClickWavDataUri() {
@@ -261,6 +454,28 @@ function createTypingKeyWavDataUri() {
     const clack = Math.sin(2 * Math.PI * 950 * t) * Math.exp(-140 * t) * 0.19
     const noise = pseudoRandom(i + 777) * 0.07 * Math.exp(-220 * t)
     const value = clamp(tick + clack + noise, -1, 1) * env
+    samples[i] = Math.round(value * 32767)
+  }
+
+  const wavBytes = encodePcm16MonoWav(samples, sampleRate)
+  return `data:audio/wav;base64,${bytesToBase64(wavBytes)}`
+}
+
+function createTimerAlarmWavDataUri() {
+  const sampleRate = 22050
+  const durationSeconds = 0.72
+  const sampleCount = Math.floor(sampleRate * durationSeconds)
+  const samples = new Int16Array(sampleCount)
+
+  for (let i = 0; i < sampleCount; i += 1) {
+    const t = i / sampleRate
+    const pulse = Math.sin(2 * Math.PI * 2.3 * t) > 0 ? 1 : 0.35
+    const env = Math.exp(-1.7 * t)
+    const toneA = Math.sin(2 * Math.PI * 880 * t) * 0.34
+    const toneB = Math.sin(2 * Math.PI * 1320 * t) * 0.18
+    const low = Math.sin(2 * Math.PI * 220 * t) * 0.08
+    const shimmer = Math.sin(2 * Math.PI * 1760 * t) * Math.exp(-9 * t) * 0.09
+    const value = clamp((toneA + toneB + low + shimmer) * env * pulse, -1, 1)
     samples[i] = Math.round(value * 32767)
   }
 

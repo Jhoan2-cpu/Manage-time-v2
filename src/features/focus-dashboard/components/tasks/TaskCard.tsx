@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
+  faArrowRotateRight,
   faBell,
   faEye,
   faHourglassHalf,
@@ -16,6 +17,7 @@ type TaskCardProps = {
   task: Task
   sessionCount: number
   isRunning?: boolean
+  showRestartAction?: boolean
   onPlayTask?: (task: Task) => void
   onEditTask?: (task: Task) => void
 }
@@ -56,7 +58,14 @@ const taskCardTiltClassByColor: Record<Task['colorTag'], string> = {
   violet: '-rotate-[0.25deg]',
 }
 
-export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, onEditTask }: TaskCardProps) {
+export function TaskCard({
+  task,
+  sessionCount,
+  isRunning = false,
+  showRestartAction = false,
+  onPlayTask,
+  onEditTask,
+}: TaskCardProps) {
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
@@ -65,6 +74,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
   const sessionsLabel = sessionCount > 99 ? '99+' : String(sessionCount)
   const isActive = task.state === 'active'
   const isActiveRunning = isActive && isRunning
+  const showRestartIcon = isActive && showRestartAction && !isRunning
   const activeCardGlowStyle = isActive
     ? ({ '--task-card-glow-rgb': taskCardGlowRgbByColor[task.colorTag] } as CSSProperties)
     : undefined
@@ -148,12 +158,15 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
 
         <div className="flex items-center gap-1">
           <button
-            aria-label={`${isActiveRunning ? 'Pause' : 'Play'} ${task.title}`}
+            aria-label={`${isActiveRunning ? 'Pause' : showRestartIcon ? 'Restart' : 'Play'} ${task.title}`}
             className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
             onClick={() => onPlayTask?.(task)}
             type="button"
           >
-            <FontAwesomeIcon className={classNames(isActiveRunning ? 'text-[10px]' : 'text-[11px]')} icon={isActiveRunning ? faPause : faPlay} />
+            <FontAwesomeIcon
+              className={classNames(isActiveRunning ? 'text-[10px]' : showRestartIcon ? 'text-[10px]' : 'text-[11px]')}
+              icon={isActiveRunning ? faPause : showRestartIcon ? faArrowRotateRight : faPlay}
+            />
           </button>
 
           <button

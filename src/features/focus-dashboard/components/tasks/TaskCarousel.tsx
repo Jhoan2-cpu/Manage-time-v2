@@ -9,6 +9,7 @@ type TaskCarouselProps = {
   tasks: Task[]
   sessionCountByTaskId: Record<string, number>
   isFocusRunning?: boolean
+  isActiveTaskTimerComplete?: boolean
   accentColorTag?: TaskColorKey
   onAddTask: () => void
   onPlayTask?: (task: Task) => void
@@ -63,6 +64,7 @@ export function TaskCarousel({
   tasks,
   sessionCountByTaskId,
   isFocusRunning = false,
+  isActiveTaskTimerComplete = false,
   accentColorTag = 'blue',
   onAddTask,
   onPlayTask,
@@ -246,6 +248,7 @@ export function TaskCarousel({
                       onEditTask={onEditTask}
                       onPlayTask={onPlayTask}
                       sessionCount={sessionCountByTaskId[task.id] ?? 0}
+                      showRestartAction={isActiveTaskTimerComplete}
                       task={task}
                     />
                   </div>

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBullseye, faChevronLeft, faChevronRight, faClockRotateLeft, faXmark } from '@fortawesome/free-solid-svg-icons'
+import {
+  faBellSlash,
+  faBullseye,
+  faChevronLeft,
+  faChevronRight,
+  faClockRotateLeft,
+  faXmark,
+} from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
 import { ProfileModal } from './components/ProfileModal'
@@ -22,7 +29,10 @@ import {
   setBackgroundMusicVolume,
   setUiInteractionSfxEnabled,
   subscribeBackgroundMusicState,
+  subscribeTimerRingtoneState,
+  stopTimerEndAlarm,
   toggleBackgroundMusic,
+  triggerTimerEndAlarm,
 } from '../../lib/audio/uiSfx'
 
 const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
@@ -50,6 +60,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false)
   const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false)
+  const [isTimerAlarmPlaying, setIsTimerAlarmPlaying] = useState(false)
   const [uiInteractionSfxEnabled, setUiInteractionSfxEnabledState] = useState(() => getUiInteractionSfxEnabled())
   const [backgroundMusicVolume, setBackgroundMusicVolumeState] = useState(() => getBackgroundMusicVolume())
   const [requireTaskSwitchConfirmation, setRequireTaskSwitchConfirmation] = useState(true)
@@ -113,6 +124,9 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       ? Math.max(0, activeTaskTargetSeconds - sessionElapsedSeconds)
       : sessionElapsedSeconds
   const timerDisplayLabel = formatSecondsHms(timerDisplaySeconds)
+  const isTimerComplete = Boolean(
+    timerMode === 'timer' && activeTaskTargetSeconds && sessionElapsedSeconds >= activeTaskTargetSeconds,
+  )
   const activeTaskTotalTimeLabel = activeTask
     ? formatSecondsHms((loggedSecondsByTaskId[activeTask.id] ?? 0) + (activeTaskHasLiveSession ? sessionElapsedSeconds : 0))
     : '00:00:00'
@@ -146,6 +160,10 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   }, [])
 
   useEffect(() => {
+    return subscribeTimerRingtoneState(setIsTimerAlarmPlaying)
+  }, [])
+
+  useEffect(() => {
     if (!isFocusRunning) {
       return
     }
@@ -168,6 +186,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       setSessionElapsedSeconds(activeTaskTargetSeconds)
       setIsFocusRunning(false)
       commitCurrentFocusSession()
+      triggerTimerEndAlarm()
     }
   }, [activeTaskTargetSeconds, isFocusRunning, sessionElapsedSeconds, timerMode])
 
@@ -400,6 +419,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     setActiveFocusSessionMeta(null)
   }
   const activateTaskAndStartNewCount = (selectedTask: Task) => {
+    stopTimerEndAlarm()
     handleFinishUntrackedSession()
     commitCurrentFocusSession()
     setWorkspaceGlowPulseKey((current) => current + 1)
@@ -425,6 +445,8 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     if (!activeTask) {
       return
     }
+
+    stopTimerEndAlarm()
 
     if (isFocusRunning) {
       setIsFocusRunning(false)
@@ -458,6 +480,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       return
     }
 
+    stopTimerEndAlarm()
     setTimerMode(nextMode)
   }
   const handlePlayTask = (selectedTask: Task) => {
@@ -549,6 +572,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
               canUseTimerMode={Boolean(activeTaskTargetSeconds)}
               isFocusOnlyMode
               isRunning={isFocusRunning}
+              isTimerComplete={isTimerComplete}
               mode={timerMode}
               onChangeMode={handleChangeTimerMode}
               onStartFocus={handleStartFocus}
@@ -557,6 +581,18 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
               totalTaskTimeLabel={activeTaskTotalTimeLabel}
             />
           </div>
+
+          {isTimerAlarmPlaying ? (
+            <button
+              aria-label="Silence timer alarm"
+              className="timer-alarm-stop-glow fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-rose-300/55 bg-rose-500/18 px-3 py-2 text-sm text-rose-50 ring-1 ring-rose-300/45 backdrop-blur-md transition hover:border-rose-200/70 hover:bg-rose-500/24 hover:ring-rose-200/60"
+              onClick={stopTimerEndAlarm}
+              type="button"
+            >
+              <FontAwesomeIcon className="text-[12px] drop-shadow-[0_0_8px_rgba(251,113,133,0.35)]" icon={faBellSlash} />
+              <span className="hidden font-medium sm:inline">Silence Alarm</span>
+            </button>
+          ) : null}
         </section>
       ) : (
         <>
@@ -594,6 +630,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
                 <div className="relative z-10 mx-auto flex h-full min-h-full w-full flex-1 flex-col px-4 pb-3 pt-4 md:px-6">
                   <TaskCarousel
                     accentColorTag={activeWorkspaceAccentColor}
+                    isActiveTaskTimerComplete={isTimerComplete}
                     isFocusRunning={isFocusRunning}
                     onAddTask={handleAddTask}
                     onDeleteTask={handleRequestDeleteTask}
@@ -606,6 +643,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
                     activeTask={activeTask}
                     canUseTimerMode={Boolean(activeTaskTargetSeconds)}
                     isRunning={isFocusRunning}
+                    isTimerComplete={isTimerComplete}
                     mode={timerMode}
                     onChangeMode={handleChangeTimerMode}
                     onStartFocus={handleStartFocus}
@@ -654,6 +692,18 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
               <FontAwesomeIcon className="text-[10px]" icon={isDailyLogOpen ? faChevronLeft : faChevronRight} />
             </span>
           </button>
+
+          {isTimerAlarmPlaying ? (
+            <button
+              aria-label="Silence timer alarm"
+              className="timer-alarm-stop-glow fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-rose-300/55 bg-rose-500/18 px-3 py-2 text-sm text-rose-50 ring-1 ring-rose-300/45 backdrop-blur-md transition hover:border-rose-200/70 hover:bg-rose-500/24 hover:ring-rose-200/60"
+              onClick={stopTimerEndAlarm}
+              type="button"
+            >
+              <FontAwesomeIcon className="text-[12px] drop-shadow-[0_0_8px_rgba(251,113,133,0.35)]" icon={faBellSlash} />
+              <span className="hidden font-medium sm:inline">Silence Alarm</span>
+            </button>
+          ) : null}
         </>
       )}
 

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
+import { faArrowRotateRight, faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../constants/taskOptions'
 import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
@@ -16,6 +16,7 @@ type TimerPanelProps = {
   timerProgressPercent: number | null
   isRunning: boolean
   isFocusOnlyMode?: boolean
+  isTimerComplete?: boolean
 }
 
 const timerAccentStyles: Record<
@@ -118,6 +119,7 @@ export function TimerPanel({
   timerProgressPercent,
   isRunning,
   isFocusOnlyMode = false,
+  isTimerComplete = false,
 }: TimerPanelProps) {
   const activeTaskColor = activeTask ? taskColorMap[activeTask.colorTag] : null
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
@@ -126,6 +128,7 @@ export function TimerPanel({
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
   const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
   const playButtonGlowStyle = { '--timer-play-glow-rgb': playGlowRgb } as CSSProperties
+  const showRestartAction = mode === 'timer' && isTimerComplete && !isRunning
 
   return (
     <>
@@ -233,7 +236,7 @@ export function TimerPanel({
 
           <div className={classNames('flex justify-center', isFocusOnlyMode ? 'mt-5' : 'mt-3')}>
             <button
-              aria-label={isRunning ? 'Pause focus' : 'Start focus'}
+              aria-label={showRestartAction ? 'Restart timer' : isRunning ? 'Pause focus' : 'Start focus'}
               className={classNames(
                 'grid h-14 w-14 place-items-center rounded-full border transition hover:-translate-y-0.5 active:translate-y-0',
                 isRunning && 'timer-play-active-glow',
@@ -244,8 +247,11 @@ export function TimerPanel({
               type="button"
             >
               <FontAwesomeIcon
-                className={classNames(isRunning ? 'text-[18px]' : 'translate-x-[1px] text-xl', accents.playIconClassName)}
-                icon={isRunning ? faPause : faPlay}
+                className={classNames(
+                  isRunning ? 'text-[18px]' : showRestartAction ? 'text-[17px]' : 'translate-x-[1px] text-xl',
+                  accents.playIconClassName,
+                )}
+                icon={isRunning ? faPause : showRestartAction ? faArrowRotateRight : faPlay}
               />
             </button>
           </div>

@@ -412,6 +412,40 @@ body {
   animation: daily-log-mobile-close-glow 1.45s ease-in-out infinite alternate;
 }
 
+@keyframes timer-alarm-stop-glow {
+  0% {
+    box-shadow:
+      0 10px 28px rgba(1, 8, 22, 0.42),
+      0 0 0 1px rgba(251, 113, 133, 0.22),
+      0 0 12px rgba(244, 63, 94, 0.12),
+      0 0 26px rgba(244, 63, 94, 0.08);
+    opacity: 0.82;
+  }
+
+  50% {
+    box-shadow:
+      0 12px 30px rgba(1, 8, 22, 0.46),
+      0 0 0 1px rgba(254, 205, 211, 0.38),
+      0 0 18px rgba(251, 113, 133, 0.28),
+      0 0 38px rgba(244, 63, 94, 0.2);
+    opacity: 1;
+  }
+
+  100% {
+    box-shadow:
+      0 10px 28px rgba(1, 8, 22, 0.42),
+      0 0 0 1px rgba(251, 113, 133, 0.24),
+      0 0 10px rgba(244, 63, 94, 0.1),
+      0 0 20px rgba(244, 63, 94, 0.06);
+    opacity: 0.78;
+  }
+}
+
+.timer-alarm-stop-glow {
+  will-change: box-shadow, opacity;
+  animation: timer-alarm-stop-glow 1.05s ease-in-out infinite;
+}
+
 @keyframes focus-only-mobile-toggle-slide-right {
   0% {
     transform: translateX(-98px) scale(0.96);
