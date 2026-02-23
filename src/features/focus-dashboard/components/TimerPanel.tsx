@@ -103,14 +103,9 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
   return (
     <>
       <div className="mb-8 flex min-h-0 flex-1 justify-center">
-        <div
-          className={classNames(
-            'flex h-full w-full flex-col rounded-[28px] px-4 py-6 sm:px-8 sm:py-8',
-            accents.panelBackgroundClassName,
-          )}
-        >
+        <div className="flex h-full w-full flex-col px-4 py-6 sm:px-8 sm:py-8">
           <div className="flex justify-center">
-            <div className="flex max-w-full items-center gap-3 sm:gap-4">
+            <div className=" flex max-w-full items-center gap-3 sm:gap-4">
               <span
                 className={classNames(
                   'grid h-12 w-12 shrink-0 place-items-center rounded-2xl border text-lg',
