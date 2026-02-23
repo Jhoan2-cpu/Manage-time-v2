@@ -48,11 +48,20 @@ const taskCardGlowRgbByColor: Record<Task['colorTag'], string> = {
   violet: '139,92,246',
 }
 
+const taskCardTiltClassByColor: Record<Task['colorTag'], string> = {
+  blue: '-rotate-[0.55deg]',
+  green: 'rotate-[0.35deg]',
+  amber: '-rotate-[0.4deg]',
+  rose: 'rotate-[0.5deg]',
+  violet: '-rotate-[0.25deg]',
+}
+
 export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, onEditTask }: TaskCardProps) {
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
   const iconTextClassName = taskCardIconTextClassByColor[task.colorTag]
+  const tiltClassName = taskCardTiltClassByColor[task.colorTag]
   const sessionsLabel = sessionCount > 99 ? '99+' : String(sessionCount)
   const isActive = task.state === 'active'
   const isActiveRunning = isActive && isRunning
@@ -63,8 +72,12 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
   return (
     <article
       className={classNames(
-        'flex h-[7.5rem] w-64 shrink-0 cursor-pointer flex-col rounded-2xl p-2.5 transition duration-200 hover:-translate-y-0.5',
+        'flex h-[7.5rem] w-64 shrink-0 cursor-pointer flex-col rounded-[18px] px-2.5 pb-2.5 pt-3 transition duration-200 hover:-translate-y-0.5',
         'relative overflow-hidden',
+        tiltClassName,
+        'before:pointer-events-none before:absolute before:left-1/2 before:top-1 before:z-10 before:h-2 before:w-12 before:-translate-x-1/2 before:rotate-[-2deg] before:rounded-[3px] before:bg-white/14 before:shadow-[0_1px_0_rgba(255,255,255,0.08),0_4px_10px_rgba(2,6,23,0.18)]',
+        'after:pointer-events-none after:absolute after:right-0 after:top-0 after:z-10 after:h-4 after:w-4 after:bg-white/10 after:[clip-path:polygon(100%_0,0_0,100%_100%)] after:shadow-[-1px_1px_0_rgba(255,255,255,0.08)]',
+        'shadow-[0_12px_20px_rgba(1,8,22,0.28),inset_0_1px_0_rgba(255,255,255,0.03)]',
         isActive && 'task-card-focus-ignite',
         colorStyles.cardClassName,
         isActive && classNames('ring-2 ring-inset', colorStyles.selectedRingClassName),
@@ -84,7 +97,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
         <div className="min-w-0 flex flex-1 items-start gap-2">
           <span
             className={classNames(
-              'grid h-7 w-7 shrink-0 place-items-center text-[12px]',
+              'grid h-7 w-7 shrink-0 place-items-center text-[12px] drop-shadow-[0_1px_0_rgba(255,255,255,0.05)]',
               iconTextClassName,
             )}
             aria-hidden="true"
@@ -98,20 +111,20 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
       <div className="mt-1 min-h-5">
         <div className="flex flex-wrap items-center gap-1.5">
           {task.targetDurationMinutes ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+            <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/28 px-1.5 py-0.5 text-[10px] text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]">
               <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faHourglassHalf} />
               <span>{formatMinutesCompact(task.targetDurationMinutes).toUpperCase()}</span>
             </span>
           ) : null}
           {task.alarmTime ? (
-            <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-950/28 px-1.5 py-0.5 text-[10px] text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]">
               <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faBell} />
               <span>{formatAlarmTimeChip(task.alarmTime)}</span>
             </span>
           ) : null}
           <span
             aria-label={`${sessionCount} sessions`}
-            className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] font-medium text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]"
+            className="inline-flex items-center gap-1 rounded-md bg-slate-950/28 px-1.5 py-0.5 text-[10px] font-medium text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]"
             title={`${sessionCount} sessions`}
           >
             <span className="tabular-nums">{sessionsLabel}</span>
