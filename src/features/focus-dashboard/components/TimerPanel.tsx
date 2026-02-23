@@ -185,33 +185,12 @@ export function TimerPanel({
           <div className="relative mt-4 flex flex-1 flex-col items-center justify-center py-4 sm:py-6">
             <p
               className={classNames(
-                'relative select-none text-[48px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[84px]',
+                'relative select-none text-[72px] font-bold leading-none tracking-tight text-slate-100 tabular-nums sm:text-[124px] lg:text-[144px]',
                 accents.timeGlowClassName,
               )}
             >
               {stopwatchLabel}
             </p>
-
-            {mode === 'timer' && canUseTimerMode ? (
-              <div className="mt-4 w-full max-w-[520px] px-2">
-                <div className="h-2 overflow-hidden rounded-full bg-slate-900/55 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
-                  <div
-                    className={classNames(
-                      'h-full rounded-full transition-[width] duration-500 ease-out',
-                      activeTaskColor?.swatchClassName ?? 'bg-blue-500',
-                    )}
-                    style={{ width: `${Math.max(0, Math.min(100, timerProgressPercent ?? 0))}%` }}
-                  />
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
-                  <span>0%</span>
-                  <span className={classNames('font-mono', accents.totalValueClassName)}>
-                    {Math.round(timerProgressPercent ?? 0)}%
-                  </span>
-                  <span>100%</span>
-                </div>
-              </div>
-            ) : null}
           </div>
 
           <div className={classNames('mx-auto mt-1 w-full max-w-[460px] border-t pt-4', accents.dividerClassName)}>
