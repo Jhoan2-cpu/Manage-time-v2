@@ -33,6 +33,7 @@ export function FocusDashboard() {
   )
   const [isFocusRunning, setIsFocusRunning] = useState(false)
   const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0)
+  const [workspaceGlowPulseKey, setWorkspaceGlowPulseKey] = useState(0)
   const [timerMode, setTimerMode] = useState<FocusTimerMode>(() => {
     const initialActiveTask = tasks.find((task) => task.state === 'active') ?? tasks[0] ?? null
     return initialActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch'
@@ -298,6 +299,7 @@ export function FocusDashboard() {
   }
   const handlePlayTask = (selectedTask: Task) => {
     handleFinishUntrackedSession()
+    setWorkspaceGlowPulseKey((current) => current + 1)
     setTaskList((currentTasks) =>
       currentTasks.map((task) => {
         if (task.id === selectedTask.id) {
@@ -345,12 +347,14 @@ export function FocusDashboard() {
           totalTracked={dashboardStats.totalTracked}
         />
 
-        <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
             <div
-              className="absolute inset-0"
+              className="workspace-glow-ignite absolute inset-0"
+              key={workspaceGlowPulseKey}
               style={{
-                backgroundImage: `radial-gradient(88% 72% at 50% 56%, rgba(${workspaceAccentRgb},0.20), transparent 74%), linear-gradient(180deg, #040a16 0%, #030814 100%)`,
+                backgroundImage: `radial-gradient(88% 72% at 50% 60%, rgba(${workspaceAccentRgb},0.28), transparent 74%)`,
               }}
             />
             <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />

@@ -173,6 +173,30 @@ body {
   transition: stroke-dashoffset 0.35s ease;
 }
 
+@keyframes workspace-glow-ignite {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.72);
+    filter: blur(1px) saturate(1);
+  }
+  38% {
+    opacity: 1;
+    transform: scale(1.06);
+    filter: blur(0px) saturate(1.25);
+  }
+  100% {
+    opacity: 0.82;
+    transform: scale(1);
+    filter: blur(0px) saturate(1.05);
+  }
+}
+
+.workspace-glow-ignite {
+  transform-origin: 50% 60%;
+  will-change: transform, opacity, filter;
+  animation: workspace-glow-ignite 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 @keyframes modal-fade {
   from {
     opacity: 0;
