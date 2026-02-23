@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronLeft, faChevronRight, faClockRotateLeft, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faBullseye, faChevronLeft, faChevronRight, faClockRotateLeft, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
 import { ProfileModal } from './components/ProfileModal'
@@ -529,11 +529,15 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
           <button
             aria-label="Exit Focus Only mode"
-            className="focus-only-controls-enter sticky top-4 z-20 ml-auto mr-4 inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-[#0a1427]/90 px-2.5 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] transition hover:border-blue-500/40 hover:text-slate-100 sm:absolute sm:right-5 sm:top-5 sm:ml-0 sm:mr-0 sm:px-3"
+            className="focus-only-controls-enter focus-only-mobile-toggle-morph absolute right-4 top-4 z-20 inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-[#0a1427]/90 px-2.5 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] transition hover:border-blue-500/40 hover:text-slate-100 sm:right-5 sm:top-5 sm:px-3"
             onClick={handleExitFocusOnlyMode}
             type="button"
           >
-            <FontAwesomeIcon className="text-[12px]" icon={faXmark} />
+            <span className="relative grid h-4 w-4 place-items-center sm:hidden" aria-hidden="true">
+              <FontAwesomeIcon className="focus-only-mobile-toggle-icon-bullseye absolute text-[12px]" icon={faBullseye} />
+              <FontAwesomeIcon className="focus-only-mobile-toggle-icon-x absolute text-[12px]" icon={faXmark} />
+            </span>
+            <FontAwesomeIcon className="hidden text-[12px] sm:block" icon={faXmark} />
             <span className="hidden font-medium sm:inline">Exit Focus Only</span>
           </button>
 
