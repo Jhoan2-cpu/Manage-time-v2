@@ -256,7 +256,7 @@ export function DailyLogPanel({
           'flex h-full flex-col border border-slate-800 bg-[#050d1d]/95 shadow-[0_24px_60px_rgba(1,8,22,0.55)] backdrop-blur will-change-transform',
           'rounded-none xl:h-full xl:w-[380px] xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:border-slate-800 xl:bg-[#050d1d] xl:shadow-none xl:backdrop-blur-0',
           'transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-          isOpen ? 'translate-x-0 translate-y-0 xl:translate-x-0' : '-translate-x-[10%] translate-y-[104%] xl:translate-x-0 xl:translate-y-0',
+          isOpen ? 'translate-x-0 translate-y-0 xl:translate-x-0' : '-translate-x-full translate-y-0 xl:translate-x-0 xl:translate-y-0',
         )}
       >
         <div className="border-b border-slate-800 px-4 py-4">

@@ -616,15 +616,13 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
             key={`daily-log-toggle-mobile-${dailyLogTogglePulseKey}`}
             aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
             className={classNames(
-              'fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#0a1427]/95 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden',
+              'fixed bottom-4 left-4 z-40 grid h-11 w-11 place-items-center rounded-full bg-[#0a1427]/95 text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden',
               dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
             )}
             onClick={handleToggleDailyLog}
             type="button"
           >
-            <FontAwesomeIcon className="text-[12px] text-slate-300" icon={faClockRotateLeft} />
-            <span className="font-medium">{isDailyLogOpen ? 'Hide Log' : 'Daily Log'}</span>
-            <FontAwesomeIcon className="text-[10px]" icon={isDailyLogOpen ? faChevronLeft : faChevronRight} />
+            <FontAwesomeIcon className="text-[13px] text-slate-300" icon={faClockRotateLeft} />
           </button>
 
           <button
