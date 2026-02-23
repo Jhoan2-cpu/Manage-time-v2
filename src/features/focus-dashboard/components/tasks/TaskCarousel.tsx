@@ -240,7 +240,6 @@ export function TaskCarousel({
                 tasks.map((task) => (
                   <div className="snap-start" key={task.id}>
                     <TaskCard
-                      onDeleteTask={onDeleteTask}
                       onEditTask={onEditTask}
                       onPlayTask={onPlayTask}
                       sessionCount={sessionCountByTaskId[task.id] ?? 0}

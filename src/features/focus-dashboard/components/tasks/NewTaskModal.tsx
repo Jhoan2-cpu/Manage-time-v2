@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCheck, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faCheck, faTrashCan, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { taskColorOptions, taskIconOptions } from '../../constants/taskOptions'
 import type { Task, TaskColorKey, TaskIconKey } from '../../types'
 import { classNames } from '../../utils/classNames'
@@ -19,6 +19,7 @@ type NewTaskModalProps = {
   onClose: () => void
   onCreateTask: (payload: NewTaskPayload) => void
   editingTask?: Task | null
+  onRequestDeleteTask?: (task: Task) => void
 }
 
 const defaultColorTag: TaskColorKey = taskColorOptions[0]?.id ?? 'blue'
@@ -27,7 +28,13 @@ const defaultIconTag: TaskIconKey = taskIconOptions[0]?.id ?? 'briefcase'
 const fieldClassName =
   'w-full rounded-lg border border-slate-700/90 bg-slate-900/55 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-blue-400/70 focus:ring-2 focus:ring-blue-500/20'
 
-export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null }: NewTaskModalProps) {
+export function NewTaskModal({
+  isOpen,
+  onClose,
+  onCreateTask,
+  editingTask = null,
+  onRequestDeleteTask,
+}: NewTaskModalProps) {
   const titleId = useId()
   const targetDurationId = useId()
   const alarmTimeId = useId()
@@ -251,21 +258,39 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
             </section>
           </div>
 
-          <footer className="flex items-center justify-end gap-2 border-t border-slate-800/80 px-5 py-4">
-            <button
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canSubmit}
-              type="submit"
-            >
-              {isEditing ? 'Save Changes' : 'Create Task'}
-            </button>
+          <footer className="flex items-center justify-between gap-2 border-t border-slate-800/80 px-5 py-4">
+            <div>
+              {isEditing && editingTask && onRequestDeleteTask ? (
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)] transition hover:bg-rose-500/15"
+                  onClick={() => {
+                    onClose()
+                    onRequestDeleteTask(editingTask)
+                  }}
+                  type="button"
+                >
+                  <FontAwesomeIcon icon={faTrashCan} />
+                  <span>Eliminar</span>
+                </button>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
+                onClick={onClose}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!canSubmit}
+                type="submit"
+              >
+                {isEditing ? 'Save Changes' : 'Create Task'}
+              </button>
+            </div>
           </footer>
         </form>
       </div>

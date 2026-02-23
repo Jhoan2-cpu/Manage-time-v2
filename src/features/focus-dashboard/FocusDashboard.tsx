@@ -168,6 +168,10 @@ export function FocusDashboard() {
   const handleRequestDeleteTask = (task: Task) => {
     setTaskPendingDelete(task)
   }
+  const handleRequestDeleteFromTaskModal = (task: Task) => {
+    setIsNewTaskModalOpen(false)
+    setTaskPendingDelete(task)
+  }
   const handleCloseDeleteTaskModal = () => {
     setTaskPendingDelete(null)
   }
@@ -345,6 +349,7 @@ export function FocusDashboard() {
         isOpen={isNewTaskModalOpen}
         onClose={handleCloseNewTaskModal}
         onCreateTask={handleCreateTask}
+        onRequestDeleteTask={handleRequestDeleteFromTaskModal}
       />
       <DeleteTaskConfirmModal
         isOpen={taskPendingDelete !== null}
