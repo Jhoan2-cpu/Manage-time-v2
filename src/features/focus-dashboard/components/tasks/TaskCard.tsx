@@ -53,7 +53,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
   const iconTextClassName = taskCardIconTextClassByColor[task.colorTag]
-  const hasAdvancedMeta = Boolean(task.targetDurationMinutes || task.alarmTime)
+  const sessionsLabel = sessionCount > 99 ? '99+' : String(sessionCount)
   const isActive = task.state === 'active'
   const isActiveRunning = isActive && isRunning
   const activeCardGlowStyle = isActive
@@ -80,7 +80,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
       style={activeCardGlowStyle}
     >
       <div className="flex items-start gap-2.5">
-        <div className="min-w-0 flex flex-1 items-start gap-2.5">
+        <div className="min-w-0 flex flex-1 items-start gap-2">
           <span
             className={classNames(
               'grid h-7 w-7 shrink-0 place-items-center text-[12px]',
@@ -95,26 +95,32 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
       </div>
 
       <div className="mt-1 min-h-5">
-        {hasAdvancedMeta ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {task.targetDurationMinutes ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
-                <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faHourglassHalf} />
-                <span>{formatMinutesCompact(task.targetDurationMinutes).toUpperCase()}</span>
-              </span>
-            ) : null}
-            {task.alarmTime ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
-                <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faBell} />
-                <span>{formatAlarmTimeChip(task.alarmTime)}</span>
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {task.targetDurationMinutes ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+              <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faHourglassHalf} />
+              <span>{formatMinutesCompact(task.targetDurationMinutes).toUpperCase()}</span>
+            </span>
+          ) : null}
+          {task.alarmTime ? (
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+              <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faBell} />
+              <span>{formatAlarmTimeChip(task.alarmTime)}</span>
+            </span>
+          ) : null}
+          <span
+            aria-label={`${sessionCount} sessions`}
+            className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] font-medium text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]"
+            title={`${sessionCount} sessions`}
+          >
+            <span className="tabular-nums">{sessionsLabel}</span>
+            <span className="tracking-[0.08em] text-slate-400">SESSIONS</span>
+          </span>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center">
           <div
             className={classNames(
               'inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs tabular-nums',
@@ -124,14 +130,6 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
             <FontAwesomeIcon icon={faHourglassHalf} />
             <span>{task.duration}</span>
           </div>
-
-          <span
-            aria-label={`${sessionCount} sessions`}
-            className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-950/25 px-2 text-xs font-semibold tabular-nums text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]"
-            title={`${sessionCount} sessions`}
-          >
-            {sessionCount > 99 ? '99+' : sessionCount}
-          </span>
         </div>
 
         <div className="flex items-center gap-1">
