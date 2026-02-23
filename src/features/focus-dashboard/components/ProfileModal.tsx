@@ -2,8 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faEnvelope,
-  faIdBadge,
-  faLocationDot,
+  faKey,
   faUser,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons'
@@ -102,25 +101,28 @@ export function ProfileModal({
             <div className="min-w-0">
               <p className="truncate text-xl font-semibold tracking-tight text-slate-100">{userName}</p>
               <p className="truncate text-sm text-slate-400">{userEmail}</p>
-              <span className="mt-2 inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-200">
-                Online
-              </span>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <ProfileField icon={faIdBadge} label="Role" value="Productive Builder" />
-            <ProfileField icon={faLocationDot} label="Workspace" value="FocusFlow Default" />
-            <ProfileField icon={faEnvelope} label="Email" value={userEmail} />
+          <div className="mt-4 grid gap-3">
             <ProfileField icon={faUser} label="Display Name" value={userName} />
+            <ProfileField icon={faEnvelope} label="Email" value={userEmail} />
           </div>
 
           <div className="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/20 p-4">
-            <h3 className="text-sm font-semibold text-slate-200">About</h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              Simple profile section for your FocusFlow workspace. Later we can connect this to real account settings and
-              editable profile preferences.
-            </p>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+              <FontAwesomeIcon className="text-slate-400" icon={faKey} />
+              <span>Security</span>
+            </div>
+            <p className="mt-2 text-sm text-slate-400">Manage your account password.</p>
+            <button
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:bg-blue-500/16 hover:border-blue-400/35"
+              data-sfx-type="off"
+              type="button"
+            >
+              <FontAwesomeIcon className="text-xs" icon={faKey} />
+              <span>Change Password</span>
+            </button>
           </div>
         </div>
 
@@ -155,4 +157,3 @@ function ProfileField({ icon, label, value }: ProfileFieldProps) {
     </div>
   )
 }
-
