@@ -29,12 +29,10 @@ const fieldClassName =
 
 export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null }: NewTaskModalProps) {
   const titleId = useId()
-  const detailsId = useId()
   const targetDurationId = useId()
   const alarmTimeId = useId()
 
   const [title, setTitle] = useState('')
-  const [details, setDetails] = useState('')
   const [iconTag, setIconTag] = useState<TaskIconKey>(defaultIconTag)
   const [colorTag, setColorTag] = useState<TaskColorKey>(defaultColorTag)
   const [targetDurationMinutesInput, setTargetDurationMinutesInput] = useState('')
@@ -47,7 +45,6 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
 
     if (editingTask) {
       setTitle(editingTask.title)
-      setDetails(editingTask.details)
       setIconTag(editingTask.iconTag)
       setColorTag(editingTask.colorTag)
       setTargetDurationMinutesInput(
@@ -60,7 +57,6 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
     }
 
     setTitle('')
-    setDetails('')
     setIconTag(defaultIconTag)
     setColorTag(defaultColorTag)
     setTargetDurationMinutesInput('')
@@ -107,7 +103,7 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
 
     onCreateTask({
       title: title.trim(),
-      details: details.trim(),
+      details: '',
       colorTag,
       iconTag,
       targetDurationMinutes: normalizedTargetDuration,
@@ -146,30 +142,17 @@ export function NewTaskModal({ isOpen, onClose, onCreateTask, editingTask = null
           <div className="space-y-5 px-5 py-5">
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" htmlFor={titleId}>
-                Title
+                Tarea
               </label>
               <input
                 autoFocus
                 className={fieldClassName}
                 id={titleId}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="e.g. Q4 Planning"
+                placeholder="e.g. Estudiar algebra"
                 value={title}
               />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" htmlFor={detailsId}>
-                Description
-              </label>
-              <textarea
-                className={fieldClassName}
-                id={detailsId}
-                onChange={(event) => setDetails(event.target.value)}
-                placeholder="Add details..."
-                rows={4}
-                value={details}
-              />
+              <p className="mt-1 text-[11px] text-slate-500">Nombre simple de la tarea.</p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

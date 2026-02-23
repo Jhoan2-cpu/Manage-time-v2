@@ -41,45 +41,25 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteT
   return (
     <article
       className={classNames(
-        'group flex h-36 w-64 shrink-0 flex-col justify-between rounded-2xl p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl',
+        'flex h-32 w-64 shrink-0 flex-col justify-between rounded-2xl p-3.5 transition duration-200 hover:-translate-y-0.5',
         colorStyles.cardClassName,
         stateStyles.shell,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span
-              className={classNames(
-                'grid h-6 w-6 place-items-center rounded-md border text-[11px]',
-                colorStyles.iconShellClassName,
-              )}
-            >
-              <FontAwesomeIcon icon={iconOption.icon} />
-            </span>
-            <p className="truncate text-[10px] uppercase tracking-[0.15em] text-slate-500">{iconOption.label}</p>
-          </div>
-          <h3 className="truncate text-xl font-semibold leading-tight text-slate-100">{task.title}</h3>
-          <p className="mt-1 truncate text-xs text-slate-400">{task.details}</p>
-          {hasAdvancedMeta ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {task.targetDurationMinutes ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
-                  <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faHourglassHalf} />
-                  <span>{formatMinutesCompact(task.targetDurationMinutes).toUpperCase()}</span>
-                </span>
-              ) : null}
-              {task.alarmTime ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
-                  <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faBell} />
-                  <span>{formatAlarmTimeChip(task.alarmTime)}</span>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex flex-1 items-center gap-2.5">
+          <span
+            className={classNames(
+              'grid h-7 w-7 shrink-0 place-items-center rounded-md border text-[11px]',
+              colorStyles.iconShellClassName,
+            )}
+          >
+            <FontAwesomeIcon icon={iconOption.icon} />
+          </span>
+          <h3 className="truncate text-lg font-semibold leading-tight text-slate-100 sm:text-xl">{task.title}</h3>
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl bg-slate-950/20 p-1 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.28)] backdrop-blur-sm">
+        <div className="flex items-center gap-1 rounded-xl bg-slate-950/18 p-1 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]">
           <button
             aria-label={`Play ${task.title}`}
             className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
@@ -105,6 +85,25 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask, onDeleteT
             <FontAwesomeIcon className="text-[11px]" icon={faTrashCan} />
           </button>
         </div>
+      </div>
+
+      <div className="mt-1 min-h-5">
+        {hasAdvancedMeta ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {task.targetDurationMinutes ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+                <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faHourglassHalf} />
+                <span>{formatMinutesCompact(task.targetDurationMinutes).toUpperCase()}</span>
+              </span>
+            ) : null}
+            {task.alarmTime ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/25 px-1.5 py-0.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.2)]">
+                <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faBell} />
+                <span>{formatAlarmTimeChip(task.alarmTime)}</span>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-2">

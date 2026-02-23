@@ -154,7 +154,7 @@ export function FocusDashboard() {
             ? {
                 ...task,
                 title,
-                details: details || 'No details yet',
+                details: details.trim(),
                 colorTag,
                 iconTag,
                 targetDurationMinutes,
@@ -175,7 +175,7 @@ export function FocusDashboard() {
       {
         id: `task-${crypto.randomUUID()}`,
         title,
-        details: details || 'No details yet',
+        details: details.trim(),
         statusText: `Scheduled: ${createdAtLabel}`,
         duration: '00:00:00',
         state: 'scheduled',

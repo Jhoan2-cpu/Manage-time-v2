@@ -116,7 +116,7 @@ export function TimerPanel({
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
   const accents = activeTask ? timerAccentStyles[activeTask.colorTag] : timerAccentStyles.blue
   const taskTitle = activeTask?.title ?? 'No Task Selected'
-  const taskSubtitle = activeTask?.details ?? 'Choose a task to start a focus session'
+  const taskSubtitle = activeTask?.details?.trim() || 'Ready to focus'
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
 
   return (
