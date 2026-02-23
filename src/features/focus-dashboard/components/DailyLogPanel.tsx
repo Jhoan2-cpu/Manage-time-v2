@@ -19,7 +19,6 @@ type LogCellCoord = {
 }
 
 const HEADER_ROW_INDEX = 0
-const DAY_TOTAL_MINUTES = 24 * 60
 
 const logToneStyles: Record<LogTone, { row: string; time: string; duration: string; activity: string; icon: string }> = {
   break: {
@@ -108,6 +107,28 @@ export function DailyLogPanel({
   const [selectionAnchor, setSelectionAnchor] = useState<LogCellCoord | null>(null)
   const [selectionFocus, setSelectionFocus] = useState<LogCellCoord | null>(null)
   const [isSelectingCells, setIsSelectingCells] = useState(false)
+  const trackedMinutes = useMemo(
+    () =>
+      entries.reduce((sum, entry) => {
+        if (!entry.taskId) {
+          return sum
+        }
+        return sum + parseDurationLabelToMinutes(entry.duration)
+      }, 0),
+    [entries],
+  )
+  const untrackedMinutes = useMemo(
+    () =>
+      entries.reduce((sum, entry) => {
+        if (entry.taskId) {
+          return sum
+        }
+        return sum + parseDurationLabelToMinutes(entry.duration)
+      }, 0),
+    [entries],
+  )
+  const trackedTimeLabel = entries.some((entry) => entry.taskId) ? formatMinutesCompact(trackedMinutes) : totalTracked
+  const untrackedTimeLabel = formatMinutesCompact(untrackedMinutes)
 
   const rowModels = useMemo(
     () =>
@@ -128,13 +149,6 @@ export function DailyLogPanel({
       }),
     [entries, taskMap],
   )
-  const trackedMinutes = useMemo(
-    () => entries.reduce((sum, entry) => sum + parseDurationLabelToMinutes(entry.duration), 0),
-    [entries],
-  )
-  const untrackedMinutes = Math.max(0, DAY_TOTAL_MINUTES - trackedMinutes)
-  const trackedTimeLabel = entries.length > 0 ? formatMinutesCompact(trackedMinutes) : totalTracked
-  const untrackedTimeLabel = formatMinutesCompact(untrackedMinutes)
 
   const selectedRange = useMemo(() => {
     if (!selectionAnchor || !selectionFocus) {

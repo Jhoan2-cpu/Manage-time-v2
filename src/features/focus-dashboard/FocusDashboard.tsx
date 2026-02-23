@@ -8,9 +8,9 @@ import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModa
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
-import { dashboardStats, historyLogEntries, logEntries, tasks } from './data/mockData'
+import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tasks } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
-import type { FocusTimerMode, Task, TaskColorKey } from './types'
+import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { formatMinutesCompact, formatSecondsHms, parseDurationLabelToMinutes } from './utils/time'
 
 const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
@@ -23,6 +23,7 @@ const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
 
 export function FocusDashboard() {
   const [taskList, setTaskList] = useState<Task[]>(tasks)
+  const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(initialLogEntries)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [taskPendingDelete, setTaskPendingDelete] = useState<Task | null>(null)
@@ -36,10 +37,15 @@ export function FocusDashboard() {
     const initialActiveTask = tasks.find((task) => task.state === 'active') ?? tasks[0] ?? null
     return initialActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch'
   })
+  const [activeUntrackedSession, setActiveUntrackedSession] = useState<{
+    startedAtMs: number
+    startLabel: string
+    dateKey: string
+  } | null>(null)
 
   const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime()
   const sessionCountByTaskId = useMemo(() => {
-    return logEntries.reduce<Record<string, number>>((acc, entry) => {
+    return dailyLogEntries.reduce<Record<string, number>>((acc, entry) => {
       if (!entry.taskId) {
         return acc
       }
@@ -47,9 +53,9 @@ export function FocusDashboard() {
       acc[entry.taskId] = (acc[entry.taskId] ?? 0) + 1
       return acc
     }, {})
-  }, [])
+  }, [dailyLogEntries])
   const loggedMinutesByTaskId = useMemo(() => {
-    return logEntries.reduce<Record<string, number>>((acc, entry) => {
+    return dailyLogEntries.reduce<Record<string, number>>((acc, entry) => {
       if (!entry.taskId) {
         return acc
       }
@@ -57,7 +63,7 @@ export function FocusDashboard() {
       acc[entry.taskId] = (acc[entry.taskId] ?? 0) + parseDurationLabelToMinutes(entry.duration)
       return acc
     }, {})
-  }, [])
+  }, [dailyLogEntries])
   const activeTask = useMemo(() => {
     return taskList.find((task) => task.state === 'active') ?? taskList[0] ?? null
   }, [taskList])
@@ -76,6 +82,19 @@ export function FocusDashboard() {
       ? Math.max(0, activeTaskTargetSeconds - sessionElapsedSeconds)
       : sessionElapsedSeconds
   const timerDisplayLabel = formatSecondsHms(timerDisplaySeconds)
+  const sidebarLogEntries = activeUntrackedSession
+    ? sortLogEntriesByTime([
+        ...dailyLogEntries,
+        {
+          id: 'log-live-untracked',
+          date: activeUntrackedSession.dateKey,
+          start: activeUntrackedSession.startLabel,
+          duration: formatLogDurationFromSeconds(Math.floor((Date.now() - activeUntrackedSession.startedAtMs) / 1000)),
+          activity: 'Untracked Time',
+          tone: 'faded',
+        },
+      ])
+    : dailyLogEntries
   useEffect(() => {
     if (!isFocusRunning) {
       return
@@ -217,16 +236,58 @@ export function FocusDashboard() {
   const handleCloseSettings = () => {
     setIsSettingsModalOpen(false)
   }
+  const handleStartUntrackedSession = () => {
+    const now = new Date()
+    setActiveUntrackedSession((current) =>
+      current ?? {
+        startedAtMs: now.getTime(),
+        startLabel: formatLogStartTime(now),
+        dateKey: formatLocalDateKey(now),
+      },
+    )
+  }
+  const handleFinishUntrackedSession = () => {
+    setActiveUntrackedSession((currentSession) => {
+      if (!currentSession) {
+        return null
+      }
+
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - currentSession.startedAtMs) / 1000))
+      if (elapsedSeconds <= 0) {
+        return null
+      }
+
+      const nextEntry: LogEntry = {
+        id: `log-untracked-${crypto.randomUUID()}`,
+        date: currentSession.dateKey,
+        start: currentSession.startLabel,
+        duration: formatLogDurationFromSeconds(elapsedSeconds),
+        activity: 'Untracked Time',
+        tone: 'faded',
+      }
+
+      setDailyLogEntries((currentEntries) => sortLogEntriesByTime([...currentEntries, nextEntry]))
+      return null
+    })
+  }
   const handleStartFocus = () => {
     if (!activeTask) {
       return
     }
 
+    if (isFocusRunning) {
+      setIsFocusRunning(false)
+      handleStartUntrackedSession()
+      return
+    }
+
+    handleFinishUntrackedSession()
+
     if (timerMode === 'timer' && activeTaskTargetSeconds && sessionElapsedSeconds >= activeTaskTargetSeconds) {
       setSessionElapsedSeconds(0)
     }
 
-    setIsFocusRunning((current) => !current)
+    setIsFocusRunning(true)
   }
   const handleChangeTimerMode = (nextMode: FocusTimerMode) => {
     if (nextMode === 'timer' && !activeTaskTargetSeconds) {
@@ -236,6 +297,7 @@ export function FocusDashboard() {
     setTimerMode(nextMode)
   }
   const handlePlayTask = (selectedTask: Task) => {
+    handleFinishUntrackedSession()
     setTaskList((currentTasks) =>
       currentTasks.map((task) => {
         if (task.id === selectedTask.id) {
@@ -277,7 +339,7 @@ export function FocusDashboard() {
 
       <main className="flex h-[100svh] min-h-[100svh] pt-16">
         <DailyLogPanel
-          entries={logEntries}
+          entries={sidebarLogEntries}
           isOpen={isDailyLogOpen}
           tasks={taskList}
           totalTracked={dashboardStats.totalTracked}
@@ -359,7 +421,7 @@ export function FocusDashboard() {
       />
       <SettingsModal
         dashboardStats={dashboardStats}
-        entries={logEntries}
+        entries={dailyLogEntries}
         historyEntries={historyLogEntries}
         isOpen={isSettingsModalOpen}
         onClose={handleCloseSettings}
@@ -367,4 +429,58 @@ export function FocusDashboard() {
       />
     </div>
   )
+}
+
+function formatLogStartTime(date: Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatLocalDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatLogDurationFromSeconds(totalSeconds: number) {
+  const boundedSeconds = Math.max(0, Math.floor(totalSeconds))
+  const totalMinutes = Math.floor(boundedSeconds / 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  if (hours === 0) {
+    return `${totalMinutes} min`
+  }
+
+  return `${hours}:${minutes.toString().padStart(2, '0')} hrs`
+}
+
+function sortLogEntriesByTime(entries: LogEntry[]) {
+  return [...entries].sort((a, b) => {
+    const dateA = a.date ?? '9999-99-99'
+    const dateB = b.date ?? '9999-99-99'
+    if (dateA !== dateB) {
+      return dateA.localeCompare(dateB)
+    }
+
+    return parseStartLabelToMinutes(a.start) - parseStartLabelToMinutes(b.start)
+  })
+}
+
+function parseStartLabelToMinutes(label: string) {
+  const match = label.trim().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
+  if (!match) {
+    return Number.MAX_SAFE_INTEGER
+  }
+
+  const rawHours = Number(match[1])
+  const minutes = Number(match[2])
+  const meridiem = match[3].toUpperCase()
+  const normalizedHours = rawHours % 12
+  const hour24 = meridiem === 'PM' ? normalizedHours + 12 : normalizedHours
+
+  return hour24 * 60 + minutes
 }
