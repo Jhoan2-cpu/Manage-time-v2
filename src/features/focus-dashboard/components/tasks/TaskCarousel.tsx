@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faLayerGroup, faPlus } from '@fortawesome/free-solid-svg-icons'
-import type { Task } from '../../types'
+import type { Task, TaskColorKey } from '../../types'
 import { classNames } from '../../utils/classNames'
 import { TaskCard } from './TaskCard'
+
+const carouselAccentClassNameByColor: Record<TaskColorKey, string> = {
+  blue: 'bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+  green:
+    'bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+  amber:
+    'bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+  rose: 'bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+  violet:
+    'bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+}
 
 type TaskCarouselProps = {
   tasks: Task[]
   sessionCountByTaskId: Record<string, number>
+  accentColorTag?: TaskColorKey
   onAddTask: () => void
   onPlayTask?: (task: Task) => void
   onEditTask?: (task: Task) => void
@@ -17,6 +29,7 @@ type TaskCarouselProps = {
 export function TaskCarousel({
   tasks,
   sessionCountByTaskId,
+  accentColorTag = 'blue',
   onAddTask,
   onPlayTask,
   onEditTask,
@@ -98,7 +111,12 @@ export function TaskCarousel({
 
   return (
     <div className="mb-8">
-      <section className="rounded-[24px] bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_40%),linear-gradient(180deg,rgba(7,14,29,0.92),rgba(5,11,22,0.94))] p-3 shadow-[0_22px_55px_rgba(2,8,20,0.35),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-4">
+      <section
+        className={classNames(
+          'rounded-[24px] p-3 shadow-[0_22px_55px_rgba(2,8,20,0.35),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-4',
+          carouselAccentClassNameByColor[accentColorTag],
+        )}
+      >
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Focus Queue</p>

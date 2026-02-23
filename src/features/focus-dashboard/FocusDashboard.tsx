@@ -10,8 +10,16 @@ import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
 import { dashboardStats, historyLogEntries, logEntries, tasks, timerPreset } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
-import type { Task } from './types'
+import type { Task, TaskColorKey } from './types'
 import { formatMinutesCompact, parseDurationLabelToMinutes } from './utils/time'
+
+const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
+  blue: '59,130,246',
+  green: '16,185,129',
+  amber: '245,158,11',
+  rose: '244,63,94',
+  violet: '139,92,246',
+}
 
 export function FocusDashboard() {
   const [taskList, setTaskList] = useState<Task[]>(tasks)
@@ -50,6 +58,8 @@ export function FocusDashboard() {
   const activeTaskTotalTimeLabel = activeTask
     ? formatMinutesCompact(loggedMinutesByTaskId[activeTask.id] ?? 0).toUpperCase()
     : '0M'
+  const activeWorkspaceAccentColor = activeTask?.colorTag ?? 'blue'
+  const workspaceAccentRgb = workspaceAccentRgbByColor[activeWorkspaceAccentColor]
 
   const handleAddTask = () => {
     setEditingTask(null)
@@ -186,9 +196,26 @@ export function FocusDashboard() {
           totalTracked={dashboardStats.totalTracked}
         />
 
-        <section className="app-scroll flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <div className="mx-auto flex w-full flex-1 flex-col px-4 pb-8 pt-5 md:px-6">
+        <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-y-auto">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `radial-gradient(70% 40% at 50% 3%, rgba(${workspaceAccentRgb},0.22), transparent 72%), radial-gradient(40% 30% at 10% 22%, rgba(${workspaceAccentRgb},0.14), transparent 75%), radial-gradient(42% 34% at 90% 18%, rgba(${workspaceAccentRgb},0.12), transparent 76%), linear-gradient(180deg, #040a16 0%, #030814 100%)`,
+              }}
+            />
+            <div
+              className="absolute inset-x-6 top-24 bottom-10 rounded-[34px] blur-3xl"
+              style={{
+                backgroundImage: `radial-gradient(circle at 50% 35%, rgba(${workspaceAccentRgb},0.18), transparent 68%)`,
+              }}
+            />
+            <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
+          </div>
+
+          <div className="relative z-10 mx-auto flex w-full flex-1 flex-col px-4 pb-8 pt-5 md:px-6">
             <TaskCarousel
+              accentColorTag={activeWorkspaceAccentColor}
               onAddTask={handleAddTask}
               onDeleteTask={handleRequestDeleteTask}
               onEditTask={handleEditTask}

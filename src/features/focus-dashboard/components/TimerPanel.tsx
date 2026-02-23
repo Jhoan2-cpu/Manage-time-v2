@@ -15,6 +15,7 @@ const timerAccentStyles: Record<
   TaskColorKey,
   {
     glowClassName: string
+    panelBackgroundClassName: string
     timeGlowClassName: string
     dividerClassName: string
     totalValueClassName: string
@@ -26,6 +27,8 @@ const timerAccentStyles: Record<
 > = {
   blue: {
     glowClassName: 'shadow-[0_0_40px_rgba(59,130,246,0.18)]',
+    panelBackgroundClassName:
+      'bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.10),transparent_50%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))]',
     timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(59,130,246,0.18)]',
     dividerClassName: 'border-blue-500/15',
     totalValueClassName: 'text-blue-200',
@@ -37,6 +40,8 @@ const timerAccentStyles: Record<
   },
   green: {
     glowClassName: 'shadow-[0_0_40px_rgba(16,185,129,0.18)]',
+    panelBackgroundClassName:
+      'bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.10),transparent_50%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))]',
     timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(16,185,129,0.18)]',
     dividerClassName: 'border-emerald-500/15',
     totalValueClassName: 'text-emerald-200',
@@ -48,6 +53,8 @@ const timerAccentStyles: Record<
   },
   amber: {
     glowClassName: 'shadow-[0_0_40px_rgba(245,158,11,0.18)]',
+    panelBackgroundClassName:
+      'bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.10),transparent_50%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))]',
     timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(245,158,11,0.18)]',
     dividerClassName: 'border-amber-500/15',
     totalValueClassName: 'text-amber-200',
@@ -59,6 +66,8 @@ const timerAccentStyles: Record<
   },
   rose: {
     glowClassName: 'shadow-[0_0_40px_rgba(244,63,94,0.18)]',
+    panelBackgroundClassName:
+      'bg-[radial-gradient(circle_at_top,rgba(244,63,94,0.10),transparent_50%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))]',
     timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(244,63,94,0.18)]',
     dividerClassName: 'border-rose-500/15',
     totalValueClassName: 'text-rose-200',
@@ -70,6 +79,8 @@ const timerAccentStyles: Record<
   },
   violet: {
     glowClassName: 'shadow-[0_0_40px_rgba(139,92,246,0.18)]',
+    panelBackgroundClassName:
+      'bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.10),transparent_50%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))]',
     timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(139,92,246,0.18)]',
     dividerClassName: 'border-violet-500/15',
     totalValueClassName: 'text-violet-200',
@@ -92,7 +103,12 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
   return (
     <>
       <div className="mb-8 flex min-h-0 flex-1 justify-center">
-        <div className="flex h-full w-full flex-col rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.05),transparent_45%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))] px-4 py-6 sm:px-8 sm:py-8">
+        <div
+          className={classNames(
+            'flex h-full w-full flex-col rounded-[28px] px-4 py-6 sm:px-8 sm:py-8',
+            accents.panelBackgroundClassName,
+          )}
+        >
           <div className="flex justify-center">
             <div className="flex max-w-full items-center gap-3 sm:gap-4">
               <span
