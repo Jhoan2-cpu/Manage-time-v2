@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faChartColumn,
   faChevronDown,
+  faExpand,
   faGear,
   faMusic,
   faPause,
@@ -18,6 +19,7 @@ type FocusHeaderProps = {
   onOpenProfile?: () => void
   onSignOut?: () => void
   onToggleBackgroundMusic?: () => void
+  onEnterFocusOnlyMode?: () => void
   isBackgroundMusicPlaying?: boolean
   userName?: string
   userEmail?: string
@@ -31,6 +33,7 @@ export function FocusHeader({
   onOpenProfile,
   onSignOut,
   onToggleBackgroundMusic,
+  onEnterFocusOnlyMode,
   isBackgroundMusicPlaying = false,
   userName = 'Anton',
   userEmail = 'anton@velor.app',
@@ -132,6 +135,17 @@ export function FocusHeader({
           type="button"
         >
           <FontAwesomeIcon icon={faGear} />
+        </button>
+
+        <button
+          aria-label="Enter Focus Only mode"
+          className="hidden items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/40 px-3 py-1.5 text-sm text-slate-300 transition hover:border-blue-500/40 hover:bg-slate-800/70 hover:text-slate-100 lg:inline-flex"
+          onClick={onEnterFocusOnlyMode}
+          title="Focus Only mode"
+          type="button"
+        >
+          <FontAwesomeIcon className="text-[12px]" icon={faExpand} />
+          <span className="font-medium">Focus Only</span>
         </button>
 
         <div className="relative" ref={userMenuRef}>

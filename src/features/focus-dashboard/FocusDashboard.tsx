@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronLeft, faChevronRight, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
+import { faChevronLeft, faChevronRight, faClockRotateLeft, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { DailyLogPanel } from './components/DailyLogPanel'
 import { FocusHeader } from './components/FocusHeader'
 import { ProfileModal } from './components/ProfileModal'
@@ -56,6 +56,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
   )
+  const [isFocusOnlyMode, setIsFocusOnlyMode] = useState(false)
   const [isFocusRunning, setIsFocusRunning] = useState(false)
   const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0)
   const [workspaceGlowPulseKey, setWorkspaceGlowPulseKey] = useState(0)
@@ -180,6 +181,23 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       setSessionElapsedSeconds((currentSeconds) => Math.min(currentSeconds, activeTaskTargetSeconds))
     }
   }, [activeTaskTargetSeconds, timerMode])
+
+  useEffect(() => {
+    if (!isFocusOnlyMode) {
+      return
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsFocusOnlyMode(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isFocusOnlyMode])
 
   const handleAddTask = () => {
     setEditingTask(null)
@@ -470,112 +488,164 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     setDailyLogTogglePulseKey((current) => current + 1)
     setIsDailyLogOpen((current) => !current)
   }
+  const handleEnterFocusOnlyMode = () => {
+    setIsFocusOnlyMode(true)
+  }
+  const handleExitFocusOnlyMode = () => {
+    setIsFocusOnlyMode(false)
+  }
 
   return (
     <div className="min-h-screen bg-[#060e1d] text-slate-100">
-      <FocusHeader
-        isBackgroundMusicPlaying={isBackgroundMusicPlaying}
-        onOpenProfile={handleOpenProfile}
-        onSignOut={handleRequestSignOut}
-        onOpenSettings={handleOpenSettings}
-        onToggleBackgroundMusic={handleToggleBackgroundMusic}
-        timeLabel={timeLabel}
-        timeZoneName={timeZoneName}
-        utcOffsetLabel={utcOffsetLabel}
-        userEmail={userEmail}
-        userName={userName}
-      />
-
-      {isDailyLogOpen ? (
-        <button
-          aria-label="Close Daily Log overlay"
-          className="fixed inset-0 top-16 z-30 bg-[#020814]/55 backdrop-blur-[2px] xl:hidden"
-          onClick={handleToggleDailyLog}
-          type="button"
+      {!isFocusOnlyMode ? (
+        <FocusHeader
+          isBackgroundMusicPlaying={isBackgroundMusicPlaying}
+          onEnterFocusOnlyMode={handleEnterFocusOnlyMode}
+          onOpenProfile={handleOpenProfile}
+          onSignOut={handleRequestSignOut}
+          onOpenSettings={handleOpenSettings}
+          onToggleBackgroundMusic={handleToggleBackgroundMusic}
+          timeLabel={timeLabel}
+          timeZoneName={timeZoneName}
+          utcOffsetLabel={utcOffsetLabel}
+          userEmail={userEmail}
+          userName={userName}
         />
       ) : null}
 
-      <main className="flex h-[100svh] min-h-[100svh] pt-16">
-        <DailyLogPanel
-          entries={sidebarLogEntries}
-          isOpen={isDailyLogOpen}
-          tasks={taskList}
-          totalTracked={dashboardStats.totalTracked}
-        />
+      {isFocusOnlyMode ? (
+        <section className="focus-only-overlay-enter relative h-[100svh] overflow-hidden">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
+            <div
+              className="workspace-glow-ignite absolute inset-0"
+              key={`focus-only-glow-${workspaceGlowPulseKey}`}
+              style={{
+                backgroundImage: `radial-gradient(88% 72% at 50% 58%, rgba(${workspaceAccentRgb},0.28), transparent 74%)`,
+              }}
+            />
+            <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
+          </div>
 
-        <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-          <div className="relative flex h-full min-h-full flex-col">
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
-              <div
-                className="workspace-glow-ignite absolute inset-0"
-                key={workspaceGlowPulseKey}
-                style={{
-                  backgroundImage: `radial-gradient(88% 72% at 50% 60%, rgba(${workspaceAccentRgb},0.28), transparent 74%)`,
-                }}
-              />
-              <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
-            </div>
+          <button
+            aria-label="Exit Focus Only mode"
+            className="focus-only-controls-enter absolute right-5 top-5 z-20 inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-[#0a1427]/90 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] transition hover:border-blue-500/40 hover:text-slate-100"
+            onClick={handleExitFocusOnlyMode}
+            type="button"
+          >
+            <FontAwesomeIcon className="text-[12px]" icon={faXmark} />
+            <span className="font-medium">Exit Focus Only</span>
+          </button>
 
-            <div className="relative z-10 mx-auto flex h-full min-h-full w-full flex-1 flex-col px-4 pb-3 pt-4 md:px-6">
-              <TaskCarousel
-                accentColorTag={activeWorkspaceAccentColor}
-                isFocusRunning={isFocusRunning}
-                onAddTask={handleAddTask}
-                onDeleteTask={handleRequestDeleteTask}
-                onEditTask={handleEditTask}
-                onPlayTask={handlePlayTask}
-                sessionCountByTaskId={sessionCountByTaskId}
-                tasks={carouselTaskList}
-              />
-              <TimerPanel
-                activeTask={activeTask}
-                canUseTimerMode={Boolean(activeTaskTargetSeconds)}
-                isRunning={isFocusRunning}
-                mode={timerMode}
-                onChangeMode={handleChangeTimerMode}
-                onStartFocus={handleStartFocus}
-                timeLabel={timerDisplayLabel}
-                timerProgressPercent={timerProgressPercent}
-                totalTaskTimeLabel={activeTaskTotalTimeLabel}
-              />
-            </div>
+          <div className="focus-only-content-enter relative z-10 mx-auto flex h-full w-full max-w-[1600px] px-4 py-6 sm:px-8 sm:py-8">
+            <TimerPanel
+              activeTask={activeTask}
+              canUseTimerMode={Boolean(activeTaskTargetSeconds)}
+              isFocusOnlyMode
+              isRunning={isFocusRunning}
+              mode={timerMode}
+              onChangeMode={handleChangeTimerMode}
+              onStartFocus={handleStartFocus}
+              timeLabel={timerDisplayLabel}
+              timerProgressPercent={timerProgressPercent}
+              totalTaskTimeLabel={activeTaskTotalTimeLabel}
+            />
           </div>
         </section>
-      </main>
+      ) : (
+        <>
+          {isDailyLogOpen ? (
+            <button
+              aria-label="Close Daily Log overlay"
+              className="fixed inset-0 top-16 z-30 bg-[#020814]/55 backdrop-blur-[2px] xl:hidden"
+              onClick={handleToggleDailyLog}
+              type="button"
+            />
+          ) : null}
 
-      <button
-        key={`daily-log-toggle-mobile-${dailyLogTogglePulseKey}`}
-        aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
-        className={classNames(
-          'fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#0a1427]/95 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden',
-          dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
-        )}
-        onClick={handleToggleDailyLog}
-        type="button"
-      >
-        <FontAwesomeIcon className="text-[12px] text-slate-300" icon={faClockRotateLeft} />
-        <span className="font-medium">{isDailyLogOpen ? 'Hide Log' : 'Daily Log'}</span>
-        <FontAwesomeIcon className="text-[10px]" icon={isDailyLogOpen ? faChevronLeft : faChevronRight} />
-      </button>
+          <main className="flex h-[100svh] min-h-[100svh] pt-16">
+            <DailyLogPanel
+              entries={sidebarLogEntries}
+              isOpen={isDailyLogOpen}
+              tasks={taskList}
+              totalTracked={dashboardStats.totalTracked}
+            />
 
-      <button
-        key={`daily-log-toggle-desktop-${dailyLogTogglePulseKey}`}
-        aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
-        className={classNames(
-          'fixed top-1/2 z-40 hidden h-12 w-9 -translate-y-1/2 place-items-center rounded-r-xl border border-l-0 border-slate-700/80 bg-[#0a1427]/95 text-slate-300 shadow-[0_10px_30px_rgba(1,8,22,0.45)] transition-[left,border-color,color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-blue-500/40 hover:text-blue-300 xl:grid',
-          dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
-        )}
-        onClick={handleToggleDailyLog}
-        style={{ left: isDailyLogOpen ? 380 : 0 }}
-        title={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
-        type="button"
-      >
-        <span className="flex flex-col items-center gap-0.5">
-          <FontAwesomeIcon className="text-[11px]" icon={faClockRotateLeft} />
-          <FontAwesomeIcon className="text-[10px]" icon={isDailyLogOpen ? faChevronLeft : faChevronRight} />
-        </span>
-      </button>
+            <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+              <div className="relative flex h-full min-h-full flex-col">
+                <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
+                  <div
+                    className="workspace-glow-ignite absolute inset-0"
+                    key={workspaceGlowPulseKey}
+                    style={{
+                      backgroundImage: `radial-gradient(88% 72% at 50% 60%, rgba(${workspaceAccentRgb},0.28), transparent 74%)`,
+                    }}
+                  />
+                  <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
+                </div>
+
+                <div className="relative z-10 mx-auto flex h-full min-h-full w-full flex-1 flex-col px-4 pb-3 pt-4 md:px-6">
+                  <TaskCarousel
+                    accentColorTag={activeWorkspaceAccentColor}
+                    isFocusRunning={isFocusRunning}
+                    onAddTask={handleAddTask}
+                    onDeleteTask={handleRequestDeleteTask}
+                    onEditTask={handleEditTask}
+                    onPlayTask={handlePlayTask}
+                    sessionCountByTaskId={sessionCountByTaskId}
+                    tasks={carouselTaskList}
+                  />
+                  <TimerPanel
+                    activeTask={activeTask}
+                    canUseTimerMode={Boolean(activeTaskTargetSeconds)}
+                    isRunning={isFocusRunning}
+                    mode={timerMode}
+                    onChangeMode={handleChangeTimerMode}
+                    onStartFocus={handleStartFocus}
+                    timeLabel={timerDisplayLabel}
+                    timerProgressPercent={timerProgressPercent}
+                    totalTaskTimeLabel={activeTaskTotalTimeLabel}
+                  />
+                </div>
+              </div>
+            </section>
+          </main>
+
+          <button
+            key={`daily-log-toggle-mobile-${dailyLogTogglePulseKey}`}
+            aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
+            className={classNames(
+              'fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#0a1427]/95 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden',
+              dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
+            )}
+            onClick={handleToggleDailyLog}
+            type="button"
+          >
+            <FontAwesomeIcon className="text-[12px] text-slate-300" icon={faClockRotateLeft} />
+            <span className="font-medium">{isDailyLogOpen ? 'Hide Log' : 'Daily Log'}</span>
+            <FontAwesomeIcon className="text-[10px]" icon={isDailyLogOpen ? faChevronLeft : faChevronRight} />
+          </button>
+
+          <button
+            key={`daily-log-toggle-desktop-${dailyLogTogglePulseKey}`}
+            aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
+            className={classNames(
+              'fixed top-1/2 z-40 hidden h-12 w-9 -translate-y-1/2 place-items-center rounded-r-xl border border-l-0 border-slate-700/80 bg-[#0a1427]/95 text-slate-300 shadow-[0_10px_30px_rgba(1,8,22,0.45)] transition-[left,border-color,color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-blue-500/40 hover:text-blue-300 xl:grid',
+              dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
+            )}
+            onClick={handleToggleDailyLog}
+            style={{ left: isDailyLogOpen ? 380 : 0 }}
+            title={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
+            type="button"
+          >
+            <span className="flex flex-col items-center gap-0.5">
+              <FontAwesomeIcon className="text-[11px]" icon={faClockRotateLeft} />
+              <FontAwesomeIcon className="text-[10px]" icon={isDailyLogOpen ? faChevronLeft : faChevronRight} />
+            </span>
+          </button>
+        </>
+      )}
 
       <NewTaskModal
         editingTask={editingTask}

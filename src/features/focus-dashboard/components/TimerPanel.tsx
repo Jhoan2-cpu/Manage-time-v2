@@ -15,6 +15,7 @@ type TimerPanelProps = {
   canUseTimerMode: boolean
   timerProgressPercent: number | null
   isRunning: boolean
+  isFocusOnlyMode?: boolean
 }
 
 const timerAccentStyles: Record<
@@ -116,6 +117,7 @@ export function TimerPanel({
   canUseTimerMode,
   timerProgressPercent,
   isRunning,
+  isFocusOnlyMode = false,
 }: TimerPanelProps) {
   const activeTaskColor = activeTask ? taskColorMap[activeTask.colorTag] : null
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
@@ -128,7 +130,12 @@ export function TimerPanel({
   return (
     <>
       <div className="mb-2 flex min-h-0 flex-1 justify-center">
-        <div className="flex h-full w-full flex-col px-4 py-2 sm:px-8 sm:py-3">
+        <div
+          className={classNames(
+            'flex h-full w-full flex-col px-4 py-2 sm:px-8 sm:py-3',
+            isFocusOnlyMode && 'justify-center py-4 sm:py-6',
+          )}
+        >
           <div className="flex justify-center">
             <div className=" flex max-w-full items-center gap-3 sm:gap-4">
               <span
@@ -142,10 +149,20 @@ export function TimerPanel({
               </span>
 
               <div className="min-w-0">
-                <h2 className="truncate text-center text-2xl font-semibold tracking-tight text-slate-100 sm:text-left sm:text-4xl">
+                <h2
+                  className={classNames(
+                    'truncate text-center text-2xl font-semibold tracking-tight text-slate-100 sm:text-4xl',
+                    isFocusOnlyMode ? 'sm:text-center' : 'sm:text-left',
+                  )}
+                >
                   {taskTitle}
                 </h2>
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <div
+                  className={classNames(
+                    'mt-2 flex flex-wrap items-center justify-center gap-2',
+                    isFocusOnlyMode ? 'sm:justify-center' : 'sm:justify-start',
+                  )}
+                >
                   <div className="inline-flex items-center rounded-xl bg-slate-950/25 p-1 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
                     <button
                       className={classNames(
@@ -182,10 +199,16 @@ export function TimerPanel({
             </div>
           </div>
 
-          <div className="relative mt-2 flex flex-1 flex-col items-center justify-center py-1 sm:py-2">
+          <div
+            className={classNames(
+              'relative mt-2 flex flex-1 flex-col items-center justify-center py-1 sm:py-2',
+              isFocusOnlyMode && 'mt-4 sm:mt-6',
+            )}
+          >
             <p
               className={classNames(
-                'relative select-none text-[clamp(80px,12vw,220px)] font-bold leading-none tracking-tight text-slate-100 tabular-nums',
+                'relative select-none font-bold leading-none tracking-tight text-slate-100 tabular-nums',
+                isFocusOnlyMode ? 'text-[clamp(96px,14vw,260px)]' : 'text-[clamp(80px,12vw,220px)]',
                 accents.timeGlowClassName,
               )}
             >
@@ -193,7 +216,13 @@ export function TimerPanel({
             </p>
           </div>
 
-          <div className={classNames('mx-auto mt-0.5 w-full max-w-[460px] border-t pt-3', accents.dividerClassName)}>
+          <div
+            className={classNames(
+              'mx-auto w-full max-w-[460px] border-t',
+              isFocusOnlyMode ? 'mt-1 pt-4 sm:mt-2' : 'mt-0.5 pt-3',
+              accents.dividerClassName,
+            )}
+          >
             <p className="text-center text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">
               Total Task Time:
               <span className={classNames('ml-2 font-mono tracking-[0.16em]', accents.totalValueClassName)}>
@@ -202,7 +231,7 @@ export function TimerPanel({
             </p>
           </div>
 
-          <div className="mt-3 flex justify-center">
+          <div className={classNames('flex justify-center', isFocusOnlyMode ? 'mt-5' : 'mt-3')}>
             <button
               aria-label={isRunning ? 'Pause focus' : 'Start focus'}
               className={classNames(

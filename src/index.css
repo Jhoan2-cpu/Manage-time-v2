@@ -339,6 +339,45 @@ body {
   animation: daily-log-toggle-ignite 560ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes focus-only-overlay-enter {
+  0% {
+    opacity: 0;
+    filter: saturate(0.9) brightness(0.92);
+  }
+
+  100% {
+    opacity: 1;
+    filter: saturate(1) brightness(1);
+  }
+}
+
+.focus-only-overlay-enter {
+  animation: focus-only-overlay-enter 280ms ease-out both;
+}
+
+@keyframes focus-only-content-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+    filter: blur(2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.focus-only-content-enter {
+  animation: focus-only-content-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.focus-only-controls-enter {
+  animation: focus-only-content-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 40ms;
+}
+
 @keyframes modal-fade {
   from {
     opacity: 0;
