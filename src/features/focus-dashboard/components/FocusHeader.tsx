@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
+  faChartColumn,
   faChevronDown,
   faClockRotateLeft,
   faGear,
   faRightFromBracket,
-  faSliders,
   faUser,
 } from '@fortawesome/free-solid-svg-icons'
 
@@ -128,49 +128,79 @@ export function FocusHeader({
 
           {isUserMenuOpen ? (
             <div
-              className="absolute right-0 top-[calc(100%+10px)] w-64 overflow-hidden rounded-2xl border border-slate-700/70 bg-[#0a1325]/95 shadow-[0_20px_50px_rgba(1,8,22,0.6)] backdrop-blur-xl"
+              className="absolute right-0 top-[calc(100%+12px)] w-[min(86vw,324px)] overflow-hidden rounded-2xl border border-slate-700/70 bg-[linear-gradient(180deg,rgba(10,19,37,0.98),rgba(6,14,29,0.98))] shadow-[0_28px_80px_rgba(1,8,22,0.68)] backdrop-blur-xl"
               role="menu"
             >
-              <div className="border-b border-slate-800/90 px-3 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/15 text-sm font-semibold text-blue-100 ring-1 ring-blue-400/20">
-                    {userInitials}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-100">{userName}</p>
-                    <p className="truncate text-xs text-slate-400">{userEmail}</p>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-blue-500/8 to-transparent" />
+
+                <div className="border-b border-slate-800/90 px-5 py-5">
+                  <div className="flex items-center gap-4">
+                    <span className="relative grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-blue-500/25 via-blue-400/10 to-slate-800 text-sm font-semibold text-slate-100 ring-2 ring-blue-400/40 shadow-[0_8px_24px_rgba(59,130,246,0.18)]">
+                      {userInitials}
+                      <span className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#081122] bg-emerald-400" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-lg font-semibold tracking-tight text-slate-100">{userName}</p>
+                      <p className="truncate text-sm text-slate-400">{userEmail}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="p-2">
-                <button
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800/80"
-                  onClick={() => setIsUserMenuOpen(false)}
-                  role="menuitem"
-                  type="button"
-                >
-                  <FontAwesomeIcon className="w-4 text-slate-400" icon={faUser} />
-                  <span>Profile</span>
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800/80"
-                  onClick={handleOpenSettingsFromMenu}
-                  role="menuitem"
-                  type="button"
-                >
-                  <FontAwesomeIcon className="w-4 text-slate-400" icon={faSliders} />
-                  <span>Settings</span>
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-rose-200 transition hover:bg-rose-500/10"
-                  onClick={() => setIsUserMenuOpen(false)}
-                  role="menuitem"
-                  type="button"
-                >
-                  <FontAwesomeIcon className="w-4 text-rose-300" icon={faRightFromBracket} />
-                  <span>Sign Out</span>
-                </button>
+                <div className="px-3 py-3">
+                  <button
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
+                      <FontAwesomeIcon icon={faUser} />
+                    </span>
+                    <span className="text-base text-slate-200">Personal Profile</span>
+                  </button>
+
+                  <button
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
+                    onClick={handleOpenSettingsFromMenu}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
+                      <FontAwesomeIcon icon={faGear} />
+                    </span>
+                    <span className="text-base text-slate-200">Workspace Settings</span>
+                  </button>
+
+                  <button
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
+                      <FontAwesomeIcon icon={faChartColumn} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-base leading-tight text-slate-200">Focus Statistics</span>
+                      <span className="block truncate text-xs text-slate-500">Weekly report available</span>
+                    </span>
+                  </button>
+                </div>
+
+                <div className="border-t border-slate-800/90 px-3 py-3">
+                  <button
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
+                      <FontAwesomeIcon icon={faRightFromBracket} />
+                    </span>
+                    <span className="text-base text-slate-200">Sign Out</span>
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
