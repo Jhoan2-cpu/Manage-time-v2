@@ -21,26 +21,6 @@ const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   violet: '139,92,246',
 }
 
-function formatAlarmTimeLabel(alarmTime: string | null) {
-  if (!alarmTime) {
-    return null
-  }
-
-  const [hoursRaw, minutesRaw] = alarmTime.split(':')
-  const hours = Number.parseInt(hoursRaw ?? '', 10)
-  const minutes = Number.parseInt(minutesRaw ?? '', 10)
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return alarmTime
-  }
-
-  const date = new Date()
-  date.setHours(hours, minutes, 0, 0)
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
-}
-
 export function FocusDashboard() {
   const [taskList, setTaskList] = useState<Task[]>(tasks)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
@@ -96,12 +76,6 @@ export function FocusDashboard() {
       ? Math.max(0, activeTaskTargetSeconds - sessionElapsedSeconds)
       : sessionElapsedSeconds
   const timerDisplayLabel = formatSecondsHms(timerDisplaySeconds)
-  const activeTaskTimerTargetLabel =
-    activeTask?.targetDurationMinutes && activeTask.targetDurationMinutes > 0
-      ? formatMinutesCompact(activeTask.targetDurationMinutes).toUpperCase()
-      : null
-  const activeTaskAlarmLabel = formatAlarmTimeLabel(activeTask?.alarmTime ?? null)
-
   useEffect(() => {
     if (!isFocusRunning) {
       return
@@ -328,13 +302,11 @@ export function FocusDashboard() {
             />
             <TimerPanel
               activeTask={activeTask}
-              alarmTimeLabel={activeTaskAlarmLabel}
               canUseTimerMode={Boolean(activeTaskTargetSeconds)}
               isRunning={isFocusRunning}
               mode={timerMode}
               onChangeMode={handleChangeTimerMode}
               onStartFocus={handleStartFocus}
-              targetDurationLabel={activeTaskTimerTargetLabel}
               timeLabel={timerDisplayLabel}
               timerProgressPercent={timerProgressPercent}
               totalTaskTimeLabel={activeTaskTotalTimeLabel}

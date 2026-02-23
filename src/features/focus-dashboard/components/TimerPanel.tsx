@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBell, faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
+import { faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../constants/taskOptions'
 import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
@@ -14,8 +14,6 @@ type TimerPanelProps = {
   canUseTimerMode: boolean
   timerProgressPercent: number | null
   isRunning: boolean
-  targetDurationLabel: string | null
-  alarmTimeLabel: string | null
 }
 
 const timerAccentStyles: Record<
@@ -109,14 +107,11 @@ export function TimerPanel({
   canUseTimerMode,
   timerProgressPercent,
   isRunning,
-  targetDurationLabel,
-  alarmTimeLabel,
 }: TimerPanelProps) {
   const activeTaskColor = activeTask ? taskColorMap[activeTask.colorTag] : null
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
   const accents = activeTask ? timerAccentStyles[activeTask.colorTag] : timerAccentStyles.blue
   const taskTitle = activeTask?.title ?? 'No Task Selected'
-  const taskSubtitle = activeTask?.details?.trim() || 'Ready to focus'
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
 
   return (
@@ -139,16 +134,6 @@ export function TimerPanel({
                 <h2 className="truncate text-center text-2xl font-semibold tracking-tight text-slate-100 sm:text-left sm:text-4xl">
                   {taskTitle}
                 </h2>
-                <div
-                  className={classNames(
-                    'mt-1 inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-xs',
-                    accents.chipClassName,
-                  )}
-                >
-                  <span className={classNames('h-2 w-2 rounded-full', activeTaskColor?.swatchClassName ?? 'bg-slate-500')} />
-                  <span className="truncate text-slate-300">{taskSubtitle}</span>
-                </div>
-
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                   <div className="inline-flex items-center rounded-xl bg-slate-950/25 p-1 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
                     <button
@@ -181,20 +166,6 @@ export function TimerPanel({
                       <span>Temporizador</span>
                     </button>
                   </div>
-
-                  {targetDurationLabel ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)]">
-                      <FontAwesomeIcon className="text-slate-400" icon={faHourglassHalf} />
-                      <span>{targetDurationLabel}</span>
-                    </span>
-                  ) : null}
-
-                  {alarmTimeLabel ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)]">
-                      <FontAwesomeIcon className="text-slate-400" icon={faBell} />
-                      <span>{alarmTimeLabel}</span>
-                    </span>
-                  ) : null}
                 </div>
               </div>
             </div>
