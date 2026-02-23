@@ -8,7 +8,7 @@ import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModa
 import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
-import { dashboardStats, logEntries, tasks, timerPreset } from './data/mockData'
+import { dashboardStats, historyLogEntries, logEntries, tasks, timerPreset } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
 import type { Task } from './types'
 import { formatMinutesCompact, parseDurationLabelToMinutes } from './utils/time'
@@ -246,6 +246,7 @@ export function FocusDashboard() {
       <SettingsModal
         dashboardStats={dashboardStats}
         entries={logEntries}
+        historyEntries={historyLogEntries}
         isOpen={isSettingsModalOpen}
         onClose={handleCloseSettings}
         tasks={taskList}

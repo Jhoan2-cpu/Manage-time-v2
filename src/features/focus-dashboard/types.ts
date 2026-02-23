@@ -18,6 +18,7 @@ export interface Task {
 
 export interface LogEntry {
   id: string
+  date?: string
   start: string
   duration: string
   activity?: string
