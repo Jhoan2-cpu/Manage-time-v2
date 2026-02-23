@@ -14,6 +14,7 @@ import { TaskCarousel } from './components/tasks/TaskCarousel'
 import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tasks } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
+import { classNames } from './utils/classNames'
 import { formatSecondsHms, parseDurationLabelToSeconds } from './utils/time'
 import {
   getBackgroundMusicVolume,
@@ -58,6 +59,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const [isFocusRunning, setIsFocusRunning] = useState(false)
   const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0)
   const [workspaceGlowPulseKey, setWorkspaceGlowPulseKey] = useState(0)
+  const [dailyLogTogglePulseKey, setDailyLogTogglePulseKey] = useState(0)
   const [timerMode, setTimerMode] = useState<FocusTimerMode>(() => {
     const initialActiveTask = tasks.find((task) => task.state === 'active') ?? tasks[0] ?? null
     return initialActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch'
@@ -465,6 +467,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     setTaskPendingSwitchConfirm(null)
   }
   const handleToggleDailyLog = () => {
+    setDailyLogTogglePulseKey((current) => current + 1)
     setIsDailyLogOpen((current) => !current)
   }
 
@@ -540,8 +543,12 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       </main>
 
       <button
+        key={`daily-log-toggle-mobile-${dailyLogTogglePulseKey}`}
         aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
-        className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#0a1427]/95 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden"
+        className={classNames(
+          'fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#0a1427]/95 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] ring-1 ring-slate-700/80 transition hover:ring-blue-500/40 xl:hidden',
+          dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
+        )}
         onClick={handleToggleDailyLog}
         type="button"
       >
@@ -551,10 +558,14 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       </button>
 
       <button
+        key={`daily-log-toggle-desktop-${dailyLogTogglePulseKey}`}
         aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
-        className="fixed top-1/2 z-40 hidden h-12 w-9 -translate-y-1/2 place-items-center rounded-r-xl border border-l-0 border-slate-700/80 bg-[#0a1427]/95 text-slate-300 shadow-[0_10px_30px_rgba(1,8,22,0.45)] transition-[left,border-color,color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-blue-500/40 hover:text-blue-300 xl:grid"
+        className={classNames(
+          'fixed top-1/2 z-40 hidden h-12 w-9 -translate-y-1/2 place-items-center rounded-r-xl border border-l-0 border-slate-700/80 bg-[#0a1427]/95 text-slate-300 shadow-[0_10px_30px_rgba(1,8,22,0.45)] transition-[left,border-color,color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-blue-500/40 hover:text-blue-300 xl:grid',
+          dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
+        )}
         onClick={handleToggleDailyLog}
-        style={{ left: isDailyLogOpen ? 340 : 0 }}
+        style={{ left: isDailyLogOpen ? 380 : 0 }}
         title={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
         type="button"
       >

@@ -188,7 +188,14 @@ export function DailyLogPanel({
     return selectionAnchor.row === row && selectionAnchor.col === col
   }
 
-  const handleCellMouseDown = (row: number, col: number) => {
+  const handleCellMouseDown = (row: number, col: number, extendSelection = false) => {
+    if (extendSelection && selectionAnchor) {
+      setSelectionFocus({ row, col })
+      setIsSelectingCells(false)
+      tableSelectionRef.current?.focus()
+      return
+    }
+
     setSelectionAnchor({ row, col })
     setSelectionFocus({ row, col })
     setIsSelectingCells(true)
@@ -241,13 +248,13 @@ export function DailyLogPanel({
         'z-40 overflow-hidden xl:relative xl:shrink-0',
         'fixed inset-x-0 bottom-0 top-16 max-h-none xl:static xl:inset-auto xl:bottom-auto xl:max-h-none',
         'transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-        isOpen ? 'pointer-events-auto xl:w-[340px]' : 'pointer-events-none xl:w-0',
+        isOpen ? 'pointer-events-auto xl:w-[380px]' : 'pointer-events-none xl:w-0',
       )}
     >
       <div
         className={classNames(
           'flex h-full flex-col border border-slate-800 bg-[#050d1d]/95 shadow-[0_24px_60px_rgba(1,8,22,0.55)] backdrop-blur will-change-transform',
-          'rounded-none xl:h-full xl:w-[340px] xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:border-slate-800 xl:bg-[#050d1d] xl:shadow-none xl:backdrop-blur-0',
+          'rounded-none xl:h-full xl:w-[380px] xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:border-slate-800 xl:bg-[#050d1d] xl:shadow-none xl:backdrop-blur-0',
           'transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
           isOpen ? 'translate-x-0 translate-y-0 xl:translate-x-0' : '-translate-x-[10%] translate-y-[104%] xl:-translate-x-full xl:translate-y-0',
         )}
@@ -273,11 +280,11 @@ export function DailyLogPanel({
         >
           <table className="w-full table-fixed border-separate border-spacing-y-1 text-xs select-none">
             <colgroup>
-              <col className="w-[72px]" />
+              <col className="w-[96px]" />
               <col className="w-[88px]" />
               <col />
             </colgroup>
-            <thead className="sticky top-0 z-10">
+            <thead>
               <tr>
                 <th
                   className={classNames(
@@ -289,7 +296,7 @@ export function DailyLogPanel({
                   onMouseDown={(event) => {
                     if (event.button !== 0) return
                     event.preventDefault()
-                    handleCellMouseDown(HEADER_ROW_INDEX, 0)
+                    handleCellMouseDown(HEADER_ROW_INDEX, 0, event.shiftKey)
                   }}
                   onMouseEnter={() => handleCellMouseEnter(HEADER_ROW_INDEX, 0)}
                 >
@@ -305,7 +312,7 @@ export function DailyLogPanel({
                   onMouseDown={(event) => {
                     if (event.button !== 0) return
                     event.preventDefault()
-                    handleCellMouseDown(HEADER_ROW_INDEX, 1)
+                    handleCellMouseDown(HEADER_ROW_INDEX, 1, event.shiftKey)
                   }}
                   onMouseEnter={() => handleCellMouseEnter(HEADER_ROW_INDEX, 1)}
                 >
@@ -321,7 +328,7 @@ export function DailyLogPanel({
                   onMouseDown={(event) => {
                     if (event.button !== 0) return
                     event.preventDefault()
-                    handleCellMouseDown(HEADER_ROW_INDEX, 2)
+                    handleCellMouseDown(HEADER_ROW_INDEX, 2, event.shiftKey)
                   }}
                   onMouseEnter={() => handleCellMouseEnter(HEADER_ROW_INDEX, 2)}
                 >
@@ -344,7 +351,7 @@ export function DailyLogPanel({
                       onMouseDown={(event) => {
                         if (event.button !== 0) return
                         event.preventDefault()
-                        handleCellMouseDown(rowIndex + 1, 0)
+                        handleCellMouseDown(rowIndex + 1, 0, event.shiftKey)
                       }}
                       onMouseEnter={() => handleCellMouseEnter(rowIndex + 1, 0)}
                     >
@@ -361,7 +368,7 @@ export function DailyLogPanel({
                       onMouseDown={(event) => {
                         if (event.button !== 0) return
                         event.preventDefault()
-                        handleCellMouseDown(rowIndex + 1, 1)
+                        handleCellMouseDown(rowIndex + 1, 1, event.shiftKey)
                       }}
                       onMouseEnter={() => handleCellMouseEnter(rowIndex + 1, 1)}
                     >
@@ -378,7 +385,7 @@ export function DailyLogPanel({
                       onMouseDown={(event) => {
                         if (event.button !== 0) return
                         event.preventDefault()
-                        handleCellMouseDown(rowIndex + 1, 2)
+                        handleCellMouseDown(rowIndex + 1, 2, event.shiftKey)
                       }}
                       onMouseEnter={() => handleCellMouseEnter(rowIndex + 1, 2)}
                     >
