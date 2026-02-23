@@ -15,7 +15,14 @@ import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tas
 import { useCurrentTime } from './hooks/useCurrentTime'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { formatSecondsHms, parseDurationLabelToSeconds } from './utils/time'
-import { subscribeBackgroundMusicState, toggleBackgroundMusic } from '../../lib/audio/uiSfx'
+import {
+  getBackgroundMusicVolume,
+  getUiInteractionSfxEnabled,
+  setBackgroundMusicVolume,
+  setUiInteractionSfxEnabled,
+  subscribeBackgroundMusicState,
+  toggleBackgroundMusic,
+} from '../../lib/audio/uiSfx'
 
 const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   blue: '59,130,246',
@@ -42,6 +49,9 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false)
   const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false)
+  const [uiInteractionSfxEnabled, setUiInteractionSfxEnabledState] = useState(() => getUiInteractionSfxEnabled())
+  const [backgroundMusicVolume, setBackgroundMusicVolumeState] = useState(() => getBackgroundMusicVolume())
+  const [requireTaskSwitchConfirmation, setRequireTaskSwitchConfirmation] = useState(true)
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
   )
@@ -276,6 +286,14 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const handleToggleBackgroundMusic = () => {
     toggleBackgroundMusic()
   }
+  const handleToggleUiInteractionSfx = (nextValue: boolean) => {
+    const appliedValue = setUiInteractionSfxEnabled(nextValue)
+    setUiInteractionSfxEnabledState(appliedValue)
+  }
+  const handleBackgroundMusicVolumeChange = (nextValue: number) => {
+    const appliedVolume = setBackgroundMusicVolume(nextValue)
+    setBackgroundMusicVolumeState(appliedVolume)
+  }
   const handleOpenProfile = () => {
     setIsProfileModalOpen(true)
   }
@@ -428,7 +446,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       return
     }
 
-    if (isFocusRunning && activeTask && selectedTask.id !== activeTask.id) {
+    if (requireTaskSwitchConfirmation && isFocusRunning && activeTask && selectedTask.id !== activeTask.id) {
       setTaskPendingSwitchConfirm(selectedTask)
       return
     }
@@ -573,12 +591,18 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         onConfirm={handleConfirmSignOut}
       />
       <SettingsModal
+        backgroundMusicVolume={backgroundMusicVolume}
         dashboardStats={dashboardStats}
         entries={dailyLogEntries}
         historyEntries={historyLogEntries}
         isOpen={isSettingsModalOpen}
+        onBackgroundMusicVolumeChange={handleBackgroundMusicVolumeChange}
         onClose={handleCloseSettings}
+        onToggleTaskSwitchConfirmation={setRequireTaskSwitchConfirmation}
+        onToggleUiInteractionSfx={handleToggleUiInteractionSfx}
+        requireTaskSwitchConfirmation={requireTaskSwitchConfirmation}
         tasks={taskList}
+        uiInteractionSfxEnabled={uiInteractionSfxEnabled}
       />
     </div>
   )

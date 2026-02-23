@@ -20,6 +20,8 @@ let clickHowl: Howl | null = null
 let typingHowl: Howl | null = null
 let backgroundMusicHowl: Howl | null = null
 const backgroundMusicListeners = new Set<(isPlaying: boolean) => void>()
+let uiInteractionSfxEnabled = true
+let backgroundMusicVolume = 0.08
 
 const BACKGROUND_MUSIC_SRC_CANDIDATES = [
   encodeURI('/loop/Dark Ambient No Copyright Music  c152 - missed call.mp3'),
@@ -54,7 +56,7 @@ export function initUiSfx() {
 
   backgroundMusicHowl = new Howl({
     src: BACKGROUND_MUSIC_SRC_CANDIDATES,
-    volume: 0.08,
+    volume: backgroundMusicVolume,
     loop: true,
     preload: true,
     html5: true,
@@ -133,7 +135,7 @@ export function initUiSfx() {
 }
 
 export function playUiClick() {
-  if (!clickHowl) {
+  if (!clickHowl || !uiInteractionSfxEnabled) {
     return
   }
 
@@ -146,7 +148,7 @@ export function playUiClick() {
 }
 
 export function playUiTyping() {
-  if (!typingHowl) {
+  if (!typingHowl || !uiInteractionSfxEnabled) {
     return
   }
 
@@ -181,6 +183,34 @@ export function toggleBackgroundMusic() {
 
 export function getBackgroundMusicPlaying() {
   return Boolean(backgroundMusicHowl?.playing())
+}
+
+export function getBackgroundMusicVolume() {
+  if (backgroundMusicHowl) {
+    return clamp(backgroundMusicHowl.volume(), 0, 1)
+  }
+
+  return clamp(backgroundMusicVolume, 0, 1)
+}
+
+export function setBackgroundMusicVolume(nextVolume: number) {
+  const clampedVolume = clamp(Number.isFinite(nextVolume) ? nextVolume : backgroundMusicVolume, 0, 1)
+  backgroundMusicVolume = clampedVolume
+
+  if (backgroundMusicHowl) {
+    backgroundMusicHowl.volume(clampedVolume)
+  }
+
+  return clampedVolume
+}
+
+export function getUiInteractionSfxEnabled() {
+  return uiInteractionSfxEnabled
+}
+
+export function setUiInteractionSfxEnabled(enabled: boolean) {
+  uiInteractionSfxEnabled = Boolean(enabled)
+  return uiInteractionSfxEnabled
 }
 
 export function subscribeBackgroundMusicState(listener: (isPlaying: boolean) => void) {
