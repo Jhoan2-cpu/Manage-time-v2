@@ -206,6 +206,35 @@ body {
   animation-fill-mode: both;
 }
 
+@keyframes timer-play-active-glow {
+  0% {
+    box-shadow:
+      0 10px 28px rgba(var(--timer-play-glow-rgb), 0.2),
+      0 0 0 rgba(var(--timer-play-glow-rgb), 0),
+      0 0 0 rgba(var(--timer-play-glow-rgb), 0);
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    box-shadow:
+      0 12px 34px rgba(var(--timer-play-glow-rgb), 0.3),
+      0 0 18px rgba(var(--timer-play-glow-rgb), 0.3),
+      0 0 36px rgba(var(--timer-play-glow-rgb), 0.18);
+    transform: translateY(-1px) scale(1.02);
+  }
+  100% {
+    box-shadow:
+      0 10px 30px rgba(var(--timer-play-glow-rgb), 0.24),
+      0 0 12px rgba(var(--timer-play-glow-rgb), 0.2),
+      0 0 24px rgba(var(--timer-play-glow-rgb), 0.11);
+    transform: translateY(0) scale(1);
+  }
+}
+
+.timer-play-active-glow {
+  will-change: box-shadow, transform;
+  animation: timer-play-active-glow 1.35s ease-in-out infinite alternate;
+}
+
 @keyframes modal-fade {
   from {
     opacity: 0;

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../constants/taskOptions'
@@ -97,6 +98,14 @@ const timerAccentStyles: Record<
   },
 }
 
+const timerPlayGlowRgbByColor: Record<TaskColorKey, string> = {
+  blue: '59,130,246',
+  green: '16,185,129',
+  amber: '245,158,11',
+  rose: '244,63,94',
+  violet: '139,92,246',
+}
+
 export function TimerPanel({
   timeLabel,
   onStartFocus,
@@ -113,6 +122,8 @@ export function TimerPanel({
   const accents = activeTask ? timerAccentStyles[activeTask.colorTag] : timerAccentStyles.blue
   const taskTitle = activeTask?.title ?? 'No Task Selected'
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
+  const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
+  const playButtonGlowStyle = { '--timer-play-glow-rgb': playGlowRgb } as CSSProperties
 
   return (
     <>
@@ -217,9 +228,11 @@ export function TimerPanel({
               aria-label={isRunning ? 'Pause focus' : 'Start focus'}
               className={classNames(
                 'grid h-14 w-14 place-items-center rounded-2xl border transition hover:-translate-y-0.5 active:translate-y-0',
+                isRunning && 'timer-play-active-glow',
                 accents.playButtonClassName,
               )}
               onClick={onStartFocus}
+              style={playButtonGlowStyle}
               type="button"
             >
               <FontAwesomeIcon
