@@ -60,12 +60,20 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCar
   return (
     <article
       className={classNames(
-        'flex h-36 w-64 shrink-0 flex-col justify-between rounded-2xl p-3.5 transition duration-200 hover:-translate-y-0.5',
+        'flex h-36 w-64 shrink-0 cursor-pointer flex-col justify-between rounded-2xl p-3.5 transition duration-200 hover:-translate-y-0.5',
         'relative overflow-hidden',
         isActive && 'task-card-focus-ignite',
         colorStyles.cardClassName,
         stateStyles.shell,
       )}
+      onClick={(event) => {
+        const target = event.target
+        if (target instanceof Element && target.closest('button')) {
+          return
+        }
+
+        onEditTask?.(task)
+      }}
       style={activeCardGlowStyle}
     >
       <div className="flex items-start gap-2.5">
