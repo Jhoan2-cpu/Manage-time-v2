@@ -67,6 +67,7 @@ export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, on
         'relative overflow-hidden',
         isActive && 'task-card-focus-ignite',
         colorStyles.cardClassName,
+        isActive && classNames('ring-2 ring-inset', colorStyles.selectedRingClassName),
         stateStyles.shell,
       )}
       onClick={(event) => {

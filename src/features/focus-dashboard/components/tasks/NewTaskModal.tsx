@@ -155,12 +155,12 @@ export function NewTaskModal({
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: `radial-gradient(70% 55% at 20% 0%, rgba(${modalAccentRgb},0.14), transparent 72%), radial-gradient(55% 45% at 90% 100%, rgba(${modalAccentRgb},0.08), transparent 76%)`,
+              backgroundImage: `radial-gradient(82% 66% at 18% 78%, rgba(${modalAccentRgb},0.22), transparent 72%), radial-gradient(58% 44% at 88% 8%, rgba(${modalAccentRgb},0.07), transparent 78%)`,
             }}
           />
           <div
-            className="absolute left-1/2 top-0 h-20 w-3/4 -translate-x-1/2 rounded-full blur-2xl"
-            style={{ backgroundColor: `rgba(${modalAccentRgb},0.12)` }}
+            className="absolute -bottom-4 left-8 h-28 w-56 rounded-full blur-3xl"
+            style={{ backgroundColor: `rgba(${modalAccentRgb},0.18)` }}
           />
         </div>
 
