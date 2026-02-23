@@ -171,7 +171,7 @@ export function TimerPanel({
             </div>
           </div>
 
-          <div className="relative mt-5 flex flex-1 flex-col items-center justify-center py-6 sm:py-8">
+          <div className="relative mt-4 flex flex-1 flex-col items-center justify-center py-4 sm:py-6">
             <p
               className={classNames(
                 'relative select-none font-mono text-[48px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[84px]',
@@ -181,15 +181,8 @@ export function TimerPanel({
               {stopwatchLabel}
             </p>
 
-            <div className="relative mt-4 flex items-center gap-2">
-              <span className={classNames('h-2.5 w-2.5 rounded-full', activeTaskColor?.swatchClassName ?? 'bg-blue-500')} />
-              <span className="h-2 w-2 rounded-full bg-slate-700" />
-              <span className="h-2 w-2 rounded-full bg-slate-700" />
-              <span className="h-2 w-2 rounded-full bg-slate-700" />
-            </div>
-
             {mode === 'timer' && canUseTimerMode ? (
-              <div className="mt-5 w-full max-w-[520px] px-2">
+              <div className="mt-4 w-full max-w-[520px] px-2">
                 <div className="h-2 overflow-hidden rounded-full bg-slate-900/55 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
                   <div
                     className={classNames(
@@ -210,7 +203,7 @@ export function TimerPanel({
             ) : null}
           </div>
 
-          <div className={classNames('mx-auto mt-2 w-full max-w-[460px] border-t pt-4', accents.dividerClassName)}>
+          <div className={classNames('mx-auto mt-1 w-full max-w-[460px] border-t pt-4', accents.dividerClassName)}>
             <p className="text-center text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">
               Total Task Time:
               <span className={classNames('ml-2 font-mono tracking-[0.16em]', accents.totalValueClassName)}>
