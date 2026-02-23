@@ -4,6 +4,7 @@ import {
   faBell,
   faEye,
   faHourglassHalf,
+  faPause,
   faPlay,
 } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
@@ -14,6 +15,7 @@ import { formatMinutesCompact } from '../../utils/time'
 type TaskCardProps = {
   task: Task
   sessionCount: number
+  isRunning?: boolean
   onPlayTask?: (task: Task) => void
   onEditTask?: (task: Task) => void
 }
@@ -46,13 +48,14 @@ const taskCardGlowRgbByColor: Record<Task['colorTag'], string> = {
   violet: '139,92,246',
 }
 
-export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCardProps) {
+export function TaskCard({ task, sessionCount, isRunning = false, onPlayTask, onEditTask }: TaskCardProps) {
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
   const iconTextClassName = taskCardIconTextClassByColor[task.colorTag]
   const hasAdvancedMeta = Boolean(task.targetDurationMinutes || task.alarmTime)
   const isActive = task.state === 'active'
+  const isActiveRunning = isActive && isRunning
   const activeCardGlowStyle = isActive
     ? ({ '--task-card-glow-rgb': taskCardGlowRgbByColor[task.colorTag] } as CSSProperties)
     : undefined
@@ -133,12 +136,12 @@ export function TaskCard({ task, sessionCount, onPlayTask, onEditTask }: TaskCar
 
         <div className="flex items-center gap-1">
           <button
-            aria-label={`Play ${task.title}`}
+            aria-label={`${isActiveRunning ? 'Pause' : 'Play'} ${task.title}`}
             className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
             onClick={() => onPlayTask?.(task)}
             type="button"
           >
-            <FontAwesomeIcon className="text-[11px]" icon={faPlay} />
+            <FontAwesomeIcon className={classNames(isActiveRunning ? 'text-[10px]' : 'text-[11px]')} icon={isActiveRunning ? faPause : faPlay} />
           </button>
 
           <button

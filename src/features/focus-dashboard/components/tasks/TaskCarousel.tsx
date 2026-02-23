@@ -8,6 +8,7 @@ import { TaskCard } from './TaskCard'
 type TaskCarouselProps = {
   tasks: Task[]
   sessionCountByTaskId: Record<string, number>
+  isFocusRunning?: boolean
   accentColorTag?: TaskColorKey
   onAddTask: () => void
   onPlayTask?: (task: Task) => void
@@ -61,6 +62,7 @@ const carouselScrollbarStyleByColor: Record<TaskColorKey, CSSProperties> = {
 export function TaskCarousel({
   tasks,
   sessionCountByTaskId,
+  isFocusRunning = false,
   accentColorTag = 'blue',
   onAddTask,
   onPlayTask,
@@ -240,6 +242,7 @@ export function TaskCarousel({
                 tasks.map((task) => (
                   <div className="snap-start" key={task.id}>
                     <TaskCard
+                      isRunning={isFocusRunning}
                       onEditTask={onEditTask}
                       onPlayTask={onPlayTask}
                       sessionCount={sessionCountByTaskId[task.id] ?? 0}
