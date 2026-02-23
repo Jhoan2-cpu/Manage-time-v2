@@ -130,7 +130,7 @@ export function FocusHeader({
 
         <button
           aria-label="Open settings"
-          className="grid h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
+          className="hidden h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-slate-100 sm:grid"
           onClick={onOpenSettings}
           type="button"
         >

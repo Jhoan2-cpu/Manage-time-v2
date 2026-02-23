@@ -537,7 +537,9 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
               <FontAwesomeIcon className="focus-only-mobile-toggle-icon-bullseye absolute text-[12px]" icon={faBullseye} />
               <FontAwesomeIcon className="focus-only-mobile-toggle-icon-x absolute text-[12px]" icon={faXmark} />
             </span>
-            <FontAwesomeIcon className="hidden text-[12px] sm:block" icon={faXmark} />
+            <span className="hidden sm:grid sm:h-4 sm:w-4 sm:place-items-center" aria-hidden="true">
+              <FontAwesomeIcon className="text-[12px]" icon={faXmark} />
+            </span>
             <span className="hidden font-medium sm:inline">Exit Focus Only</span>
           </button>
 
