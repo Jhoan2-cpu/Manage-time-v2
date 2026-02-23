@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faChartColumn,
+  faBullseye,
   faChevronDown,
-  faExpand,
   faGear,
   faMusic,
   faPause,
@@ -144,7 +144,7 @@ export function FocusHeader({
           title="Focus Only mode"
           type="button"
         >
-          <FontAwesomeIcon className="text-[12px]" icon={faExpand} />
+          <FontAwesomeIcon className="text-[12px]" icon={faBullseye} />
           <span className="font-medium">Focus Only</span>
         </button>
 
