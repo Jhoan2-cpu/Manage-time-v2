@@ -514,7 +514,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       ) : null}
 
       {isFocusOnlyMode ? (
-        <section className="focus-only-overlay-enter relative h-[100svh] overflow-hidden">
+        <section className="focus-only-overlay-enter app-scroll relative h-[100svh] overflow-x-hidden overflow-y-auto">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
             <div
@@ -529,15 +529,15 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
           <button
             aria-label="Exit Focus Only mode"
-            className="focus-only-controls-enter absolute right-5 top-5 z-20 inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-[#0a1427]/90 px-3 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] transition hover:border-blue-500/40 hover:text-slate-100"
+            className="focus-only-controls-enter sticky top-4 z-20 ml-auto mr-4 inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-[#0a1427]/90 px-2.5 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] transition hover:border-blue-500/40 hover:text-slate-100 sm:absolute sm:right-5 sm:top-5 sm:ml-0 sm:mr-0 sm:px-3"
             onClick={handleExitFocusOnlyMode}
             type="button"
           >
             <FontAwesomeIcon className="text-[12px]" icon={faXmark} />
-            <span className="font-medium">Exit Focus Only</span>
+            <span className="hidden font-medium sm:inline">Exit Focus Only</span>
           </button>
 
-          <div className="focus-only-content-enter relative z-10 mx-auto flex h-full w-full max-w-[1600px] px-4 py-6 sm:px-8 sm:py-8">
+          <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-4 sm:px-8 sm:py-8">
             <TimerPanel
               activeTask={activeTask}
               canUseTimerMode={Boolean(activeTaskTargetSeconds)}

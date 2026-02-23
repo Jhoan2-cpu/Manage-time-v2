@@ -139,13 +139,13 @@ export function FocusHeader({
 
         <button
           aria-label="Enter Focus Only mode"
-          className="hidden items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/40 px-3 py-1.5 text-sm text-slate-300 transition hover:border-blue-500/40 hover:bg-slate-800/70 hover:text-slate-100 lg:inline-flex"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/40 text-slate-300 transition hover:border-blue-500/40 hover:bg-slate-800/70 hover:text-slate-100 md:h-auto md:w-auto md:gap-2 md:px-3 md:py-1.5 md:rounded-full"
           onClick={onEnterFocusOnlyMode}
           title="Focus Only mode"
           type="button"
         >
           <FontAwesomeIcon className="text-[12px]" icon={faBullseye} />
-          <span className="font-medium">Focus Only</span>
+          <span className="hidden font-medium md:inline">Focus Only</span>
         </button>
 
         <div className="relative" ref={userMenuRef}>
