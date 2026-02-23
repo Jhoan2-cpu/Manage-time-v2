@@ -25,6 +25,22 @@ type NewTaskModalProps = {
 const defaultColorTag: TaskColorKey = taskColorOptions[0]?.id ?? 'blue'
 const defaultIconTag: TaskIconKey = taskIconOptions[0]?.id ?? 'briefcase'
 
+const modalAccentRgbByColor: Record<TaskColorKey, string> = {
+  blue: '59,130,246',
+  green: '16,185,129',
+  amber: '245,158,11',
+  rose: '244,63,94',
+  violet: '139,92,246',
+}
+
+const modalAccentBorderClassByColor: Record<TaskColorKey, string> = {
+  blue: 'border-blue-500/20',
+  green: 'border-emerald-500/20',
+  amber: 'border-amber-500/20',
+  rose: 'border-rose-500/20',
+  violet: 'border-violet-500/20',
+}
+
 const fieldClassName =
   'w-full rounded-lg border border-slate-700/90 bg-slate-900/55 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-blue-400/70 focus:ring-2 focus:ring-blue-500/20'
 
@@ -97,6 +113,7 @@ export function NewTaskModal({
 
   const isEditing = editingTask !== null
   const canSubmit = title.trim().length > 0
+  const modalAccentRgb = modalAccentRgbByColor[colorTag]
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -127,11 +144,27 @@ export function NewTaskModal({
       <div
         aria-labelledby="new-task-modal-title"
         aria-modal="true"
-        className="modal-card-animate w-[min(92vw,500px)] rounded-2xl border border-blue-500/20 bg-[#0a1429]/95 shadow-[0_28px_90px_rgba(1,8,22,0.78)]"
+        className={classNames(
+          'modal-card-animate relative w-[min(92vw,500px)] overflow-hidden rounded-2xl border bg-[#0a1429]/95 shadow-[0_28px_90px_rgba(1,8,22,0.78)]',
+          modalAccentBorderClassByColor[colorTag],
+        )}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
-        <form onSubmit={handleSubmit}>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `radial-gradient(70% 55% at 20% 0%, rgba(${modalAccentRgb},0.14), transparent 72%), radial-gradient(55% 45% at 90% 100%, rgba(${modalAccentRgb},0.08), transparent 76%)`,
+            }}
+          />
+          <div
+            className="absolute left-1/2 top-0 h-20 w-3/4 -translate-x-1/2 rounded-full blur-2xl"
+            style={{ backgroundColor: `rgba(${modalAccentRgb},0.12)` }}
+          />
+        </div>
+
+        <form className="relative z-10" onSubmit={handleSubmit}>
           <header className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
             <h2 className="text-2xl font-semibold tracking-tight text-slate-100" id="new-task-modal-title">
               {isEditing ? 'Edit Task' : 'New Task'}
