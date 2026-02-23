@@ -14,6 +14,7 @@ import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tas
 import { useCurrentTime } from './hooks/useCurrentTime'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { formatSecondsHms, parseDurationLabelToSeconds } from './utils/time'
+import { subscribeBackgroundMusicState, toggleBackgroundMusic } from '../../lib/audio/uiSfx'
 
 const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   blue: '59,130,246',
@@ -32,6 +33,7 @@ export function FocusDashboard() {
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<Task | null>(null)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false)
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
   )
@@ -118,6 +120,10 @@ export function FocusDashboard() {
         },
       ])
     : dailyLogEntries
+  useEffect(() => {
+    return subscribeBackgroundMusicState(setIsBackgroundMusicPlaying)
+  }, [])
+
   useEffect(() => {
     if (!isFocusRunning) {
       return
@@ -258,6 +264,9 @@ export function FocusDashboard() {
   }
   const handleOpenSettings = () => {
     setIsSettingsModalOpen(true)
+  }
+  const handleToggleBackgroundMusic = () => {
+    toggleBackgroundMusic()
   }
   const handleOpenProfile = () => {
     setIsProfileModalOpen(true)
@@ -426,8 +435,10 @@ export function FocusDashboard() {
   return (
     <div className="min-h-screen bg-[#060e1d] text-slate-100">
       <FocusHeader
+        isBackgroundMusicPlaying={isBackgroundMusicPlaying}
         onOpenProfile={handleOpenProfile}
         onOpenSettings={handleOpenSettings}
+        onToggleBackgroundMusic={handleToggleBackgroundMusic}
         timeLabel={timeLabel}
         timeZoneName={timeZoneName}
         utcOffsetLabel={utcOffsetLabel}

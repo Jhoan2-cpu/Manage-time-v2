@@ -18,6 +18,13 @@ const TEXT_INPUT_TYPES = new Set([
 
 let clickHowl: Howl | null = null
 let typingHowl: Howl | null = null
+let backgroundMusicHowl: Howl | null = null
+const backgroundMusicListeners = new Set<(isPlaying: boolean) => void>()
+
+const BACKGROUND_MUSIC_SRC_CANDIDATES = [
+  encodeURI('/loop/Dark Ambient No Copyright Music  c152 - missed call.mp3'),
+  '/loop/background.mp3',
+]
 
 export function initUiSfx() {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -43,6 +50,20 @@ export function initUiSfx() {
     src: [createTypingKeyWavDataUri()],
     volume: 0.06,
     preload: true,
+  })
+
+  backgroundMusicHowl = new Howl({
+    src: BACKGROUND_MUSIC_SRC_CANDIDATES,
+    volume: 0.08,
+    loop: true,
+    preload: true,
+    html5: true,
+    onplay: emitBackgroundMusicState,
+    onpause: emitBackgroundMusicState,
+    onstop: emitBackgroundMusicState,
+    onend: emitBackgroundMusicState,
+    onplayerror: emitBackgroundMusicState,
+    onloaderror: emitBackgroundMusicState,
   })
 
   let lastPlayAt = 0
@@ -135,6 +156,45 @@ export function playUiTyping() {
   } catch {
     // Ignore playback errors caused by platform autoplay restrictions.
   }
+}
+
+export function toggleBackgroundMusic() {
+  if (!backgroundMusicHowl) {
+    return false
+  }
+
+  try {
+    if (backgroundMusicHowl.playing()) {
+      backgroundMusicHowl.pause()
+      emitBackgroundMusicState()
+      return false
+    }
+
+    backgroundMusicHowl.play()
+    emitBackgroundMusicState()
+    return true
+  } catch {
+    emitBackgroundMusicState()
+    return false
+  }
+}
+
+export function getBackgroundMusicPlaying() {
+  return Boolean(backgroundMusicHowl?.playing())
+}
+
+export function subscribeBackgroundMusicState(listener: (isPlaying: boolean) => void) {
+  backgroundMusicListeners.add(listener)
+  listener(getBackgroundMusicPlaying())
+
+  return () => {
+    backgroundMusicListeners.delete(listener)
+  }
+}
+
+function emitBackgroundMusicState() {
+  const isPlaying = getBackgroundMusicPlaying()
+  backgroundMusicListeners.forEach((listener) => listener(isPlaying))
 }
 
 function createUiClickWavDataUri() {

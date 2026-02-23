@@ -1,8 +1,10 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
+  faArrowLeft,
   faEnvelope,
   faKey,
+  faLock,
   faUser,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons'
@@ -20,6 +22,12 @@ export function ProfileModal({
   userName = 'Anton Rivera',
   userEmail = 'anton@focusflow.app',
 }: ProfileModalProps) {
+  const [activeSection, setActiveSection] = useState<'profile' | 'password'>('profile')
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
   const userInitials = useMemo(() => {
     const parts = userName
       .trim()
@@ -33,6 +41,17 @@ export function ProfileModal({
 
     return parts.map((part) => part[0]?.toUpperCase() ?? '').join('') || 'U'
   }, [userName])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveSection('profile')
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) {
@@ -59,6 +78,8 @@ export function ProfileModal({
     return null
   }
 
+  const isPasswordSection = activeSection === 'password'
+
   return (
     <div
       className="modal-overlay-animate fixed inset-0 z-[84] flex items-center justify-center bg-[#020a18]/82 px-4 backdrop-blur-[3px]"
@@ -73,11 +94,22 @@ export function ProfileModal({
       >
         <header className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-xl border border-blue-400/20 bg-blue-500/10 text-blue-200">
-              <FontAwesomeIcon icon={faUser} />
-            </span>
+            {isPasswordSection ? (
+              <button
+                aria-label="Back to profile"
+                className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700/70 bg-slate-900/30 text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
+                onClick={() => setActiveSection('profile')}
+                type="button"
+              >
+                <FontAwesomeIcon icon={faArrowLeft} />
+              </button>
+            ) : (
+              <span className="grid h-9 w-9 place-items-center rounded-xl border border-blue-400/20 bg-blue-500/10 text-blue-200">
+                <FontAwesomeIcon icon={faUser} />
+              </span>
+            )}
             <h2 className="text-lg font-semibold tracking-tight text-slate-100" id="profile-modal-title">
-              Personal Profile
+              {isPasswordSection ? 'Change Password' : 'Personal Profile'}
             </h2>
           </div>
           <button
@@ -93,47 +125,107 @@ export function ProfileModal({
         <div className="relative px-5 py-5">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-blue-500/8 to-transparent" />
 
-          <div className="relative flex items-center gap-4 rounded-2xl border border-slate-800/80 bg-slate-950/25 p-4">
-            <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-500/30 via-blue-400/10 to-slate-800 text-base font-semibold text-slate-100 ring-2 ring-blue-400/35">
-              {userInitials}
-              <span className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-[#0a1325] bg-emerald-400" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-xl font-semibold tracking-tight text-slate-100">{userName}</p>
-              <p className="truncate text-sm text-slate-400">{userEmail}</p>
-            </div>
-          </div>
+          {isPasswordSection ? (
+            <div className="relative rounded-2xl border border-slate-800/80 bg-slate-950/20 p-4">
+              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <FontAwesomeIcon className="text-slate-400" icon={faLock} />
+                <span>Update your password</span>
+              </div>
+              <p className="mb-4 text-sm text-slate-400">
+                Enter your current password and choose a new one.
+              </p>
 
-          <div className="mt-4 grid gap-3">
-            <ProfileField icon={faUser} label="Display Name" value={userName} />
-            <ProfileField icon={faEnvelope} label="Email" value={userEmail} />
-          </div>
+              <div className="grid gap-3">
+                <PasswordField
+                  label="Current Password"
+                  value={passwordForm.currentPassword}
+                  onChange={(value) => setPasswordForm((current) => ({ ...current, currentPassword: value }))}
+                />
+                <PasswordField
+                  label="New Password"
+                  value={passwordForm.newPassword}
+                  onChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))}
+                />
+                <PasswordField
+                  label="Confirm New Password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))}
+                />
+              </div>
 
-          <div className="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/20 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-              <FontAwesomeIcon className="text-slate-400" icon={faKey} />
-              <span>Security</span>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
+                  data-sfx-type="off"
+                  onClick={() => setActiveSection('profile')}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:border-blue-400/35 hover:bg-blue-500/16 disabled:cursor-not-allowed disabled:opacity-45"
+                  data-sfx-type="off"
+                  disabled={
+                    !passwordForm.currentPassword ||
+                    !passwordForm.newPassword ||
+                    !passwordForm.confirmPassword ||
+                    passwordForm.newPassword !== passwordForm.confirmPassword
+                  }
+                  type="button"
+                >
+                  <FontAwesomeIcon className="text-xs" icon={faKey} />
+                  <span>Save Password</span>
+                </button>
+              </div>
             </div>
-            <p className="mt-2 text-sm text-slate-400">Manage your account password.</p>
-            <button
-              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:bg-blue-500/16 hover:border-blue-400/35"
-              data-sfx-type="off"
-              type="button"
-            >
-              <FontAwesomeIcon className="text-xs" icon={faKey} />
-              <span>Change Password</span>
-            </button>
-          </div>
+          ) : (
+            <>
+              <div className="relative flex items-center gap-4 rounded-2xl border border-slate-800/80 bg-slate-950/25 p-4">
+                <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-500/30 via-blue-400/10 to-slate-800 text-base font-semibold text-slate-100 ring-2 ring-blue-400/35">
+                  {userInitials}
+                  <span className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-[#0a1325] bg-emerald-400" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xl font-semibold tracking-tight text-slate-100">{userName}</p>
+                  <p className="truncate text-sm text-slate-400">{userEmail}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <ProfileField icon={faUser} label="Display Name" value={userName} />
+                <ProfileField icon={faEnvelope} label="Email" value={userEmail} />
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/20 p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <FontAwesomeIcon className="text-slate-400" icon={faKey} />
+                  <span>Security</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-400">Manage your account password.</p>
+                <button
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:bg-blue-500/16 hover:border-blue-400/35"
+                  data-sfx-type="off"
+                  onClick={() => setActiveSection('password')}
+                  type="button"
+                >
+                  <FontAwesomeIcon className="text-xs" icon={faKey} />
+                  <span>Change Password</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-slate-800/80 px-5 py-4">
-          <button
-            className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
+          {!isPasswordSection ? (
+            <button
+              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
+              onClick={onClose}
+              type="button"
+            >
+              Close
+            </button>
+          ) : null}
         </footer>
       </div>
     </div>
@@ -155,5 +247,26 @@ function ProfileField({ icon, label, value }: ProfileFieldProps) {
       </div>
       <p className="mt-2 truncate text-sm font-medium text-slate-200">{value}</p>
     </div>
+  )
+}
+
+type PasswordFieldProps = {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}
+
+function PasswordField({ label, value, onChange }: PasswordFieldProps) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{label}</span>
+      <input
+        className="w-full rounded-xl border border-slate-700/80 bg-[#081122] px-3 py-2.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-400/40 focus:ring-2 focus:ring-blue-500/10"
+        data-sfx-type="off"
+        onChange={(event) => onChange(event.target.value)}
+        type="password"
+        value={value}
+      />
+    </label>
   )
 }
