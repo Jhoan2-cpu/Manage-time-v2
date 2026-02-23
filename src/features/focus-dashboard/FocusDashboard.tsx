@@ -504,40 +504,42 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         />
 
         <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
-            <div
-              className="workspace-glow-ignite absolute inset-0"
-              key={workspaceGlowPulseKey}
-              style={{
-                backgroundImage: `radial-gradient(88% 72% at 50% 60%, rgba(${workspaceAccentRgb},0.28), transparent 74%)`,
-              }}
-            />
-            <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
-          </div>
+          <div className="relative flex h-full min-h-full flex-col">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
+              <div
+                className="workspace-glow-ignite absolute inset-0"
+                key={workspaceGlowPulseKey}
+                style={{
+                  backgroundImage: `radial-gradient(88% 72% at 50% 60%, rgba(${workspaceAccentRgb},0.28), transparent 74%)`,
+                }}
+              />
+              <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
+            </div>
 
-          <div className="relative z-10 mx-auto flex w-full flex-1 flex-col px-4 pb-3 pt-4 md:px-6">
-            <TaskCarousel
-              accentColorTag={activeWorkspaceAccentColor}
-              isFocusRunning={isFocusRunning}
-              onAddTask={handleAddTask}
-              onDeleteTask={handleRequestDeleteTask}
-              onEditTask={handleEditTask}
-              onPlayTask={handlePlayTask}
-              sessionCountByTaskId={sessionCountByTaskId}
-              tasks={carouselTaskList}
-            />
-            <TimerPanel
-              activeTask={activeTask}
-              canUseTimerMode={Boolean(activeTaskTargetSeconds)}
-              isRunning={isFocusRunning}
-              mode={timerMode}
-              onChangeMode={handleChangeTimerMode}
-              onStartFocus={handleStartFocus}
-              timeLabel={timerDisplayLabel}
-              timerProgressPercent={timerProgressPercent}
-              totalTaskTimeLabel={activeTaskTotalTimeLabel}
-            />
+            <div className="relative z-10 mx-auto flex h-full min-h-full w-full flex-1 flex-col px-4 pb-3 pt-4 md:px-6">
+              <TaskCarousel
+                accentColorTag={activeWorkspaceAccentColor}
+                isFocusRunning={isFocusRunning}
+                onAddTask={handleAddTask}
+                onDeleteTask={handleRequestDeleteTask}
+                onEditTask={handleEditTask}
+                onPlayTask={handlePlayTask}
+                sessionCountByTaskId={sessionCountByTaskId}
+                tasks={carouselTaskList}
+              />
+              <TimerPanel
+                activeTask={activeTask}
+                canUseTimerMode={Boolean(activeTaskTargetSeconds)}
+                isRunning={isFocusRunning}
+                mode={timerMode}
+                onChangeMode={handleChangeTimerMode}
+                onStartFocus={handleStartFocus}
+                timeLabel={timerDisplayLabel}
+                timerProgressPercent={timerProgressPercent}
+                totalTaskTimeLabel={activeTaskTotalTimeLabel}
+              />
+            </div>
           </div>
         </section>
       </main>
