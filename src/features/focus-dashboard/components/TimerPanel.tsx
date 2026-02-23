@@ -185,7 +185,7 @@ export function TimerPanel({
           <div className="relative mt-4 flex flex-1 flex-col items-center justify-center py-4 sm:py-6">
             <p
               className={classNames(
-                'relative select-none font-mono text-[48px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[84px]',
+                'relative select-none text-[48px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[84px]',
                 accents.timeGlowClassName,
               )}
             >
