@@ -11,27 +11,39 @@ export function formatUtcOffset(minutesOffset: number) {
   return `UTC${sign}${hours}:${minutes.toString().padStart(2, '0')}`
 }
 
-export function parseDurationLabelToMinutes(durationLabel: string) {
+export function parseDurationLabelToSeconds(durationLabel: string) {
   const value = durationLabel.trim().toLowerCase()
+
+  const hmsMatch = value.match(/^(\d+):(\d{2}):(\d{2})$/)
+  if (hmsMatch) {
+    const hours = Number(hmsMatch[1])
+    const minutes = Number(hmsMatch[2])
+    const seconds = Number(hmsMatch[3])
+    return hours * 3600 + minutes * 60 + seconds
+  }
 
   const hourMinuteMatch = value.match(/^(\d+):(\d+)\s*h(?:r|rs)?s?$/)
   if (hourMinuteMatch) {
     const hours = Number(hourMinuteMatch[1])
     const minutes = Number(hourMinuteMatch[2])
-    return hours * 60 + minutes
+    return hours * 3600 + minutes * 60
   }
 
   const hourOnlyMatch = value.match(/^(\d+)\s*h(?:r|rs)?s?$/)
   if (hourOnlyMatch) {
-    return Number(hourOnlyMatch[1]) * 60
+    return Number(hourOnlyMatch[1]) * 3600
   }
 
   const minuteMatch = value.match(/^(\d+)\s*min(?:s)?$/)
   if (minuteMatch) {
-    return Number(minuteMatch[1])
+    return Number(minuteMatch[1]) * 60
   }
 
   return 0
+}
+
+export function parseDurationLabelToMinutes(durationLabel: string) {
+  return Math.floor(parseDurationLabelToSeconds(durationLabel) / 60)
 }
 
 export function formatMinutesCompact(totalMinutes: number) {

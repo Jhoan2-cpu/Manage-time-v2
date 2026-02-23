@@ -446,16 +446,7 @@ function formatLocalDateKey(date: Date) {
 }
 
 function formatLogDurationFromSeconds(totalSeconds: number) {
-  const boundedSeconds = Math.max(0, Math.floor(totalSeconds))
-  const totalMinutes = Math.floor(boundedSeconds / 60)
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-
-  if (hours === 0) {
-    return `${totalMinutes} min`
-  }
-
-  return `${hours}:${minutes.toString().padStart(2, '0')} hrs`
+  return formatSecondsHms(totalSeconds)
 }
 
 function sortLogEntriesByTime(entries: LogEntry[]) {

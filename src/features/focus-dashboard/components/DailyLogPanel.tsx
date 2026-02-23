@@ -4,7 +4,7 @@ import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { taskIconMap } from '../constants/taskOptions'
 import type { LogEntry, LogTone, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
-import { formatMinutesCompact, parseDurationLabelToMinutes } from '../utils/time'
+import { formatMinutesCompact, formatSecondsHms, parseDurationLabelToMinutes, parseDurationLabelToSeconds } from '../utils/time'
 
 type DailyLogPanelProps = {
   entries: LogEntry[]
@@ -141,7 +141,7 @@ export function DailyLogPanel({
         return {
           id: entry.id,
           start: entry.start,
-          duration: entry.duration,
+          duration: formatSecondsHms(parseDurationLabelToSeconds(entry.duration)),
           activityLabel,
           styles,
           taskIcon,
