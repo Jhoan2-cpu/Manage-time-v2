@@ -6,14 +6,14 @@ import { classNames } from '../../utils/classNames'
 import { TaskCard } from './TaskCard'
 
 const carouselAccentClassNameByColor: Record<TaskColorKey, string> = {
-  blue: 'bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+  blue: 'bg-[linear-gradient(180deg,rgba(59,130,246,0.04),rgba(7,14,29,0.90)_26%,rgba(5,11,22,0.94))]',
   green:
-    'bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+    'bg-[linear-gradient(180deg,rgba(16,185,129,0.04),rgba(7,14,29,0.90)_26%,rgba(5,11,22,0.94))]',
   amber:
-    'bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
-  rose: 'bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+    'bg-[linear-gradient(180deg,rgba(245,158,11,0.04),rgba(7,14,29,0.90)_26%,rgba(5,11,22,0.94))]',
+  rose: 'bg-[linear-gradient(180deg,rgba(244,63,94,0.04),rgba(7,14,29,0.90)_26%,rgba(5,11,22,0.94))]',
   violet:
-    'bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.10),transparent_42%),linear-gradient(180deg,rgba(7,14,29,0.90),rgba(5,11,22,0.94))]',
+    'bg-[linear-gradient(180deg,rgba(139,92,246,0.04),rgba(7,14,29,0.90)_26%,rgba(5,11,22,0.94))]',
 }
 
 type TaskCarouselProps = {

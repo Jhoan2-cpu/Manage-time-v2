@@ -134,8 +134,6 @@ export function TimerPanel({ timeLabel, onStartFocus, activeTask, totalTaskTimeL
           </div>
 
           <div className="relative mt-5 flex flex-1 flex-col items-center justify-center py-6 sm:py-8">
-            <div className={classNames('absolute inset-x-6 top-1/2 h-24 -translate-y-1/2 rounded-full blur-3xl sm:h-32', accents.blurClassName)} />
-
             <p
               className={classNames(
                 'relative select-none font-mono text-[48px] font-light leading-none tracking-tight text-slate-100 tabular-nums sm:text-[84px]',
