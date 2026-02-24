@@ -1,7 +1,10 @@
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChartPie, faChevronLeft } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
-import { formatMinutesCompact } from '../../utils/time'
+import type { TaskColorKey } from '../../types'
+import { classNames } from '../../utils/classNames'
+import { formatMinutesCompact, formatSecondsHms, parseDurationLabelToSeconds } from '../../utils/time'
 import { HistoryStatCard } from './HistoryStatCard'
 import { HistoryTimeByTaskList } from './HistoryTimeByTaskList'
 import {
@@ -11,6 +14,7 @@ import {
   formatIsoDateShort,
   type DayHistoryStats,
   type HistoryDaySummary,
+  type HistoryRecordRow,
 } from './historyUtils'
 
 type HistoryDayDetailsOverlayProps = {
@@ -115,40 +119,7 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  {daySummary.rows.map((row) => {
-                    const taskColor = row.taskColorTag ? taskColorMap[row.taskColorTag] : null
-                    const taskIcon = row.taskIconTag ? taskIconMap[row.taskIconTag] : null
-                    return (
-                      <div
-                        className="grid gap-2 rounded-xl bg-slate-900/25 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.22)] sm:grid-cols-[90px_110px_minmax(0,1fr)] sm:items-center"
-                        key={`overlay-${row.id}`}
-                      >
-                        <span className="font-mono text-sm text-slate-300">{row.start}</span>
-                        <span className="inline-flex w-fit items-center rounded-md bg-slate-900/55 px-2 py-1 font-mono text-xs text-slate-200 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
-                          {row.duration}
-                        </span>
-                        <div className="flex min-w-0 items-center gap-2">
-                          {taskIcon ? (
-                            <span
-                              className={
-                                taskColor
-                                  ? `grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] ${taskColor.iconShellClassName}`
-                                  : 'grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-800 text-[10px] text-slate-300'
-                              }
-                            >
-                              <FontAwesomeIcon icon={taskIcon.icon} />
-                            </span>
-                          ) : null}
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-slate-100">{row.taskTitle}</p>
-                            <p className="truncate text-xs text-slate-500">{row.activityLabel}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                <SelectableHistoryDayLogTable rows={daySummary.rows} />
               </div>
             </div>
           </div>
@@ -156,4 +127,323 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
       </div>
     </div>
   )
+}
+
+type HistoryLogCellCoord = {
+  row: number
+  col: number
+}
+
+const HISTORY_HEADER_ROW_INDEX = 0
+
+type HistoryLogRowStyle = {
+  row: string
+  time: string
+  duration: string
+  activity: string
+  icon: string
+}
+
+const historyDefaultRowStyle: HistoryLogRowStyle = {
+  row: 'border border-slate-800/55 bg-slate-900/25',
+  time: 'text-slate-300',
+  duration: 'text-slate-200',
+  activity: 'text-slate-200',
+  icon: 'border-slate-700/80 bg-slate-800/60 text-slate-300',
+}
+
+const historyUntrackedRowStyle: HistoryLogRowStyle = {
+  row: 'border border-dashed border-slate-800/55 bg-slate-950/10',
+  time: 'text-slate-500',
+  duration: 'text-slate-500',
+  activity: 'text-slate-500',
+  icon: 'border-slate-800/80 bg-slate-900/40 text-slate-500',
+}
+
+const historyTaskRowStyleByColor: Record<TaskColorKey, HistoryLogRowStyle> = {
+  blue: {
+    row: 'border border-blue-500/22 bg-blue-500/7 shadow-[inset_3px_0_0_0_rgba(59,130,246,.8)]',
+    time: 'text-blue-100',
+    duration: 'text-blue-100',
+    activity: 'text-blue-100',
+    icon: 'border-blue-400/35 bg-blue-500/15 text-blue-200',
+  },
+  green: {
+    row: 'border border-emerald-500/22 bg-emerald-500/7 shadow-[inset_3px_0_0_0_rgba(16,185,129,.8)]',
+    time: 'text-emerald-100',
+    duration: 'text-emerald-100',
+    activity: 'text-emerald-100',
+    icon: 'border-emerald-400/35 bg-emerald-500/15 text-emerald-200',
+  },
+  amber: {
+    row: 'border border-amber-500/22 bg-amber-500/7 shadow-[inset_3px_0_0_0_rgba(245,158,11,.8)]',
+    time: 'text-amber-100',
+    duration: 'text-amber-100',
+    activity: 'text-amber-100',
+    icon: 'border-amber-400/35 bg-amber-500/15 text-amber-200',
+  },
+  rose: {
+    row: 'border border-rose-500/22 bg-rose-500/7 shadow-[inset_3px_0_0_0_rgba(244,63,94,.8)]',
+    time: 'text-rose-100',
+    duration: 'text-rose-100',
+    activity: 'text-rose-100',
+    icon: 'border-rose-400/35 bg-rose-500/15 text-rose-200',
+  },
+  pink: {
+    row: 'border border-pink-500/22 bg-pink-500/7 shadow-[inset_3px_0_0_0_rgba(236,72,153,.8)]',
+    time: 'text-pink-100',
+    duration: 'text-pink-100',
+    activity: 'text-pink-100',
+    icon: 'border-pink-400/35 bg-pink-500/15 text-pink-200',
+  },
+  violet: {
+    row: 'border border-violet-500/22 bg-violet-500/7 shadow-[inset_3px_0_0_0_rgba(139,92,246,.8)]',
+    time: 'text-violet-100',
+    duration: 'text-violet-100',
+    activity: 'text-violet-100',
+    icon: 'border-violet-400/35 bg-violet-500/15 text-violet-200',
+  },
+}
+
+function SelectableHistoryDayLogTable({ rows }: { rows: HistoryRecordRow[] }) {
+  const tableSelectionRef = useRef<HTMLDivElement | null>(null)
+  const [selectionAnchor, setSelectionAnchor] = useState<HistoryLogCellCoord | null>(null)
+  const [selectionFocus, setSelectionFocus] = useState<HistoryLogCellCoord | null>(null)
+  const [isSelectingCells, setIsSelectingCells] = useState(false)
+
+  const selectedRange = useMemo(() => {
+    if (!selectionAnchor || !selectionFocus) {
+      return null
+    }
+
+    return {
+      minRow: Math.min(selectionAnchor.row, selectionFocus.row),
+      maxRow: Math.max(selectionAnchor.row, selectionFocus.row),
+      minCol: Math.min(selectionAnchor.col, selectionFocus.col),
+      maxCol: Math.max(selectionAnchor.col, selectionFocus.col),
+    }
+  }, [selectionAnchor, selectionFocus])
+
+  useEffect(() => {
+    if (!isSelectingCells) {
+      return
+    }
+
+    const stopSelection = () => setIsSelectingCells(false)
+    window.addEventListener('mouseup', stopSelection)
+    return () => window.removeEventListener('mouseup', stopSelection)
+  }, [isSelectingCells])
+
+  const isCellSelected = (row: number, col: number) => {
+    if (!selectedRange) return false
+    return row >= selectedRange.minRow && row <= selectedRange.maxRow && col >= selectedRange.minCol && col <= selectedRange.maxCol
+  }
+
+  const isAnchorCell = (row: number, col: number) => {
+    if (!selectionAnchor) return false
+    return selectionAnchor.row === row && selectionAnchor.col === col
+  }
+
+  const handleCellMouseDown = (row: number, col: number, extendSelection = false) => {
+    if (extendSelection && selectionAnchor) {
+      setSelectionFocus({ row, col })
+      setIsSelectingCells(false)
+      tableSelectionRef.current?.focus()
+      return
+    }
+
+    setSelectionAnchor({ row, col })
+    setSelectionFocus({ row, col })
+    setIsSelectingCells(true)
+    tableSelectionRef.current?.focus()
+  }
+
+  const handleCellMouseEnter = (row: number, col: number) => {
+    if (!isSelectingCells) return
+    setSelectionFocus({ row, col })
+  }
+
+  const handleCopySelection = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    if (!selectedRange) {
+      return
+    }
+
+    const headers = ['Start', 'Duration', 'Activity']
+    const matrix = rows.map((row) => [
+      formatHistoryStartTimeWithSeconds(row.start),
+      formatSecondsHms(parseDurationLabelToSeconds(row.duration)),
+      row.taskTitle || row.activityLabel,
+    ])
+    const selectedHeaderRow = headers.slice(selectedRange.minCol, selectedRange.maxCol + 1).join('\t')
+    const copiedLines: string[] = []
+
+    const includesHeaderRow = selectedRange.minRow <= HISTORY_HEADER_ROW_INDEX && selectedRange.maxRow >= HISTORY_HEADER_ROW_INDEX
+    if (includesHeaderRow || selectedRange.minRow > HISTORY_HEADER_ROW_INDEX) {
+      copiedLines.push(selectedHeaderRow)
+    }
+
+    const dataStartVisualRow = Math.max(selectedRange.minRow, HISTORY_HEADER_ROW_INDEX + 1)
+    const dataEndVisualRow = selectedRange.maxRow
+    if (dataEndVisualRow >= HISTORY_HEADER_ROW_INDEX + 1) {
+      copiedLines.push(
+        ...matrix
+          .slice(dataStartVisualRow - 1, dataEndVisualRow)
+          .map((columns) => columns.slice(selectedRange.minCol, selectedRange.maxCol + 1).join('\t')),
+      )
+    }
+
+    if (copiedLines.length === 0 || !selectedHeaderRow) {
+      return
+    }
+
+    event.preventDefault()
+    event.clipboardData.setData('text/plain', copiedLines.join('\n'))
+  }
+
+  return (
+    <div
+      className="app-scroll overflow-auto"
+      onCopy={handleCopySelection}
+      onMouseLeave={() => {
+        if (isSelectingCells) {
+          setIsSelectingCells(false)
+        }
+      }}
+      ref={tableSelectionRef}
+      tabIndex={0}
+    >
+      <table className="w-full table-fixed border-separate border-spacing-y-1.5 text-xs select-none">
+        <colgroup>
+          <col className="w-[120px]" />
+          <col className="w-[100px]" />
+          <col />
+        </colgroup>
+        <thead>
+          <tr>
+            {(['Start', 'Duration', 'Activity'] as const).map((label, colIndex) => (
+              <th
+                className={classNames(
+                  'cursor-default border border-slate-800/55 bg-[#081225]/95 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition',
+                  colIndex === 0 && 'rounded-l-md border-r-0',
+                  colIndex === 1 && 'border-x-0',
+                  colIndex === 2 && 'rounded-r-md border-l-0',
+                  isCellSelected(HISTORY_HEADER_ROW_INDEX, colIndex) &&
+                    'bg-blue-500/16 text-blue-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.55)]',
+                  isAnchorCell(HISTORY_HEADER_ROW_INDEX, colIndex) && 'shadow-[inset_0_0_0_1px_rgba(147,197,253,0.8)]',
+                )}
+                key={`history-day-header-${label}`}
+                onMouseDown={(event) => {
+                  if (event.button !== 0) return
+                  event.preventDefault()
+                  handleCellMouseDown(HISTORY_HEADER_ROW_INDEX, colIndex, event.shiftKey)
+                }}
+                onMouseEnter={() => handleCellMouseEnter(HISTORY_HEADER_ROW_INDEX, colIndex)}
+              >
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => {
+            const taskColor = row.taskColorTag ? taskColorMap[row.taskColorTag] : null
+            const taskIcon = row.taskIconTag ? taskIconMap[row.taskIconTag] : null
+            const rowStyle = row.taskColorTag
+              ? historyTaskRowStyleByColor[row.taskColorTag]
+              : row.taskId
+                ? historyDefaultRowStyle
+                : historyUntrackedRowStyle
+
+            return (
+              <tr className={classNames('align-middle', rowStyle.row)} key={`overlay-row-${row.id}`}>
+                <td
+                  className={classNames(
+                    'cursor-default rounded-l-md border border-r-0 border-slate-800/55 px-2 py-2 font-mono tabular-nums transition',
+                    rowStyle.time,
+                    isCellSelected(rowIndex + 1, 0) && 'bg-blue-500/16 text-slate-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.55)]',
+                    isAnchorCell(rowIndex + 1, 0) && 'shadow-[inset_0_0_0_1px_rgba(147,197,253,0.8)]',
+                  )}
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) return
+                    event.preventDefault()
+                    handleCellMouseDown(rowIndex + 1, 0, event.shiftKey)
+                  }}
+                  onMouseEnter={() => handleCellMouseEnter(rowIndex + 1, 0)}
+                >
+                  {formatHistoryStartTimeWithSeconds(row.start)}
+                </td>
+                <td
+                  className={classNames(
+                    'cursor-default border-y border-slate-800/55 px-2 py-2 text-center font-mono tabular-nums transition',
+                    rowStyle.duration,
+                    isCellSelected(rowIndex + 1, 1) && 'bg-blue-500/16 text-slate-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.55)]',
+                    isAnchorCell(rowIndex + 1, 1) && 'shadow-[inset_0_0_0_1px_rgba(147,197,253,0.8)]',
+                  )}
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) return
+                    event.preventDefault()
+                    handleCellMouseDown(rowIndex + 1, 1, event.shiftKey)
+                  }}
+                  onMouseEnter={() => handleCellMouseEnter(rowIndex + 1, 1)}
+                >
+                  {formatSecondsHms(parseDurationLabelToSeconds(row.duration))}
+                </td>
+                <td
+                  className={classNames(
+                    'cursor-default rounded-r-md border border-l-0 border-slate-800/55 px-2 py-2 transition',
+                    rowStyle.activity,
+                    isCellSelected(rowIndex + 1, 2) && 'bg-blue-500/16 text-slate-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.55)]',
+                    isAnchorCell(rowIndex + 1, 2) && 'shadow-[inset_0_0_0_1px_rgba(147,197,253,0.8)]',
+                  )}
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) return
+                    event.preventDefault()
+                    handleCellMouseDown(rowIndex + 1, 2, event.shiftKey)
+                  }}
+                  onMouseEnter={() => handleCellMouseEnter(rowIndex + 1, 2)}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    {taskIcon ? (
+                      <span
+                        className={classNames(
+                          'grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px]',
+                          row.taskColorTag && taskColor ? taskColor.iconShellClassName : rowStyle.icon,
+                        )}
+                      >
+                        <FontAwesomeIcon icon={taskIcon.icon} />
+                      </span>
+                    ) : null}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{row.taskTitle}</p>
+                      {row.activityLabel && row.activityLabel !== row.taskTitle ? (
+                        <p className="truncate text-[11px] text-slate-500">{row.activityLabel}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function formatHistoryStartTimeWithSeconds(startLabel: string) {
+  const trimmed = startLabel.trim()
+  const alreadyHasSeconds = trimmed.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i)
+  if (alreadyHasSeconds) {
+    return trimmed.replace(/\s+/g, ' ').toUpperCase()
+  }
+
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (!match) {
+    return trimmed
+  }
+
+  const hours = match[1]
+  const minutes = match[2]
+  const period = (match[3] ?? '').toUpperCase()
+  return `${hours}:${minutes}:00 ${period}`
 }
