@@ -263,8 +263,14 @@ export function SettingsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[95] bg-[#030915]/96 backdrop-blur-sm">
-      <div className="flex h-full flex-col">
+    <div className="settings-history-overlay-animate fixed inset-0 z-[95] overflow-hidden bg-[#030915]/96 backdrop-blur-sm">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="settings-history-glow-animate absolute left-[8%] top-[18%] h-72 w-72 rounded-full bg-blue-500/12 blur-3xl" />
+        <div className="settings-history-glow-animate absolute right-[10%] top-[14%] h-80 w-80 rounded-full bg-violet-500/10 blur-3xl [animation-delay:70ms]" />
+        <div className="settings-history-glow-animate absolute left-1/3 bottom-[8%] h-96 w-96 rounded-full bg-cyan-400/8 blur-[80px] [animation-delay:120ms]" />
+      </div>
+
+      <div className="settings-history-shell-animate relative flex h-full flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800/80 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600/15 text-blue-200 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)]">
