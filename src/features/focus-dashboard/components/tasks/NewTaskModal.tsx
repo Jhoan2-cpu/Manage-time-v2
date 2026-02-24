@@ -193,14 +193,14 @@ export function NewTaskModal({
 
   return (
     <div
-      className="modal-overlay-animate fixed inset-0 z-[70] flex items-center justify-center bg-[#020a18]/80 px-4 backdrop-blur-[3px]"
+      className="modal-overlay-animate fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#020a18]/80 px-3 py-4 backdrop-blur-[3px] sm:items-center sm:px-4 sm:py-6"
       onClick={onClose}
     >
       <div
         aria-labelledby="new-task-modal-title"
         aria-modal="true"
         className={classNames(
-          'modal-card-animate relative w-[min(97vw,840px)] overflow-hidden rounded-2xl border bg-[#0a1429]/95 shadow-[0_28px_90px_rgba(1,8,22,0.78)]',
+          'modal-card-animate relative my-auto flex max-h-[calc(100svh-2rem)] w-[min(97vw,840px)] flex-col overflow-hidden rounded-2xl border bg-[#0a1429]/95 shadow-[0_28px_90px_rgba(1,8,22,0.78)] sm:max-h-[92svh]',
           modalAccentBorderClassByColor[colorTag],
         )}
         onClick={(event) => event.stopPropagation()}
@@ -219,7 +219,7 @@ export function NewTaskModal({
           />
         </div>
 
-        <form className="relative z-10" onSubmit={handleSubmit}>
+        <form className="relative z-10 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
           <header className="flex items-center justify-between border-b border-slate-800/80 px-6 py-5">
             <h2 className="text-2xl font-semibold tracking-tight text-slate-100" id="new-task-modal-title">
               {isEditing ? 'Edit Task' : 'New Task'}
@@ -234,7 +234,7 @@ export function NewTaskModal({
             </button>
           </header>
 
-          <div className="space-y-6 px-6 py-6">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" htmlFor={titleId}>
                 Tarea
@@ -488,7 +488,7 @@ export function NewTaskModal({
             </section>
           </div>
 
-          <footer className="flex items-center justify-between gap-2 border-t border-slate-800/80 px-6 py-5">
+          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 bg-[#081226]/90 px-6 py-4 sm:flex-nowrap sm:py-5">
             <div>
               {isEditing && editingTask && onRequestDeleteTask ? (
                 <button
