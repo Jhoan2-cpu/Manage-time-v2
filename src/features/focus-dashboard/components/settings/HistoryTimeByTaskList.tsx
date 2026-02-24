@@ -1,6 +1,6 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
-import { formatMinutesCompact } from '../../utils/time'
+import { formatSecondsCompact } from '../../utils/time'
 import { chartColorHexByTag, type HistorySlice } from './historyUtils'
 
 type HistoryTimeByTaskListProps = {
@@ -56,7 +56,7 @@ export function HistoryTimeByTaskList({
 
                 <div className="text-right">
                   <p className="font-mono text-sm font-semibold text-slate-200">
-                    {formatMinutesCompact(slice.minutes).toUpperCase()}
+                    {formatSecondsCompact(slice.seconds).toUpperCase()}
                   </p>
                   <p className="text-xs text-slate-400">{slice.percentage.toFixed(1)}% of day</p>
                 </div>

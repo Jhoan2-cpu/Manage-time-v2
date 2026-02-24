@@ -12,12 +12,12 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../constants/taskOptions'
 import type { DashboardStats, LogEntry, Task } from '../types'
-import { formatMinutesCompact, parseDurationLabelToMinutes } from '../utils/time'
+import { formatSecondsCompact, parseDurationLabelToMinutes, parseDurationLabelToSeconds } from '../utils/time'
 import { HistoryDayDetailsOverlay } from './settings/HistoryDayDetailsOverlay'
 import { HistoryOverviewPanel } from './settings/HistoryOverviewPanel'
 import { SettingsPreferencesPanel } from './settings/SettingsPreferencesPanel'
 import {
-  DAY_TOTAL_MINUTES,
+  DAY_TOTAL_SECONDS,
   buildDayHistoryStatsFromRows,
   formatIsoDateLong,
   formatIsoDateShort,
@@ -111,6 +111,7 @@ export function SettingsModal({
           dateIso: entry.date ?? currentDayIsoDate,
           start: entry.start,
           duration: entry.duration,
+          seconds: parseDurationLabelToSeconds(entry.duration),
           minutes: parseDurationLabelToMinutes(entry.duration),
           taskId: task?.id,
           taskTitle: task?.title ?? entry.activity ?? 'Other activity',
@@ -136,6 +137,7 @@ export function SettingsModal({
           dateIso,
           start: entry.start,
           duration: entry.duration,
+          seconds: parseDurationLabelToSeconds(entry.duration),
           minutes: parseDurationLabelToMinutes(entry.duration),
           taskId: task?.id,
           taskTitle: task?.title ?? entry.activity ?? 'Other activity',
@@ -160,6 +162,7 @@ export function SettingsModal({
 
       if (current) {
         current.rows.push(row)
+        current.totalSeconds += row.seconds
         current.totalMinutes += row.minutes
         current.sessionCount += 1
         if (row.taskId && !current.taskIds.includes(row.taskId)) {
@@ -175,6 +178,7 @@ export function SettingsModal({
       byDate.set(row.dateIso, {
         dateIso: row.dateIso,
         rows: [row],
+        totalSeconds: row.seconds,
         totalMinutes: row.minutes,
         sessionCount: 1,
         taskIds: row.taskId ? [row.taskId] : [],
@@ -492,10 +496,10 @@ export function SettingsModal({
                                     Tracked Time
                                   </span>
                                   <span className="inline-flex items-center rounded-md bg-slate-900/45 px-2 py-1 font-mono text-xs text-slate-200 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.3)]">
-                                    {formatMinutesCompact(day.totalMinutes).toUpperCase()}
+                                    {formatSecondsCompact(day.totalSeconds).toUpperCase()}
                                   </span>
                                 </div>
-                                <p className="mt-1 text-xs text-slate-500">{((day.totalMinutes / DAY_TOTAL_MINUTES) * 100).toFixed(1)}% day</p>
+                                <p className="mt-1 text-xs text-slate-500">{((day.totalSeconds / DAY_TOTAL_SECONDS) * 100).toFixed(1)}% day</p>
                               </div>
 
                               <div className="flex justify-end md:justify-start">

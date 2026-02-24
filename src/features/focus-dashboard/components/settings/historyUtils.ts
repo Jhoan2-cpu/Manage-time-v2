@@ -4,6 +4,7 @@ import { toIsoDateStringInTimeZone } from '../../utils/time'
 export type HistorySlice = {
   key: string
   title: string
+  seconds: number
   minutes: number
   percentage: number
   sessionCount: number
@@ -16,6 +17,7 @@ export type HistoryRecordRow = {
   dateIso: string
   start: string
   duration: string
+  seconds: number
   minutes: number
   taskId?: string
   taskTitle: string
@@ -27,6 +29,7 @@ export type HistoryRecordRow = {
 export type HistoryDaySummary = {
   dateIso: string
   rows: HistoryRecordRow[]
+  totalSeconds: number
   totalMinutes: number
   sessionCount: number
   taskIds: string[]
@@ -36,13 +39,17 @@ export type HistoryDaySummary = {
 
 export type DayHistoryStats = {
   slices: HistorySlice[]
+  totalSeconds: number
   totalMinutes: number
+  trackedSeconds: number
   trackedMinutes: number
   trackedPercentage: number
+  untrackedSeconds: number
   untrackedMinutes: number
   untrackedPercentage: number
   totalSessions: number
   topTask: HistorySlice | null
+  averageSessionSeconds: number
   averageSessionMinutes: number
 }
 
@@ -55,22 +62,24 @@ export const chartColorHexByTag: Record<TaskColorKey, string> = {
   violet: '#8b5cf6',
 }
 
-export const DAY_TOTAL_MINUTES = 24 * 60
+export const DAY_TOTAL_SECONDS = 24 * 60 * 60
+export const DAY_TOTAL_MINUTES = DAY_TOTAL_SECONDS / 60
 export const UNTRACKED_TIME_LABEL = 'Untracked Time'
 
 export function buildDayHistoryStatsFromRows(rows: HistoryRecordRow[]): DayHistoryStats {
   const aggregated = new Map<string, Omit<HistorySlice, 'percentage'>>()
 
   for (const row of rows) {
-    const minutes = Math.max(0, row.minutes || 0)
-    if (minutes <= 0) {
+    const seconds = Math.max(0, row.seconds || 0)
+    if (seconds <= 0) {
       continue
     }
 
     const key = row.taskId ?? `activity-${row.taskTitle}`
     const current = aggregated.get(key)
     if (current) {
-      current.minutes += minutes
+      current.seconds += seconds
+      current.minutes = current.seconds / 60
       current.sessionCount += 1
       continue
     }
@@ -78,7 +87,8 @@ export function buildDayHistoryStatsFromRows(rows: HistoryRecordRow[]): DayHisto
     aggregated.set(key, {
       key,
       title: row.taskTitle,
-      minutes,
+      seconds,
+      minutes: seconds / 60,
       sessionCount: 1,
       colorTag: row.taskColorTag,
       iconTag: row.taskIconTag,
@@ -86,27 +96,35 @@ export function buildDayHistoryStatsFromRows(rows: HistoryRecordRow[]): DayHisto
   }
 
   const slices = Array.from(aggregated.values())
-    .sort((a, b) => b.minutes - a.minutes)
+    .sort((a, b) => b.seconds - a.seconds)
     .map((slice) => ({
       ...slice,
-      percentage: (slice.minutes / DAY_TOTAL_MINUTES) * 100,
+      percentage: (slice.seconds / DAY_TOTAL_SECONDS) * 100,
     }))
 
-  const totalMinutes = slices.reduce((sum, slice) => sum + slice.minutes, 0)
-  const trackedMinutes = Math.min(DAY_TOTAL_MINUTES, totalMinutes)
+  const totalSeconds = slices.reduce((sum, slice) => sum + slice.seconds, 0)
+  const trackedSeconds = Math.min(DAY_TOTAL_SECONDS, totalSeconds)
   const totalSessions = slices.reduce((sum, slice) => sum + slice.sessionCount, 0)
-  const untrackedMinutes = Math.max(0, DAY_TOTAL_MINUTES - trackedMinutes)
+  const untrackedSeconds = Math.max(0, DAY_TOTAL_SECONDS - trackedSeconds)
+  const averageSessionSeconds = totalSessions > 0 ? totalSeconds / totalSessions : 0
+  const totalMinutes = totalSeconds / 60
+  const trackedMinutes = trackedSeconds / 60
+  const untrackedMinutes = untrackedSeconds / 60
 
   return {
     slices,
+    totalSeconds,
     totalMinutes,
+    trackedSeconds,
     trackedMinutes,
-    trackedPercentage: (trackedMinutes / DAY_TOTAL_MINUTES) * 100,
+    trackedPercentage: (trackedSeconds / DAY_TOTAL_SECONDS) * 100,
+    untrackedSeconds,
     untrackedMinutes,
-    untrackedPercentage: (untrackedMinutes / DAY_TOTAL_MINUTES) * 100,
+    untrackedPercentage: (untrackedSeconds / DAY_TOTAL_SECONDS) * 100,
     totalSessions,
     topTask: slices[0] ?? null,
-    averageSessionMinutes: totalSessions > 0 ? totalMinutes / totalSessions : 0,
+    averageSessionSeconds,
+    averageSessionMinutes: averageSessionSeconds / 60,
   }
 }
 
@@ -117,7 +135,7 @@ export function buildPieChartBackground(history: Pick<DayHistoryStats, 'slices'>
 
   let cursor = 0
   const segments = history.slices.map((slice) => {
-    const degrees = (Math.max(0, slice.minutes) / DAY_TOTAL_MINUTES) * 360
+    const degrees = (Math.max(0, slice.seconds) / DAY_TOTAL_SECONDS) * 360
     const start = cursor
     const end = cursor + degrees
     cursor = end

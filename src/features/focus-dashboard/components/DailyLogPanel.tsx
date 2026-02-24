@@ -4,7 +4,7 @@ import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import { taskIconMap } from '../constants/taskOptions'
 import type { LogEntry, LogTone, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
-import { formatMinutesCompact, formatSecondsHms, parseDurationLabelToMinutes, parseDurationLabelToSeconds } from '../utils/time'
+import { formatSecondsCompact, formatSecondsHms, parseDurationLabelToSeconds } from '../utils/time'
 
 type DailyLogPanelProps = {
   entries: LogEntry[]
@@ -114,28 +114,30 @@ export function DailyLogPanel({
   const [selectionAnchor, setSelectionAnchor] = useState<LogCellCoord | null>(null)
   const [selectionFocus, setSelectionFocus] = useState<LogCellCoord | null>(null)
   const [isSelectingCells, setIsSelectingCells] = useState(false)
-  const trackedMinutes = useMemo(
+  const trackedSeconds = useMemo(
     () =>
       entries.reduce((sum, entry) => {
         if (!entry.taskId) {
           return sum
         }
-        return sum + parseDurationLabelToMinutes(entry.duration)
+        return sum + parseDurationLabelToSeconds(entry.duration)
       }, 0),
     [entries],
   )
-  const untrackedMinutes = useMemo(
+  const untrackedSeconds = useMemo(
     () =>
       entries.reduce((sum, entry) => {
         if (entry.taskId) {
           return sum
         }
-        return sum + parseDurationLabelToMinutes(entry.duration)
+        return sum + parseDurationLabelToSeconds(entry.duration)
       }, 0),
     [entries],
   )
-  const trackedTimeLabel = entries.some((entry) => entry.taskId) ? formatMinutesCompact(trackedMinutes) : totalTracked
-  const untrackedTimeLabel = formatMinutesCompact(untrackedMinutes)
+  const trackedTimeLabel = entries.some((entry) => entry.taskId)
+    ? formatSecondsCompact(trackedSeconds)
+    : formatSecondsCompact(parseDurationLabelToSeconds(totalTracked))
+  const untrackedTimeLabel = formatSecondsCompact(untrackedSeconds)
 
   const rowModels = useMemo(
     () =>

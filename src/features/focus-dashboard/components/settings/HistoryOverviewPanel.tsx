@@ -1,7 +1,7 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChartPie, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import type { DashboardStats } from '../../types'
-import { formatMinutesCompact } from '../../utils/time'
+import { formatSecondsCompact, parseDurationLabelToSeconds } from '../../utils/time'
 import { HistoryStatCard } from './HistoryStatCard'
 import { HistoryTimeByTaskList } from './HistoryTimeByTaskList'
 import {
@@ -47,7 +47,7 @@ export function HistoryOverviewPanel({
               <div className="text-center">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Today</p>
                 <p className="mt-1 font-mono text-xl font-semibold text-slate-100">
-                  {formatMinutesCompact(history.trackedMinutes).toUpperCase()}
+                  {formatSecondsCompact(history.trackedSeconds).toUpperCase()}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">{history.totalSessions} sessions</p>
               </div>
@@ -58,14 +58,14 @@ export function HistoryOverviewPanel({
             <div className="rounded-xl bg-slate-900/30 px-3 py-2 text-left shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Tracked Time</p>
               <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
-                {formatMinutesCompact(history.trackedMinutes).toUpperCase()}
+                {formatSecondsCompact(history.trackedSeconds).toUpperCase()}
               </p>
               <p className="text-[11px] text-slate-400">{history.trackedPercentage.toFixed(1)}%</p>
             </div>
             <div className="rounded-xl bg-slate-900/30 px-3 py-2 text-left shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{UNTRACKED_TIME_LABEL}</p>
               <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
-                {formatMinutesCompact(history.untrackedMinutes).toUpperCase()}
+                {formatSecondsCompact(history.untrackedSeconds).toUpperCase()}
               </p>
               <p className="text-[11px] text-slate-400">{history.untrackedPercentage.toFixed(1)}%</p>
             </div>
@@ -75,9 +75,12 @@ export function HistoryOverviewPanel({
 
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <HistoryStatCard label="Total Tracked" value={dashboardStats.totalTracked} />
+          <HistoryStatCard
+            label="Total Tracked"
+            value={formatSecondsCompact(parseDurationLabelToSeconds(dashboardStats.totalTracked)).toUpperCase()}
+          />
           <HistoryStatCard label="Daily Log Sessions" value={`${dailyLogSessionsCount}`} />
-          <HistoryStatCard label="Avg Session" value={formatMinutesCompact(history.averageSessionMinutes).toUpperCase()} />
+          <HistoryStatCard label="Avg Session" value={formatSecondsCompact(history.averageSessionSeconds).toUpperCase()} />
           <HistoryStatCard label="Top Task" value={history.topTask ? history.topTask.title : 'No data'} valueClassName="text-sm" />
         </div>
 

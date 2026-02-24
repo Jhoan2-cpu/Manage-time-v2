@@ -29,9 +29,26 @@ export function parseDurationLabelToSeconds(durationLabel: string) {
     return hours * 3600 + minutes * 60
   }
 
+  const compactHourMinuteSecondMatch = value.match(
+    /^(\d+)\s*h(?:r|rs)?s?\s+(\d+)\s*m(?:in|ins)?s?(?:\s+(\d+)\s*s(?:ec|ecs|econd|econds)?s?)?$/,
+  )
+  if (compactHourMinuteSecondMatch) {
+    const hours = Number(compactHourMinuteSecondMatch[1])
+    const minutes = Number(compactHourMinuteSecondMatch[2])
+    const seconds = Number(compactHourMinuteSecondMatch[3] ?? '0')
+    return hours * 3600 + minutes * 60 + seconds
+  }
+
   const hourOnlyMatch = value.match(/^(\d+)\s*h(?:r|rs)?s?$/)
   if (hourOnlyMatch) {
     return Number(hourOnlyMatch[1]) * 3600
+  }
+
+  const minuteSecondMatch = value.match(/^(\d+)\s*m(?:in|ins)?s?\s+(\d+)\s*s(?:ec|ecs|econd|econds)?s?$/)
+  if (minuteSecondMatch) {
+    const minutes = Number(minuteSecondMatch[1])
+    const seconds = Number(minuteSecondMatch[2])
+    return minutes * 60 + seconds
   }
 
   const minuteMatch = value.match(/^(\d+)\s*min(?:s)?$/)
@@ -56,6 +73,19 @@ export function formatMinutesCompact(totalMinutes: number) {
   }
 
   return `${hours}h ${minutes.toString().padStart(2, '0')}m`
+}
+
+export function formatSecondsCompact(totalSeconds: number) {
+  const boundedSeconds = Math.max(0, Math.floor(totalSeconds))
+  const hours = Math.floor(boundedSeconds / 3600)
+  const minutes = Math.floor((boundedSeconds % 3600) / 60)
+  const seconds = boundedSeconds % 60
+
+  if (hours === 0) {
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
+  }
+
+  return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`
 }
 
 export function formatSecondsHms(totalSeconds: number) {

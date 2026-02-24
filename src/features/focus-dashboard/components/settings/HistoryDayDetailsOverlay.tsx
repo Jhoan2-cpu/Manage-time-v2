@@ -4,7 +4,7 @@ import { faChartPie, faChevronLeft } from '@fortawesome/free-solid-svg-icons'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
 import type { TaskColorKey } from '../../types'
 import { classNames } from '../../utils/classNames'
-import { formatMinutesCompact, formatSecondsHms, parseDurationLabelToSeconds } from '../../utils/time'
+import { formatSecondsCompact, formatSecondsHms, parseDurationLabelToSeconds } from '../../utils/time'
 import { HistoryStatCard } from './HistoryStatCard'
 import { HistoryTimeByTaskList } from './HistoryTimeByTaskList'
 import {
@@ -44,7 +44,7 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
               </div>
             </div>
             <div className="text-xs text-slate-500">
-              {daySummary.sessionCount} sessions - {formatMinutesCompact(daySummary.totalMinutes).toUpperCase()} tracked
+              {daySummary.sessionCount} sessions - {formatSecondsCompact(daySummary.totalSeconds).toUpperCase()} tracked
             </div>
           </div>
 
@@ -73,7 +73,7 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
                         <div className="text-center">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Tracked</p>
                           <p className="mt-1 font-mono text-xl font-semibold text-slate-100">
-                            {formatMinutesCompact(dayStats.trackedMinutes).toUpperCase()}
+                            {formatSecondsCompact(dayStats.trackedSeconds).toUpperCase()}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">{dayStats.totalSessions} sessions</p>
                         </div>
@@ -84,14 +84,14 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
                       <div className="rounded-xl bg-slate-900/30 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Tracked Time</p>
                         <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
-                          {formatMinutesCompact(dayStats.trackedMinutes).toUpperCase()}
+                          {formatSecondsCompact(dayStats.trackedSeconds).toUpperCase()}
                         </p>
                         <p className="text-[11px] text-slate-400">{dayStats.trackedPercentage.toFixed(1)}%</p>
                       </div>
                       <div className="rounded-xl bg-slate-900/30 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{UNTRACKED_TIME_LABEL}</p>
                         <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
-                          {formatMinutesCompact(dayStats.untrackedMinutes).toUpperCase()}
+                          {formatSecondsCompact(dayStats.untrackedSeconds).toUpperCase()}
                         </p>
                         <p className="text-[11px] text-slate-400">{dayStats.untrackedPercentage.toFixed(1)}%</p>
                       </div>
@@ -101,8 +101,8 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
 
                 <div className="space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <HistoryStatCard label="Tracked Time" value={formatMinutesCompact(dayStats.trackedMinutes).toUpperCase()} />
-                    <HistoryStatCard label={UNTRACKED_TIME_LABEL} value={formatMinutesCompact(dayStats.untrackedMinutes).toUpperCase()} />
+                    <HistoryStatCard label="Tracked Time" value={formatSecondsCompact(dayStats.trackedSeconds).toUpperCase()} />
+                    <HistoryStatCard label={UNTRACKED_TIME_LABEL} value={formatSecondsCompact(dayStats.untrackedSeconds).toUpperCase()} />
                     <HistoryStatCard label="Sessions" value={`${dayStats.totalSessions}`} />
                     <HistoryStatCard label="Top Task" value={dayStats.topTask ? dayStats.topTask.title : 'No data'} valueClassName="text-sm" />
                   </div>
