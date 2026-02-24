@@ -49,6 +49,8 @@ type SettingsModalProps = {
   onTimeZoneChange: (nextValue: string) => void
 }
 
+const SETTINGS_HISTORY_CLOSE_ANIMATION_MS = 280
+
 export function SettingsModal({
   isOpen,
   onClose,
@@ -70,11 +72,35 @@ export function SettingsModal({
   onTimeZoneChange,
 }: SettingsModalProps) {
   const { locale } = useI18n()
+  const [isRendered, setIsRendered] = useState(isOpen)
+  const [isClosing, setIsClosing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTaskFilter, setSelectedTaskFilter] = useState<string>('all')
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'today' | 'last7' | 'last30'>('all')
   const [historyPage, setHistoryPage] = useState(1)
   const [selectedHistoryDay, setSelectedHistoryDay] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsRendered(true)
+      setIsClosing(false)
+      return
+    }
+
+    if (!isRendered) {
+      return
+    }
+
+    setIsClosing(true)
+    const timerId = window.setTimeout(() => {
+      setIsClosing(false)
+      setIsRendered(false)
+    }, SETTINGS_HISTORY_CLOSE_ANIMATION_MS)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [isOpen, isRendered])
 
   useEffect(() => {
     if (!isOpen) {
@@ -345,19 +371,21 @@ export function SettingsModal({
     [selectedHistoryDaySummary],
   )
 
-  if (!isOpen) {
+  if (!isRendered) {
     return null
   }
 
   return (
-    <div className="settings-history-overlay-animate fixed inset-0 z-[95] overflow-hidden bg-[#030915]/96 backdrop-blur-sm">
+    <div
+      className={`${isClosing ? 'settings-history-overlay-exit pointer-events-none' : 'settings-history-overlay-animate'} fixed inset-0 z-[95] overflow-hidden bg-[#030915]/96 backdrop-blur-sm`}
+    >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="settings-history-glow-animate absolute left-[8%] top-[18%] h-72 w-72 rounded-full bg-blue-500/12 blur-3xl" />
         <div className="settings-history-glow-animate absolute right-[10%] top-[14%] h-80 w-80 rounded-full bg-violet-500/10 blur-3xl [animation-delay:70ms]" />
         <div className="settings-history-glow-animate absolute left-1/3 bottom-[8%] h-96 w-96 rounded-full bg-cyan-400/8 blur-[80px] [animation-delay:120ms]" />
       </div>
 
-      <div className="settings-history-shell-animate relative flex h-full flex-col">
+      <div className={`${isClosing ? 'settings-history-shell-exit' : 'settings-history-shell-animate'} relative flex h-full flex-col`}>
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800/80 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600/15 text-blue-200 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)]">

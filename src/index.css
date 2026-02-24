@@ -731,6 +731,16 @@ body {
   }
 }
 
+@keyframes settings-history-overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes settings-history-shell-enter {
   from {
     opacity: 0;
@@ -740,6 +750,18 @@ body {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes settings-history-shell-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.994);
   }
 }
 
@@ -767,8 +789,17 @@ body {
   animation: settings-history-overlay-fade 220ms ease-out;
 }
 
+.settings-history-overlay-exit {
+  animation: settings-history-overlay-fade-out 220ms ease-in forwards;
+}
+
 .settings-history-shell-animate {
   animation: settings-history-shell-enter 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: 50% 12%;
+}
+
+.settings-history-shell-exit {
+  animation: settings-history-shell-exit 260ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
   transform-origin: 50% 12%;
 }
 
