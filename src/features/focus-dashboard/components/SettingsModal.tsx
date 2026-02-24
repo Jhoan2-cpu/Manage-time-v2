@@ -40,6 +40,12 @@ type SettingsModalProps = {
   onToggleUiInteractionSfx: (nextValue: boolean) => void
   onBackgroundMusicVolumeChange: (nextValue: number) => void
   onToggleTaskSwitchConfirmation: (nextValue: boolean) => void
+  autoDetectTimeZone: boolean
+  selectedTimeZone: string
+  effectiveTimeZone: string
+  timeZoneOptions: string[]
+  onToggleAutoDetectTimeZone: (nextValue: boolean) => void
+  onTimeZoneChange: (nextValue: string) => void
 }
 
 export function SettingsModal({
@@ -55,6 +61,12 @@ export function SettingsModal({
   onToggleUiInteractionSfx,
   onBackgroundMusicVolumeChange,
   onToggleTaskSwitchConfirmation,
+  autoDetectTimeZone,
+  selectedTimeZone,
+  effectiveTimeZone,
+  timeZoneOptions,
+  onToggleAutoDetectTimeZone,
+  onTimeZoneChange,
 }: SettingsModalProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTaskFilter, setSelectedTaskFilter] = useState<string>('all')
@@ -83,7 +95,10 @@ export function SettingsModal({
     }
   }, [isOpen, onClose])
 
-  const currentDayIsoDate = useMemo(() => entries[0]?.date ?? toIsoDateString(new Date()), [entries])
+  const currentDayIsoDate = useMemo(
+    () => entries[0]?.date ?? toIsoDateString(new Date(), effectiveTimeZone),
+    [effectiveTimeZone, entries],
+  )
   const currentDayLabel = useMemo(() => formatIsoDateLong(currentDayIsoDate), [currentDayIsoDate])
   const taskMap = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks])
 
@@ -298,11 +313,17 @@ export function SettingsModal({
         <div className="app-scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
           <div className="mx-auto grid w-full max-w-7xl gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
             <SettingsPreferencesPanel
+              autoDetectTimeZone={autoDetectTimeZone}
               backgroundMusicVolume={backgroundMusicVolume}
+              effectiveTimeZone={effectiveTimeZone}
               onBackgroundMusicVolumeChange={onBackgroundMusicVolumeChange}
+              onTimeZoneChange={onTimeZoneChange}
+              onToggleAutoDetectTimeZone={onToggleAutoDetectTimeZone}
               onToggleTaskSwitchConfirmation={onToggleTaskSwitchConfirmation}
               onToggleUiInteractionSfx={onToggleUiInteractionSfx}
               requireTaskSwitchConfirmation={requireTaskSwitchConfirmation}
+              selectedTimeZone={selectedTimeZone}
+              timeZoneOptions={timeZoneOptions}
               uiInteractionSfxEnabled={uiInteractionSfxEnabled}
             />
 

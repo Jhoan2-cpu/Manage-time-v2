@@ -1,4 +1,5 @@
 import type { Task, TaskColorKey } from '../../types'
+import { toIsoDateStringInTimeZone } from '../../utils/time'
 
 export type HistorySlice = {
   key: string
@@ -131,7 +132,11 @@ export function buildPieChartBackground(history: Pick<DayHistoryStats, 'slices'>
   return `conic-gradient(${segments.join(', ')})`
 }
 
-export function toIsoDateString(date: Date) {
+export function toIsoDateString(date: Date, timeZone?: string) {
+  if (timeZone) {
+    return toIsoDateStringInTimeZone(date, timeZone)
+  }
+
   const year = date.getFullYear()
   const month = `${date.getMonth() + 1}`.padStart(2, '0')
   const day = `${date.getDate()}`.padStart(2, '0')

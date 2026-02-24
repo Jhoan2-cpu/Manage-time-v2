@@ -22,7 +22,7 @@ import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tas
 import { useCurrentTime } from './hooks/useCurrentTime'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { classNames } from './utils/classNames'
-import { formatSecondsHms, parseDurationLabelToSeconds } from './utils/time'
+import { formatSecondsHms, getBrowserTimeZone, getSupportedTimeZones, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
 import {
   getBackgroundMusicVolume,
   getUiInteractionSfxEnabled,
@@ -43,6 +43,9 @@ const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   pink: '236,72,153',
   violet: '139,92,246',
 }
+
+const TIME_ZONE_STORAGE_KEY = 'velor.settings.timezone'
+const AUTO_TIME_ZONE_STORAGE_KEY = 'velor.settings.timezone.auto'
 
 type FocusDashboardProps = {
   userName?: string
@@ -65,6 +68,28 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const [uiInteractionSfxEnabled, setUiInteractionSfxEnabledState] = useState(() => getUiInteractionSfxEnabled())
   const [backgroundMusicVolume, setBackgroundMusicVolumeState] = useState(() => getBackgroundMusicVolume())
   const [requireTaskSwitchConfirmation, setRequireTaskSwitchConfirmation] = useState(true)
+  const [selectedTimeZone, setSelectedTimeZone] = useState(() => {
+    if (typeof window === 'undefined') {
+      return 'UTC'
+    }
+
+    const stored = window.localStorage.getItem(TIME_ZONE_STORAGE_KEY)?.trim()
+    return stored || getBrowserTimeZone()
+  })
+  const [autoDetectTimeZone, setAutoDetectTimeZone] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+
+    const stored = window.localStorage.getItem(AUTO_TIME_ZONE_STORAGE_KEY)
+    if (stored === '0') {
+      return false
+    }
+    if (stored === '1') {
+      return true
+    }
+    return true
+  })
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
   )
@@ -88,7 +113,16 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     dateKey: string
   } | null>(null)
 
-  const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime()
+  const browserTimeZone = useMemo(() => getBrowserTimeZone(), [])
+  const supportedTimeZones = useMemo(() => getSupportedTimeZones(), [])
+  const timeZoneOptions = useMemo(() => {
+    return supportedTimeZones.includes(selectedTimeZone)
+      ? supportedTimeZones
+      : [selectedTimeZone, ...supportedTimeZones.filter((timeZone) => timeZone !== selectedTimeZone)]
+  }, [selectedTimeZone, supportedTimeZones])
+  const effectiveTimeZone = autoDetectTimeZone ? browserTimeZone : selectedTimeZone
+
+  const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(effectiveTimeZone)
   const sessionCountByTaskId = useMemo(() => {
     return dailyLogEntries.reduce<Record<string, number>>((acc, entry) => {
       if (!entry.taskId) {
@@ -164,6 +198,22 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   useEffect(() => {
     return subscribeTimerRingtoneState(setIsTimerAlarmPlaying)
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(TIME_ZONE_STORAGE_KEY, selectedTimeZone)
+  }, [selectedTimeZone])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(AUTO_TIME_ZONE_STORAGE_KEY, autoDetectTimeZone ? '1' : '0')
+  }, [autoDetectTimeZone])
 
   useEffect(() => {
     if (!isFocusRunning) {
@@ -335,6 +385,12 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     const appliedVolume = setBackgroundMusicVolume(nextValue)
     setBackgroundMusicVolumeState(appliedVolume)
   }
+  const handleToggleAutoDetectTimeZone = (nextValue: boolean) => {
+    setAutoDetectTimeZone(nextValue)
+  }
+  const handleTimeZoneChange = (nextValue: string) => {
+    setSelectedTimeZone(nextValue)
+  }
   const handleOpenProfile = () => {
     setIsProfileModalOpen(true)
   }
@@ -358,8 +414,8 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     const now = new Date()
     setActiveFocusSessionMeta({
       taskId: task.id,
-      startLabel: formatLogStartTime(now),
-      dateKey: formatLocalDateKey(now),
+      startLabel: formatLogStartTime(now, effectiveTimeZone),
+      dateKey: formatLocalDateKey(now, effectiveTimeZone),
     })
   }
   const handleStartUntrackedSession = () => {
@@ -367,8 +423,8 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     setActiveUntrackedSession((current) =>
       current ?? {
         startedAtMs: now.getTime(),
-        startLabel: formatLogStartTime(now),
-        dateKey: formatLocalDateKey(now),
+        startLabel: formatLogStartTime(now, effectiveTimeZone),
+        dateKey: formatLocalDateKey(now, effectiveTimeZone),
       },
     )
   }
@@ -736,31 +792,42 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         onConfirm={handleConfirmSignOut}
       />
       <SettingsModal
+        autoDetectTimeZone={autoDetectTimeZone}
         backgroundMusicVolume={backgroundMusicVolume}
         dashboardStats={dashboardStats}
+        effectiveTimeZone={effectiveTimeZone}
         entries={dailyLogEntries}
         historyEntries={historyLogEntries}
         isOpen={isSettingsModalOpen}
         onBackgroundMusicVolumeChange={handleBackgroundMusicVolumeChange}
         onClose={handleCloseSettings}
+        onTimeZoneChange={handleTimeZoneChange}
+        onToggleAutoDetectTimeZone={handleToggleAutoDetectTimeZone}
         onToggleTaskSwitchConfirmation={setRequireTaskSwitchConfirmation}
         onToggleUiInteractionSfx={handleToggleUiInteractionSfx}
         requireTaskSwitchConfirmation={requireTaskSwitchConfirmation}
+        selectedTimeZone={selectedTimeZone}
         tasks={taskList}
+        timeZoneOptions={timeZoneOptions}
         uiInteractionSfxEnabled={uiInteractionSfxEnabled}
       />
     </div>
   )
 }
 
-function formatLogStartTime(date: Date) {
+function formatLogStartTime(date: Date, timeZone?: string) {
   return new Intl.DateTimeFormat('en-US', {
+    timeZone,
     hour: 'numeric',
     minute: '2-digit',
   }).format(date)
 }
 
-function formatLocalDateKey(date: Date) {
+function formatLocalDateKey(date: Date, timeZone?: string) {
+  if (timeZone) {
+    return toIsoDateStringInTimeZone(date, timeZone)
+  }
+
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')

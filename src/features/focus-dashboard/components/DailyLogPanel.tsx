@@ -147,7 +147,7 @@ export function DailyLogPanel({
 
         return {
           id: entry.id,
-          start: entry.start,
+          start: formatStartTimeWithSeconds(entry.start),
           duration: formatSecondsHms(parseDurationLabelToSeconds(entry.duration)),
           activityLabel,
           styles,
@@ -295,7 +295,7 @@ export function DailyLogPanel({
               <tr>
                 <th
                   className={classNames(
-                    'cursor-default rounded-l-md border border-r-0 border-slate-800/55 bg-[#081225]/95 px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition',
+                    'cursor-default rounded-l-md border border-r-0 border-slate-800/55 bg-[#081225]/95 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition',
                     isCellSelected(HEADER_ROW_INDEX, 0) &&
                       'bg-blue-500/16 text-blue-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.55)]',
                     isAnchorCell(HEADER_ROW_INDEX, 0) && 'shadow-[inset_0_0_0_1px_rgba(147,197,253,0.8)]',
@@ -327,7 +327,7 @@ export function DailyLogPanel({
                 </th>
                 <th
                   className={classNames(
-                    'cursor-default rounded-r-md border border-l-0 border-slate-800/55 bg-[#081225]/95 px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition',
+                    'cursor-default rounded-r-md border border-l-0 border-slate-800/55 bg-[#081225]/95 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition',
                     isCellSelected(HEADER_ROW_INDEX, 2) &&
                       'bg-blue-500/16 text-blue-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.55)]',
                     isAnchorCell(HEADER_ROW_INDEX, 2) && 'shadow-[inset_0_0_0_1px_rgba(147,197,253,0.8)]',
@@ -438,4 +438,62 @@ export function DailyLogPanel({
       </div>
     </aside>
   )
+}
+
+function formatStartTimeWithSeconds(startLabel: string) {
+  const raw = startLabel.trim()
+  if (!raw) {
+    return startLabel
+  }
+
+  if (/:\d{2}:\d{2}\s*(AM|PM)$/i.test(raw)) {
+    return raw.toUpperCase()
+  }
+
+  if (/^\d{1,2}:\d{2}:\d{2}$/.test(raw)) {
+    const [hoursRaw, minutesRaw, secondsRaw] = raw.split(':')
+    const hours = Number.parseInt(hoursRaw ?? '', 10)
+    const minutes = Number.parseInt(minutesRaw ?? '', 10)
+    const seconds = Number.parseInt(secondsRaw ?? '', 10)
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return startLabel
+    }
+
+    const date = new Date()
+    date.setHours(hours, minutes, seconds, 0)
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date)
+  }
+
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i)
+  if (!timeMatch) {
+    return startLabel
+  }
+
+  const hoursRaw = Number.parseInt(timeMatch[1] ?? '', 10)
+  const minutesRaw = Number.parseInt(timeMatch[2] ?? '', 10)
+  const period = timeMatch[3]?.toUpperCase()
+  if (!Number.isFinite(hoursRaw) || !Number.isFinite(minutesRaw)) {
+    return startLabel
+  }
+
+  const date = new Date()
+  if (period) {
+    let hours24 = hoursRaw % 12
+    if (period === 'PM') {
+      hours24 += 12
+    }
+    date.setHours(hours24, minutesRaw, 0, 0)
+  } else {
+    date.setHours(hoursRaw, minutesRaw, 0, 0)
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date)
 }

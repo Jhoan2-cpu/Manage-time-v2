@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatUtcOffset } from '../utils/time'
+import { formatUtcOffsetForTimeZone } from '../utils/time'
 
-export function useCurrentTime() {
+export function useCurrentTime(timeZone?: string | null) {
   const [currentTime, setCurrentTime] = useState(() => new Date())
 
   useEffect(() => {
@@ -16,24 +16,30 @@ export function useCurrentTime() {
 
   const timeLabel = useMemo(() => {
     return currentTime.toLocaleTimeString('en-US', {
+      timeZone: timeZone ?? undefined,
       hour: 'numeric',
       minute: '2-digit',
     })
-  }, [currentTime])
+  }, [currentTime, timeZone])
 
   const timeZoneName = useMemo(() => {
     const timeZonePart = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone ?? undefined,
       timeZoneName: 'short',
     })
       .formatToParts(currentTime)
       .find((part) => part.type === 'timeZoneName')
 
     return timeZonePart?.value ?? 'Local'
-  }, [currentTime])
+  }, [currentTime, timeZone])
 
   const utcOffsetLabel = useMemo(() => {
-    return formatUtcOffset(currentTime.getTimezoneOffset())
-  }, [currentTime])
+    if (timeZone) {
+      return formatUtcOffsetForTimeZone(currentTime, timeZone)
+    }
+
+    return formatUtcOffsetForTimeZone(currentTime, Intl.DateTimeFormat().resolvedOptions().timeZone)
+  }, [currentTime, timeZone])
 
   return {
     timeLabel,

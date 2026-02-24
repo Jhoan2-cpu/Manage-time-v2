@@ -66,3 +66,119 @@ export function formatSecondsHms(totalSeconds: number) {
 
   return [hours, minutes, seconds].map((value) => value.toString().padStart(2, '0')).join(':')
 }
+
+export function getBrowserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+export function getSupportedTimeZones() {
+  const intlWithSupportedValues = Intl as typeof Intl & {
+    supportedValuesOf?: (key: 'timeZone') => string[]
+  }
+
+  try {
+    const values = intlWithSupportedValues.supportedValuesOf?.('timeZone')
+    if (values && values.length > 0) {
+      return values
+    }
+  } catch {
+    // Fallback list below
+  }
+
+  return [
+    'UTC',
+    'America/Los_Angeles',
+    'America/Denver',
+    'America/Chicago',
+    'America/New_York',
+    'America/Mexico_City',
+    'America/Guatemala',
+    'America/Bogota',
+    'America/Lima',
+    'America/Sao_Paulo',
+    'Europe/London',
+    'Europe/Madrid',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Europe/Rome',
+    'Europe/Athens',
+    'Asia/Dubai',
+    'Asia/Kolkata',
+    'Asia/Bangkok',
+    'Asia/Singapore',
+    'Asia/Tokyo',
+    'Asia/Seoul',
+    'Asia/Shanghai',
+    'Australia/Sydney',
+    'Pacific/Auckland',
+  ]
+}
+
+export function getTimeZoneOffsetMinutes(date: Date, timeZone: string) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+
+    const parts = formatter.formatToParts(date)
+    const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value
+
+    const year = Number(getPart('year'))
+    const month = Number(getPart('month'))
+    const day = Number(getPart('day'))
+    const hour = Number(getPart('hour'))
+    const minute = Number(getPart('minute'))
+    const second = Number(getPart('second'))
+
+    if (![year, month, day, hour, minute, second].every(Number.isFinite)) {
+      return date.getTimezoneOffset()
+    }
+
+    const asUtcTimestamp = Date.UTC(year, month - 1, day, hour, minute, second)
+    return (date.getTime() - asUtcTimestamp) / 60_000
+  } catch {
+    return date.getTimezoneOffset()
+  }
+}
+
+export function formatUtcOffsetForTimeZone(date: Date, timeZone: string) {
+  return formatUtcOffset(getTimeZoneOffsetMinutes(date, timeZone))
+}
+
+export function toIsoDateStringInTimeZone(date: Date, timeZone: string) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+    const parts = formatter.formatToParts(date)
+    const year = parts.find((part) => part.type === 'year')?.value
+    const month = parts.find((part) => part.type === 'month')?.value
+    const day = parts.find((part) => part.type === 'day')?.value
+
+    if (year && month && day) {
+      return `${year}-${month}-${day}`
+    }
+  } catch {
+    // fallback below
+  }
+
+  const fallbackDate = new Date(date)
+  const year = fallbackDate.getFullYear()
+  const month = `${fallbackDate.getMonth() + 1}`.padStart(2, '0')
+  const day = `${fallbackDate.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
