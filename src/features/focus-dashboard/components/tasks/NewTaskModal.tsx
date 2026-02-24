@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faClock, faHourglassHalf, faTrashCan, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { taskColorOptions, taskIconOptions } from '../../constants/taskOptions'
@@ -85,6 +85,13 @@ export function NewTaskModal({
   const [alarmMinuteInput, setAlarmMinuteInput] = useState('')
   const [alarmSecondInput, setAlarmSecondInput] = useState('')
   const [alarmPeriod, setAlarmPeriod] = useState<'AM' | 'PM'>('AM')
+  const [colorGlowOrigin, setColorGlowOrigin] = useState<{ xPercent: number; yPercent: number }>({
+    xPercent: 22,
+    yPercent: 82,
+  })
+  const [colorGlowPulseKey, setColorGlowPulseKey] = useState(0)
+  const modalCardRef = useRef<HTMLDivElement | null>(null)
+  const colorButtonRefs = useRef<Partial<Record<TaskColorKey, HTMLButtonElement | null>>>({})
 
   useEffect(() => {
     if (!isOpen) {
@@ -145,6 +152,21 @@ export function NewTaskModal({
     }
   }, [isOpen, onClose])
 
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const targetButton = colorButtonRefs.current[colorTag]
+      if (targetButton) {
+        updateColorGlowOriginFromElement(targetButton)
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [colorTag, isOpen])
+
   if (!isOpen) {
     return null
   }
@@ -154,6 +176,41 @@ export function NewTaskModal({
   const modalAccentRgb = modalAccentRgbByColor[colorTag]
   const softAccentBorder = `rgba(${modalAccentRgb},0.18)`
   const softAccentGlow = `rgba(${modalAccentRgb},0.08)`
+  const colorOriginLeft = `${colorGlowOrigin.xPercent}%`
+  const colorOriginTop = `calc(${colorGlowOrigin.yPercent}% + 12px)`
+  const reactiveGlowStyle = {
+    left: colorOriginLeft,
+    top: colorOriginTop,
+    backgroundColor: `rgba(${modalAccentRgb},0.18)`,
+    boxShadow: `0 0 80px rgba(${modalAccentRgb},0.14)`,
+  } as CSSProperties
+  const reactiveGlowPulseStyle = {
+    left: colorOriginLeft,
+    top: colorOriginTop,
+    '--task-modal-color-pulse-rgb': modalAccentRgb,
+  } as CSSProperties
+
+  function updateColorGlowOriginFromElement(element: HTMLElement) {
+    const modalRect = modalCardRef.current?.getBoundingClientRect()
+    const elementRect = element.getBoundingClientRect()
+    if (!modalRect || modalRect.width <= 0 || modalRect.height <= 0) {
+      return
+    }
+
+    const xPercent = Math.min(100, Math.max(0, ((elementRect.left + elementRect.width / 2 - modalRect.left) / modalRect.width) * 100))
+    const yPercent = Math.min(
+      100,
+      Math.max(0, ((elementRect.top + elementRect.height / 2 - modalRect.top) / modalRect.height) * 100),
+    )
+    setColorGlowOrigin({ xPercent, yPercent })
+  }
+
+  function handleColorTagSelect(nextColorTag: TaskColorKey, sourceButton: HTMLButtonElement) {
+    updateColorGlowOriginFromElement(sourceButton)
+    setColorTag(nextColorTag)
+    setColorGlowPulseKey((value) => value + 1)
+  }
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -203,10 +260,28 @@ export function NewTaskModal({
           'modal-card-animate relative my-auto flex max-h-[calc(100svh-2rem)] w-[min(97vw,840px)] flex-col overflow-hidden rounded-2xl border bg-[#0a1429]/95 shadow-[0_28px_90px_rgba(1,8,22,0.78)] sm:max-h-[92svh]',
           modalAccentBorderClassByColor[colorTag],
         )}
+        ref={modalCardRef}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div
+            className="task-modal-color-origin-base absolute h-52 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl transition-[left,top,background-color,box-shadow] duration-300 ease-out"
+            style={reactiveGlowStyle}
+          />
+          <div
+            className="task-modal-color-origin-base absolute h-36 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl transition-[left,top,background-color] duration-300 ease-out"
+            style={{
+              left: colorOriginLeft,
+              top: colorOriginTop,
+              backgroundColor: `rgba(${modalAccentRgb},0.14)`,
+            }}
+          />
+          <div
+            key={colorGlowPulseKey}
+            className="task-modal-color-origin-pulse absolute h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={reactiveGlowPulseStyle}
+          />
           <div
             className="absolute inset-0"
             style={{
@@ -467,17 +542,20 @@ export function NewTaskModal({
                   return (
                     <button
                       aria-label={`Choose ${option.label} color`}
-                      className={classNames(
-                        'relative h-8 w-8 rounded-full ring-1 ring-slate-700/80 transition',
-                        option.swatchClassName,
-                        isSelected && classNames('ring-2 ring-offset-2 ring-offset-[#0a1429]', option.selectedRingClassName),
-                      )}
+                        className={classNames(
+                          'relative h-8 w-8 rounded-full ring-1 ring-slate-700/80 transition',
+                          option.swatchClassName,
+                          isSelected && classNames('ring-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]', option.selectedRingClassName),
+                        )}
                       key={option.id}
-                      onClick={() => setColorTag(option.id)}
+                      onClick={(event) => handleColorTagSelect(option.id, event.currentTarget)}
+                      ref={(element) => {
+                        colorButtonRefs.current[option.id] = element
+                      }}
                       type="button"
                     >
                       {isSelected ? (
-                        <span className="absolute inset-0 grid place-items-center rounded-full bg-black/10 text-[11px] text-white">
+                        <span className="absolute inset-0 grid place-items-center rounded-full bg-white/10 text-[11px] text-white">
                           <FontAwesomeIcon icon={faCheck} />
                         </span>
                       ) : null}
