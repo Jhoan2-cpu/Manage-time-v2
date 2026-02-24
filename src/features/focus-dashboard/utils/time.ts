@@ -1,3 +1,5 @@
+import { getCurrentIntlLocaleTag } from '../../../i18n'
+
 export function formatUtcOffset(minutesOffset: number) {
   const sign = minutesOffset <= 0 ? '+' : '-'
   const absoluteOffset = Math.abs(minutesOffset)
@@ -150,7 +152,7 @@ export function getSupportedTimeZones() {
 
 export function getTimeZoneOffsetMinutes(date: Date, timeZone: string) {
   try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
+    const formatter = new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
       timeZone,
       year: 'numeric',
       month: '2-digit',

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faChevronDown, faGlobe, faMagnifyingGlass, faSliders, faVolumeHigh } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../../i18n'
 import { SettingToggle } from './SettingToggle'
 
 type SettingsPreferencesPanelProps = {
@@ -32,6 +33,7 @@ export function SettingsPreferencesPanel({
   onToggleAutoDetectTimeZone,
   onTimeZoneChange,
 }: SettingsPreferencesPanelProps) {
+  const { locale, setLocale, t } = useI18n()
   const volumePercent = Math.round(Math.max(0, Math.min(1, backgroundMusicVolume)) * 100)
   const [isTimeZonePickerOpen, setIsTimeZonePickerOpen] = useState(false)
   const [timeZoneSearch, setTimeZoneSearch] = useState('')
@@ -88,14 +90,56 @@ export function SettingsPreferencesPanel({
     <section className="rounded-2xl bg-[linear-gradient(180deg,rgba(9,18,36,0.92),rgba(6,13,26,0.95))] p-4 shadow-[0_18px_45px_rgba(2,8,20,0.28),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-5">
       <div className="mb-4 flex items-center gap-2">
         <FontAwesomeIcon className="text-slate-400" icon={faSliders} />
-        <h3 className="text-base font-semibold text-slate-100">Settings</h3>
+        <h3 className="text-base font-semibold text-slate-100">{t('settings.panelTitle')}</h3>
       </div>
 
       <div className="space-y-3">
+        <div className="rounded-xl bg-slate-950/25 p-3 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-900/45 text-slate-400 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.3)]">
+                <FontAwesomeIcon icon={faGlobe} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-100">{t('settings.language.title')}</p>
+                <p className="text-xs text-slate-500">{t('settings.language.description')}</p>
+              </div>
+            </div>
+            <span className="rounded-md bg-slate-900/45 px-2 py-1 text-xs font-semibold text-slate-200 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
+              {t('settings.language.defaultBadge')}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { code: 'es', label: t('common.languageNames.es') },
+              { code: 'en', label: t('common.languageNames.en') },
+            ] as const).map((option) => {
+              const isSelected = locale === option.code
+
+              return (
+                <button
+                  className={`inline-flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                    isSelected
+                      ? 'bg-blue-500/18 text-blue-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.42)]'
+                      : 'bg-slate-900/45 text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)] hover:bg-slate-800/70'
+                  }`}
+                  key={option.code}
+                  onClick={() => setLocale(option.code)}
+                  type="button"
+                >
+                  <span>{option.label}</span>
+                  {isSelected ? <FontAwesomeIcon className="text-[11px]" icon={faCheck} /> : null}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         <SettingToggle
           checked={uiInteractionSfxEnabled}
-          description="Enable or disable UI click and typing sounds."
-          label="UI Sounds (Click + Typing)"
+          description={t('settings.uiSounds.description')}
+          label={t('settings.uiSounds.label')}
           onChange={onToggleUiInteractionSfx}
         />
 
@@ -106,8 +150,8 @@ export function SettingsPreferencesPanel({
                 <FontAwesomeIcon icon={faVolumeHigh} />
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-100">Background Music Volume</p>
-                <p className="text-xs text-slate-500">Adjust the volume of the loop music.</p>
+                <p className="text-sm font-medium text-slate-100">{t('settings.musicVolume.label')}</p>
+                <p className="text-xs text-slate-500">{t('settings.musicVolume.description')}</p>
               </div>
             </div>
             <span className="rounded-md bg-slate-900/45 px-2 py-1 text-xs font-semibold text-slate-200 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
@@ -128,8 +172,8 @@ export function SettingsPreferencesPanel({
 
         <SettingToggle
           checked={requireTaskSwitchConfirmation}
-          description="Ask for confirmation before switching while another task is currently running."
-          label="Confirm Task Switch"
+          description={t('settings.taskSwitchConfirm.description')}
+          label={t('settings.taskSwitchConfirm.label')}
           onChange={onToggleTaskSwitchConfirmation}
         />
 
@@ -140,16 +184,16 @@ export function SettingsPreferencesPanel({
                 <FontAwesomeIcon icon={faGlobe} />
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-100">Time Zone</p>
-                <p className="text-xs text-slate-500">Used for the header clock and new log timestamps.</p>
+                <p className="text-sm font-medium text-slate-100">{t('settings.timeZone.title')}</p>
+                <p className="text-xs text-slate-500">{t('settings.timeZone.description')}</p>
               </div>
             </div>
           </div>
 
           <SettingToggle
             checked={autoDetectTimeZone}
-            description={`Current: ${effectiveTimeZone}`}
-            label="Auto-detect Time Zone"
+            description={t('settings.timeZone.currentDescription', { timeZone: effectiveTimeZone })}
+            label={t('settings.timeZone.autoDetectLabel')}
             onChange={onToggleAutoDetectTimeZone}
           />
 
@@ -157,8 +201,8 @@ export function SettingsPreferencesPanel({
             className={`mt-3 rounded-xl p-3 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)] ${autoDetectTimeZone ? 'bg-slate-900/20 opacity-70' : 'bg-slate-900/30'}`}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Manual Time Zone</p>
-              <span className="text-[11px] text-slate-500">{timeZoneOptions.length} options</span>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{t('settings.timeZone.manualTitle')}</p>
+              <span className="text-[11px] text-slate-500">{t('settings.timeZone.optionsCount', { count: timeZoneOptions.length })}</span>
             </div>
 
             <div className="relative" ref={timeZonePickerRef}>
@@ -191,7 +235,7 @@ export function SettingsPreferencesPanel({
                         autoFocus
                         className="w-full rounded-lg bg-slate-900/55 py-2 pl-9 pr-3 text-sm text-slate-100 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.35)] outline-none transition placeholder:text-slate-500 focus:shadow-[inset_0_0_0_1px_rgba(59,130,246,0.45)]"
                         onChange={(event) => setTimeZoneSearch(event.target.value)}
-                        placeholder="Search timezone..."
+                        placeholder={t('settings.timeZone.searchPlaceholder')}
                         value={timeZoneSearch}
                       />
                     </label>
@@ -227,7 +271,7 @@ export function SettingsPreferencesPanel({
                         )
                       })
                     ) : (
-                      <div className="px-3 py-4 text-center text-xs text-slate-500">No time zones match your search.</div>
+                      <div className="px-3 py-4 text-center text-xs text-slate-500">{t('settings.timeZone.noMatches')}</div>
                     )}
                   </div>
                 </div>
@@ -235,18 +279,19 @@ export function SettingsPreferencesPanel({
             </div>
 
             <p className="mt-2 text-[11px] text-slate-500">
-              {autoDetectTimeZone ? 'Disable auto-detect to choose a different IANA time zone.' : `Active: ${selectedTimeZone}`}
+              {autoDetectTimeZone
+                ? t('settings.timeZone.disableAutoHint')
+                : t('settings.timeZone.activeHint', { timeZone: selectedTimeZone })}
             </p>
           </div>
         </div>
       </div>
 
       <div className="mt-5 rounded-xl bg-slate-900/35 p-3 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.3)]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Sign Out Confirmation</p>
-        <p className="mt-2 text-sm leading-relaxed text-slate-400">
-          Sign out will always require confirmation. This setting only affects switching tasks that are already in
-          progress.
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          {t('settings.signOutConfirmation.title')}
         </p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-400">{t('settings.signOutConfirmation.description')}</p>
       </div>
     </section>
   )

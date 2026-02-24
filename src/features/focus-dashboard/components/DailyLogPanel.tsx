@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons'
+import { getCurrentIntlLocaleTag, useI18n } from '../../../i18n'
 import { taskIconMap } from '../constants/taskOptions'
 import type { LogEntry, LogTone, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
@@ -109,6 +110,7 @@ export function DailyLogPanel({
   totalTracked,
   isOpen,
 }: DailyLogPanelProps) {
+  const { locale } = useI18n()
   const taskMap = new Map(tasks.map((task) => [task.id, task]))
   const tableSelectionRef = useRef<HTMLDivElement | null>(null)
   const [selectionAnchor, setSelectionAnchor] = useState<LogCellCoord | null>(null)
@@ -138,6 +140,26 @@ export function DailyLogPanel({
     ? formatSecondsCompact(trackedSeconds)
     : formatSecondsCompact(parseDurationLabelToSeconds(totalTracked))
   const untrackedTimeLabel = formatSecondsCompact(untrackedSeconds)
+  const copy =
+    locale === 'es'
+      ? {
+          title: 'Registro diario',
+          subtitle: 'Tabla seleccionable (copiar y pegar en Excel)',
+          start: 'Inicio',
+          duration: 'Duracion',
+          activity: 'Actividad',
+          totalTracked: 'Total registrado',
+          untrackedTime: 'Tiempo no registrado',
+        }
+      : {
+          title: 'Daily Log',
+          subtitle: 'Selectable table (copy and paste into Excel)',
+          start: 'Start',
+          duration: 'Duration',
+          activity: 'Activity',
+          totalTracked: 'Total Tracked',
+          untrackedTime: 'Untracked Time',
+        }
 
   const rowModels = useMemo(
     () =>
@@ -145,7 +167,7 @@ export function DailyLogPanel({
         const task = entry.taskId ? taskMap.get(entry.taskId) : undefined
         const styles = task ? taskLogColorStyles[task.colorTag] : logToneStyles[entry.tone ?? 'default']
         const taskIcon = task ? taskIconMap[task.iconTag] : undefined
-        const activityLabel = task?.title ?? entry.activity ?? 'Unknown Activity'
+        const activityLabel = task?.title ?? entry.activity ?? copy.activity
 
         return {
           id: entry.id,
@@ -156,7 +178,7 @@ export function DailyLogPanel({
           taskIcon,
         }
       }),
-    [entries, taskMap],
+    [copy.activity, entries, taskMap],
   )
 
   const selectedRange = useMemo(() => {
@@ -223,7 +245,7 @@ export function DailyLogPanel({
       return
     }
 
-    const headers = ['Start', 'Duration', 'Activity']
+    const headers = [copy.start, copy.duration, copy.activity]
     const matrix = rowModels.map((row) => [row.start, row.duration, row.activityLabel])
     const selectedHeaderRow = headers.slice(selectedRange.minCol, selectedRange.maxCol + 1).join('\t')
     const copiedLines: string[] = []
@@ -269,12 +291,12 @@ export function DailyLogPanel({
         )}
       >
         <div className="border-b border-slate-800 px-4 py-4">
-          <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-100">
-            <FontAwesomeIcon className="text-slate-300" icon={faClockRotateLeft} />
-            Daily Log
-          </h2>
-          <p className="mt-2 text-[11px] text-slate-500">Selectable table (copy and paste into Excel)</p>
-        </div>
+            <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-100">
+              <FontAwesomeIcon className="text-slate-300" icon={faClockRotateLeft} />
+              {copy.title}
+            </h2>
+            <p className="mt-2 text-[11px] text-slate-500">{copy.subtitle}</p>
+          </div>
 
         <div
           className="app-scroll flex-1 overflow-auto px-3 pb-3 pt-2"
@@ -309,7 +331,7 @@ export function DailyLogPanel({
                   }}
                   onMouseEnter={() => handleCellMouseEnter(HEADER_ROW_INDEX, 0)}
                 >
-                  Start
+                  {copy.start}
                 </th>
                 <th
                   className={classNames(
@@ -325,7 +347,7 @@ export function DailyLogPanel({
                   }}
                   onMouseEnter={() => handleCellMouseEnter(HEADER_ROW_INDEX, 1)}
                 >
-                  Duration
+                  {copy.duration}
                 </th>
                 <th
                   className={classNames(
@@ -341,7 +363,7 @@ export function DailyLogPanel({
                   }}
                   onMouseEnter={() => handleCellMouseEnter(HEADER_ROW_INDEX, 2)}
                 >
-                  Activity
+                  {copy.activity}
                 </th>
               </tr>
             </thead>
@@ -428,11 +450,11 @@ export function DailyLogPanel({
         >
           <div className="space-y-2 text-xs text-slate-400">
             <div className="flex items-center justify-between">
-              <span>Total Tracked</span>
+              <span>{copy.totalTracked}</span>
               <span className="font-mono font-medium tabular-nums text-slate-300">{trackedTimeLabel}</span>
             </div>
             <div className="flex items-center justify-between border-t border-slate-800/70 pt-2">
-              <span>Untracked Time</span>
+              <span>{copy.untrackedTime}</span>
               <span className="font-mono font-medium tabular-nums text-slate-400">{untrackedTimeLabel}</span>
             </div>
           </div>
@@ -463,7 +485,7 @@ function formatStartTimeWithSeconds(startLabel: string) {
 
     const date = new Date()
     date.setHours(hours, minutes, seconds, 0)
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
       hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
@@ -493,7 +515,7 @@ function formatStartTimeWithSeconds(startLabel: string) {
     date.setHours(hoursRaw, minutesRaw, 0, 0)
   }
 
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',

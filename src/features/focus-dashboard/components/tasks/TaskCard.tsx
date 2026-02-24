@@ -8,6 +8,7 @@ import {
   faPause,
   faPlay,
 } from '@fortawesome/free-solid-svg-icons'
+import { getCurrentIntlLocaleTag, useI18n } from '../../../../i18n'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
 import type { Task, TaskState } from '../../types'
 import { classNames } from '../../utils/classNames'
@@ -69,6 +70,7 @@ export function TaskCard({
   onPlayTask,
   onEditTask,
 }: TaskCardProps) {
+  const { locale } = useI18n()
   const stateStyles = taskStateStyles[task.state]
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
@@ -78,6 +80,26 @@ export function TaskCard({
   const isActiveRunning = isActive && isRunning
   const showRestartIcon = isActive && showRestartAction && !isRunning
   const cardGlowStyle = { '--task-card-glow-rgb': taskCardGlowRgbByColor[task.colorTag] } as CSSProperties
+  const copy =
+    locale === 'es'
+      ? {
+          sessionsWord: 'sesiones',
+          sessionsCaps: 'SESIONES',
+          pause: 'Pausar',
+          restart: 'Reiniciar',
+          play: 'Iniciar',
+          view: 'Ver',
+          viewTask: 'Ver',
+        }
+      : {
+          sessionsWord: 'sessions',
+          sessionsCaps: 'SESSIONS',
+          pause: 'Pause',
+          restart: 'Restart',
+          play: 'Play',
+          view: 'View',
+          viewTask: 'View',
+        }
 
   return (
     <article
@@ -132,12 +154,12 @@ export function TaskCard({
             </span>
           ) : null}
           <span
-            aria-label={`${sessionCount} sessions`}
+            aria-label={`${sessionCount} ${copy.sessionsWord}`}
             className="inline-flex items-center gap-1 rounded-md bg-slate-950/28 px-1.5 py-0.5 text-[10px] font-medium text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]"
-            title={`${sessionCount} sessions`}
+            title={`${sessionCount} ${copy.sessionsWord}`}
           >
             <span className="tabular-nums">{sessionsLabel}</span>
-            <span className="tracking-[0.08em] text-slate-400">SESSIONS</span>
+            <span className="tracking-[0.08em] text-slate-400">{copy.sessionsCaps}</span>
           </span>
         </div>
       </div>
@@ -157,7 +179,7 @@ export function TaskCard({
 
         <div className="flex items-center gap-1">
           <button
-            aria-label={`${isActiveRunning ? 'Pause' : showRestartIcon ? 'Restart' : 'Play'} ${task.title}`}
+            aria-label={`${isActiveRunning ? copy.pause : showRestartIcon ? copy.restart : copy.play} ${task.title}`}
             className={classNames(
               'grid h-7 w-7 place-items-center rounded-full border transition shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:brightness-110',
               colorStyles.iconShellClassName,
@@ -172,7 +194,7 @@ export function TaskCard({
           </button>
 
           <button
-            aria-label={`View ${task.title}`}
+            aria-label={`${copy.viewTask} ${task.title}`}
             className={classNames(
               'inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:brightness-110',
               colorStyles.iconShellClassName,
@@ -181,7 +203,7 @@ export function TaskCard({
             type="button"
           >
             <FontAwesomeIcon className="text-[10px]" icon={faEye} />
-            <span>Ver</span>
+            <span>{copy.view}</span>
           </button>
         </div>
       </div>
@@ -207,7 +229,7 @@ function formatAlarmTimeChip(alarmTime: string) {
       hours24 += 12
     }
     date.setHours(hours24, minutes, seconds, 0)
-    return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(date)
+    return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(date)
   }
 
   const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
@@ -224,7 +246,7 @@ function formatAlarmTimeChip(alarmTime: string) {
 
   const date = new Date()
   date.setHours(hours, minutes, seconds, 0)
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(date)
+  return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(date)
 }
 
 function formatTargetTimerChip(totalMinutes: number) {

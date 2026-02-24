@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faRightFromBracket, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../i18n'
 
 type SignOutConfirmModalProps = {
   isOpen: boolean
@@ -9,6 +10,7 @@ type SignOutConfirmModalProps = {
 }
 
 export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfirmModalProps) {
+  const { locale } = useI18n()
   useEffect(() => {
     if (!isOpen) {
       return
@@ -34,6 +36,25 @@ export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfi
     return null
   }
 
+  const copy =
+    locale === 'es'
+      ? {
+          title: 'Cerrar sesion',
+          close: 'Cerrar confirmacion de cierre de sesion',
+          body: 'Seguro que quieres cerrar sesion de tu espacio de trabajo Velor?',
+          note: 'Tu sesion local se cerrara y volveras a la pagina de inicio de sesion.',
+          cancel: 'Cancelar',
+          confirm: 'Cerrar sesion',
+        }
+      : {
+          title: 'Sign Out',
+          close: 'Close sign out confirmation',
+          body: 'Are you sure you want to sign out of your Velor workspace?',
+          note: 'Your local session will be closed and you will return to the login page.',
+          cancel: 'Cancel',
+          confirm: 'Sign Out',
+        }
+
   return (
     <div
       className="modal-overlay-animate fixed inset-0 z-[86] flex items-center justify-center bg-[#020a18]/82 px-4 backdrop-blur-[3px]"
@@ -52,11 +73,11 @@ export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfi
               <FontAwesomeIcon icon={faTriangleExclamation} />
             </span>
             <h2 className="text-lg font-semibold tracking-tight text-slate-100" id="signout-modal-title">
-              Sign Out
+              {copy.title}
             </h2>
           </div>
           <button
-            aria-label="Close sign out confirmation"
+            aria-label={copy.close}
             className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
             onClick={onClose}
             type="button"
@@ -66,8 +87,8 @@ export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfi
         </header>
 
         <div className="px-5 py-5 text-sm text-slate-300">
-          <p className="leading-relaxed">Are you sure you want to sign out of your Velor workspace?</p>
-          <p className="mt-2 text-xs text-slate-500">Your local session will be closed and you will return to the login page.</p>
+          <p className="leading-relaxed">{copy.body}</p>
+          <p className="mt-2 text-xs text-slate-500">{copy.note}</p>
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-slate-800/80 px-5 py-4">
@@ -76,7 +97,7 @@ export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfi
             onClick={onClose}
             type="button"
           >
-            Cancel
+            {copy.cancel}
           </button>
           <button
             className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-[#091021] transition hover:bg-amber-400"
@@ -84,7 +105,7 @@ export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfi
             type="button"
           >
             <FontAwesomeIcon icon={faRightFromBracket} />
-            Sign Out
+            {copy.confirm}
           </button>
         </footer>
       </div>

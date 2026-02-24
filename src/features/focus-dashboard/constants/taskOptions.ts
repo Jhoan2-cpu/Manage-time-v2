@@ -127,3 +127,55 @@ export const taskColorMap: Record<TaskColorKey, TaskColorOption> = {
   pink: taskColorOptions[4],
   violet: taskColorOptions[5],
 }
+
+type SupportedTaskLabelLocale = 'es' | 'en'
+
+const taskIconLabelByLocale: Record<SupportedTaskLabelLocale, Record<TaskIconKey, string>> = {
+  es: {
+    briefcase: 'Trabajo',
+    learning: 'Estudio',
+    tools: 'Setup',
+    code: 'Codigo',
+    book: 'Lectura',
+    pen: 'Escritura',
+    cart: 'Compras',
+    game: 'Gaming',
+  },
+  en: {
+    briefcase: 'Work',
+    learning: 'Study',
+    tools: 'Setup',
+    code: 'Code',
+    book: 'Read',
+    pen: 'Write',
+    cart: 'Errands',
+    game: 'Gaming',
+  },
+}
+
+const taskColorLabelByLocale: Record<SupportedTaskLabelLocale, Record<TaskColorKey, string>> = {
+  es: {
+    blue: 'Azul',
+    green: 'Verde',
+    amber: 'Ambar',
+    rose: 'Rosa',
+    pink: 'Rosado',
+    violet: 'Violeta',
+  },
+  en: {
+    blue: 'Blue',
+    green: 'Green',
+    amber: 'Amber',
+    rose: 'Rose',
+    pink: 'Pink',
+    violet: 'Violet',
+  },
+}
+
+export function getTaskIconOptionLabel(iconTag: TaskIconKey, locale: SupportedTaskLabelLocale) {
+  return taskIconLabelByLocale[locale][iconTag] ?? taskIconMap[iconTag].label
+}
+
+export function getTaskColorOptionLabel(colorTag: TaskColorKey, locale: SupportedTaskLabelLocale) {
+  return taskColorLabelByLocale[locale][colorTag] ?? taskColorMap[colorTag].label
+}

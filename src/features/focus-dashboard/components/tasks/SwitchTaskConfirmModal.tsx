@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCirclePause, faPlay, faRepeat, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../../i18n'
 import type { Task } from '../../types'
 
 type SwitchTaskConfirmModalProps = {
@@ -18,6 +19,7 @@ export function SwitchTaskConfirmModal({
   onClose,
   onConfirm,
 }: SwitchTaskConfirmModalProps) {
+  const { locale } = useI18n()
   useEffect(() => {
     if (!isOpen) {
       return
@@ -43,6 +45,31 @@ export function SwitchTaskConfirmModal({
     return null
   }
 
+  const copy =
+    locale === 'es'
+      ? {
+          title: 'Cambiar tarea activa',
+          close: 'Cerrar confirmacion de cambio de tarea',
+          currentRunningSuffix: 'esta en ejecucion.',
+          switchingPrefix: 'Cambiar a',
+          switchingMiddle: 'pausara la tarea actual e iniciara un nuevo conteo para la seleccionada.',
+          pauseCurrent: 'Pausar actual',
+          startNewCount: 'Iniciar nuevo conteo',
+          cancel: 'Cancelar',
+          confirm: 'Cambiar tarea',
+        }
+      : {
+          title: 'Switch Active Task',
+          close: 'Close switch task confirmation',
+          currentRunningSuffix: 'is currently running.',
+          switchingPrefix: 'Switching to',
+          switchingMiddle: 'will pause the current task and start a new timer count for the selected one.',
+          pauseCurrent: 'Pause current',
+          startNewCount: 'Start new count',
+          cancel: 'Cancel',
+          confirm: 'Switch Task',
+        }
+
   return (
     <div
       className="modal-overlay-animate fixed inset-0 z-[82] flex items-center justify-center bg-[#020a18]/82 px-4 backdrop-blur-[3px]"
@@ -61,11 +88,11 @@ export function SwitchTaskConfirmModal({
               <FontAwesomeIcon icon={faRepeat} />
             </span>
             <h2 className="text-lg font-semibold tracking-tight text-slate-100" id="switch-task-modal-title">
-              Switch Active Task
+              {copy.title}
             </h2>
           </div>
           <button
-            aria-label="Close switch task confirmation"
+            aria-label={copy.close}
             className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
             onClick={onClose}
             type="button"
@@ -76,25 +103,24 @@ export function SwitchTaskConfirmModal({
 
         <div className="space-y-3 px-5 py-5 text-sm text-slate-300">
           <p className="leading-relaxed">
-            <span className="font-semibold text-slate-100">"{currentTask.title}"</span> is currently running.
+            <span className="font-semibold text-slate-100">"{currentTask.title}"</span> {copy.currentRunningSuffix}
           </p>
           <p className="leading-relaxed text-slate-400">
-            Switching to <span className="font-semibold text-slate-100">"{nextTask.title}"</span> will pause the current
-            task and start a new timer count for the selected one.
+            {copy.switchingPrefix} <span className="font-semibold text-slate-100">"{nextTask.title}"</span> {copy.switchingMiddle}
           </p>
 
           <div className="rounded-xl border border-slate-800/70 bg-slate-950/30 p-3">
             <div className="flex items-center justify-between gap-3 text-xs">
               <div className="flex min-w-0 items-center gap-2 text-slate-300">
                 <FontAwesomeIcon className="text-amber-300" icon={faCirclePause} />
-                <span className="truncate">Pause current</span>
+                <span className="truncate">{copy.pauseCurrent}</span>
               </div>
               <span className="truncate font-medium text-slate-100">{currentTask.title}</span>
             </div>
             <div className="mt-2 flex items-center justify-between gap-3 text-xs">
               <div className="flex min-w-0 items-center gap-2 text-slate-300">
                 <FontAwesomeIcon className="text-emerald-300" icon={faPlay} />
-                <span className="truncate">Start new count</span>
+                <span className="truncate">{copy.startNewCount}</span>
               </div>
               <span className="truncate font-medium text-slate-100">{nextTask.title}</span>
             </div>
@@ -107,7 +133,7 @@ export function SwitchTaskConfirmModal({
             onClick={onClose}
             type="button"
           >
-            Cancel
+            {copy.cancel}
           </button>
           <button
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
@@ -115,11 +141,10 @@ export function SwitchTaskConfirmModal({
             type="button"
           >
             <FontAwesomeIcon icon={faRepeat} />
-            Switch Task
+            {copy.confirm}
           </button>
         </footer>
       </div>
     </div>
   )
 }
-

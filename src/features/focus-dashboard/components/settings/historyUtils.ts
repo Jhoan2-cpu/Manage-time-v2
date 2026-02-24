@@ -1,3 +1,4 @@
+import { getCurrentIntlLocaleTag } from '../../../../i18n'
 import type { Task, TaskColorKey } from '../../types'
 import { toIsoDateStringInTimeZone } from '../../utils/time'
 
@@ -167,7 +168,7 @@ export function startOfDayFromIso(isoDate: string) {
 
 export function formatIsoDateLong(isoDate: string) {
   const date = startOfDayFromIso(isoDate)
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -177,7 +178,7 @@ export function formatIsoDateLong(isoDate: string) {
 
 export function formatIsoDateShort(isoDate: string) {
   const date = startOfDayFromIso(isoDate)
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

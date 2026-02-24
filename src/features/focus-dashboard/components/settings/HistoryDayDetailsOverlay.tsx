@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChartPie, faChevronLeft } from '@fortawesome/free-solid-svg-icons'
+import { getCurrentIntlLocaleTag, useI18n } from '../../../../i18n'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
 import type { TaskColorKey } from '../../types'
 import { classNames } from '../../utils/classNames'
@@ -8,7 +9,6 @@ import { formatSecondsCompact, formatSecondsHms, parseDurationLabelToSeconds } f
 import { HistoryStatCard } from './HistoryStatCard'
 import { HistoryTimeByTaskList } from './HistoryTimeByTaskList'
 import {
-  UNTRACKED_TIME_LABEL,
   buildPieChartBackground,
   formatIsoDateLong,
   formatIsoDateShort,
@@ -24,6 +24,44 @@ type HistoryDayDetailsOverlayProps = {
 }
 
 export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: HistoryDayDetailsOverlayProps) {
+  const { locale } = useI18n()
+  const copy =
+    locale === 'es'
+      ? {
+          back: 'Volver',
+          dayDetails: 'Detalles del dia',
+          sessions: 'sesiones',
+          tracked: 'registrado',
+          dailyDistribution: 'Distribucion diaria',
+          trackedAndUntrackedHint: 'Registrado y tiempo no registrado para este dia (24h totales).',
+          trackedLabel: 'Registrado',
+          trackedTime: 'Tiempo registrado',
+          untrackedTime: 'Tiempo no registrado',
+          sessionsLabel: 'Sesiones',
+          topTask: 'Tarea principal',
+          noData: 'Sin datos',
+          noDataForDay: 'Sin datos para este dia.',
+          dailyLog: 'Registro diario',
+          recordsForDate: 'registros para',
+        }
+      : {
+          back: 'Back',
+          dayDetails: 'Day Details',
+          sessions: 'sessions',
+          tracked: 'tracked',
+          dailyDistribution: 'Daily Distribution',
+          trackedAndUntrackedHint: 'Tracked and untracked time for this day (24h total).',
+          trackedLabel: 'Tracked',
+          trackedTime: 'Tracked Time',
+          untrackedTime: 'Untracked Time',
+          sessionsLabel: 'Sessions',
+          topTask: 'Top Task',
+          noData: 'No data',
+          noDataForDay: 'No data for this day.',
+          dailyLog: 'Daily Log',
+          recordsForDate: 'records for',
+        }
+
   return (
     <div className="fixed inset-x-0 bottom-0 top-16 z-[110] bg-[#040a16]/92 backdrop-blur-sm">
       <div className="h-full px-4 py-4 sm:px-6 sm:py-6">
@@ -36,15 +74,15 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
                 type="button"
               >
                 <FontAwesomeIcon icon={faChevronLeft} />
-                <span>Back</span>
+                <span>{copy.back}</span>
               </button>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Day Details</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.dayDetails}</p>
                 <p className="text-sm font-medium text-slate-200">{formatIsoDateLong(daySummary.dateIso)}</p>
               </div>
             </div>
             <div className="text-xs text-slate-500">
-              {daySummary.sessionCount} sessions - {formatSecondsCompact(daySummary.totalSeconds).toUpperCase()} tracked
+              {daySummary.sessionCount} {copy.sessions} - {formatSecondsCompact(daySummary.totalSeconds).toUpperCase()} {copy.tracked}
             </div>
           </div>
 
@@ -55,10 +93,10 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
                   <div className="mb-4">
                     <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       <FontAwesomeIcon icon={faChartPie} />
-                      Daily Distribution
+                      {copy.dailyDistribution}
                     </div>
                     <p className="mt-2 text-xs text-slate-400">
-                      Tracked and {UNTRACKED_TIME_LABEL.toLowerCase()} for this day (24h total).
+                      {copy.trackedAndUntrackedHint}
                     </p>
                   </div>
 
@@ -71,25 +109,25 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
                       <div className="absolute inset-[18%] rounded-full bg-[#071122] shadow-[inset_0_1px_0_rgba(148,163,184,0.05),inset_0_-14px_24px_rgba(0,0,0,0.35)]" />
                       <div className="absolute inset-0 grid place-items-center">
                         <div className="text-center">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Tracked</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{copy.trackedLabel}</p>
                           <p className="mt-1 font-mono text-xl font-semibold text-slate-100">
                             {formatSecondsCompact(dayStats.trackedSeconds).toUpperCase()}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">{dayStats.totalSessions} sessions</p>
+                          <p className="mt-1 text-xs text-slate-500">{dayStats.totalSessions} {copy.sessions}</p>
                         </div>
                       </div>
                     </div>
 
                     <div className="mt-4 grid w-full grid-cols-2 gap-2">
                       <div className="rounded-xl bg-slate-900/30 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Tracked Time</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{copy.trackedTime}</p>
                         <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
                           {formatSecondsCompact(dayStats.trackedSeconds).toUpperCase()}
                         </p>
                         <p className="text-[11px] text-slate-400">{dayStats.trackedPercentage.toFixed(1)}%</p>
                       </div>
                       <div className="rounded-xl bg-slate-900/30 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{UNTRACKED_TIME_LABEL}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{copy.untrackedTime}</p>
                         <p className="mt-1 font-mono text-sm font-semibold text-slate-100">
                           {formatSecondsCompact(dayStats.untrackedSeconds).toUpperCase()}
                         </p>
@@ -101,21 +139,21 @@ export function HistoryDayDetailsOverlay({ daySummary, dayStats, onBack }: Histo
 
                 <div className="space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <HistoryStatCard label="Tracked Time" value={formatSecondsCompact(dayStats.trackedSeconds).toUpperCase()} />
-                    <HistoryStatCard label={UNTRACKED_TIME_LABEL} value={formatSecondsCompact(dayStats.untrackedSeconds).toUpperCase()} />
-                    <HistoryStatCard label="Sessions" value={`${dayStats.totalSessions}`} />
-                    <HistoryStatCard label="Top Task" value={dayStats.topTask ? dayStats.topTask.title : 'No data'} valueClassName="text-sm" />
+                    <HistoryStatCard label={copy.trackedTime} value={formatSecondsCompact(dayStats.trackedSeconds).toUpperCase()} />
+                    <HistoryStatCard label={copy.untrackedTime} value={formatSecondsCompact(dayStats.untrackedSeconds).toUpperCase()} />
+                    <HistoryStatCard label={copy.sessionsLabel} value={`${dayStats.totalSessions}`} />
+                    <HistoryStatCard label={copy.topTask} value={dayStats.topTask ? dayStats.topTask.title : copy.noData} valueClassName="text-sm" />
                   </div>
 
-                  <HistoryTimeByTaskList slices={dayStats.slices} emptyLabel="No data for this day." />
+                  <HistoryTimeByTaskList slices={dayStats.slices} emptyLabel={copy.noDataForDay} />
                 </div>
               </div>
 
               <div className="rounded-2xl bg-slate-950/20 p-4 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.26)]">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Daily Log</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.dailyLog}</p>
                   <p className="text-xs text-slate-500">
-                    {daySummary.rows.length} records for {formatIsoDateShort(daySummary.dateIso)}
+                    {daySummary.rows.length} {copy.recordsForDate} {formatIsoDateShort(daySummary.dateIso)}
                   </p>
                 </div>
 
@@ -206,6 +244,19 @@ const historyTaskRowStyleByColor: Record<TaskColorKey, HistoryLogRowStyle> = {
 }
 
 function SelectableHistoryDayLogTable({ rows }: { rows: HistoryRecordRow[] }) {
+  const { locale } = useI18n()
+  const copy =
+    locale === 'es'
+      ? {
+          start: 'Inicio',
+          duration: 'Duracion',
+          activity: 'Actividad',
+        }
+      : {
+          start: 'Start',
+          duration: 'Duration',
+          activity: 'Activity',
+        }
   const tableSelectionRef = useRef<HTMLDivElement | null>(null)
   const [selectionAnchor, setSelectionAnchor] = useState<HistoryLogCellCoord | null>(null)
   const [selectionFocus, setSelectionFocus] = useState<HistoryLogCellCoord | null>(null)
@@ -268,7 +319,7 @@ function SelectableHistoryDayLogTable({ rows }: { rows: HistoryRecordRow[] }) {
       return
     }
 
-    const headers = ['Start', 'Duration', 'Activity']
+    const headers = [copy.start, copy.duration, copy.activity]
     const matrix = rows.map((row) => [
       formatHistoryStartTimeWithSeconds(row.start),
       formatSecondsHms(parseDurationLabelToSeconds(row.duration)),
@@ -320,7 +371,7 @@ function SelectableHistoryDayLogTable({ rows }: { rows: HistoryRecordRow[] }) {
         </colgroup>
         <thead>
           <tr>
-            {(['Start', 'Duration', 'Activity'] as const).map((label, colIndex) => (
+            {([copy.start, copy.duration, copy.activity] as const).map((label, colIndex) => (
               <th
                 className={classNames(
                   'cursor-default border border-slate-800/55 bg-[#081225]/95 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition',
@@ -432,9 +483,27 @@ function SelectableHistoryDayLogTable({ rows }: { rows: HistoryRecordRow[] }) {
 
 function formatHistoryStartTimeWithSeconds(startLabel: string) {
   const trimmed = startLabel.trim()
+  const formatter = new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  })
   const alreadyHasSeconds = trimmed.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i)
   if (alreadyHasSeconds) {
-    return trimmed.replace(/\s+/g, ' ').toUpperCase()
+    const hours12 = Number.parseInt(alreadyHasSeconds[1] ?? '', 10)
+    const minutes = Number.parseInt(alreadyHasSeconds[2] ?? '', 10)
+    const seconds = Number.parseInt(alreadyHasSeconds[3] ?? '', 10)
+    const period = (alreadyHasSeconds[4] ?? 'AM').toUpperCase()
+    if (!Number.isFinite(hours12) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return trimmed.replace(/\s+/g, ' ').toUpperCase()
+    }
+    const date = new Date()
+    let hours24 = hours12 % 12
+    if (period === 'PM') {
+      hours24 += 12
+    }
+    date.setHours(hours24, minutes, seconds, 0)
+    return formatter.format(date)
   }
 
   const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
@@ -443,7 +512,17 @@ function formatHistoryStartTimeWithSeconds(startLabel: string) {
   }
 
   const hours = match[1]
-  const minutes = match[2]
+  const minutes = Number.parseInt(match[2] ?? '', 10)
   const period = (match[3] ?? '').toUpperCase()
-  return `${hours}:${minutes}:00 ${period}`
+  const hours12 = Number.parseInt(hours ?? '', 10)
+  if (!Number.isFinite(hours12) || !Number.isFinite(minutes)) {
+    return `${hours}:${match[2]}:00 ${period}`
+  }
+  const date = new Date()
+  let hours24 = hours12 % 12
+  if (period === 'PM') {
+    hours24 += 12
+  }
+  date.setHours(hours24, minutes, 0, 0)
+  return formatter.format(date)
 }

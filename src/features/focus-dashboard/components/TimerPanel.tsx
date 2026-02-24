@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowRotateRight, faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../i18n'
 import { taskColorMap, taskIconMap } from '../constants/taskOptions'
 import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
@@ -135,10 +136,31 @@ export function TimerPanel({
   isFocusOnlyMode = false,
   isTimerComplete = false,
 }: TimerPanelProps) {
+  const { locale } = useI18n()
   const activeTaskColor = activeTask ? taskColorMap[activeTask.colorTag] : null
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
   const accents = activeTask ? timerAccentStyles[activeTask.colorTag] : timerAccentStyles.blue
-  const taskTitle = activeTask?.title ?? 'No Task Selected'
+  const copy =
+    locale === 'es'
+      ? {
+          noTaskSelected: 'Sin tarea seleccionada',
+          stopwatch: 'Cronometro',
+          timer: 'Temporizador',
+          totalTaskTime: 'Tiempo total de tarea:',
+          restartTimer: 'Reiniciar temporizador',
+          pauseFocus: 'Pausar enfoque',
+          startFocus: 'Iniciar enfoque',
+        }
+      : {
+          noTaskSelected: 'No Task Selected',
+          stopwatch: 'Stopwatch',
+          timer: 'Timer',
+          totalTaskTime: 'Total Task Time:',
+          restartTimer: 'Restart timer',
+          pauseFocus: 'Pause focus',
+          startFocus: 'Start focus',
+        }
+  const taskTitle = activeTask?.title ?? copy.noTaskSelected
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
   const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
   const playButtonGlowStyle = { '--timer-play-glow-rgb': playGlowRgb } as CSSProperties
@@ -192,7 +214,7 @@ export function TimerPanel({
                       type="button"
                     >
                       <FontAwesomeIcon icon={faStopwatch} />
-                      <span>Cronometro</span>
+                      <span>{copy.stopwatch}</span>
                     </button>
                     <button
                       className={classNames(
@@ -208,7 +230,7 @@ export function TimerPanel({
                       type="button"
                     >
                       <FontAwesomeIcon icon={faHourglassHalf} />
-                      <span>Temporizador</span>
+                      <span>{copy.timer}</span>
                     </button>
                   </div>
                 </div>
@@ -241,7 +263,7 @@ export function TimerPanel({
             )}
           >
             <p className="text-center text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">
-              Total Task Time:
+              {copy.totalTaskTime}
               <span className={classNames('ml-2 font-mono tracking-[0.16em]', accents.totalValueClassName)}>
                 {totalTaskTimeLabel}
               </span>
@@ -250,7 +272,7 @@ export function TimerPanel({
 
           <div className={classNames('flex justify-center', isFocusOnlyMode ? 'mt-5' : 'mt-3')}>
             <button
-              aria-label={showRestartAction ? 'Restart timer' : isRunning ? 'Pause focus' : 'Start focus'}
+              aria-label={showRestartAction ? copy.restartTimer : isRunning ? copy.pauseFocus : copy.startFocus}
               className={classNames(
                 'grid h-14 w-14 place-items-center rounded-full border transition hover:-translate-y-0.5 active:translate-y-0',
                 !isRunning && !showRestartAction && 'timer-play-paused-blink',

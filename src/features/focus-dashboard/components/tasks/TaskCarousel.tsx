@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type WheelEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight, faLayerGroup, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../../i18n'
 import type { Task, TaskColorKey } from '../../types'
 import { classNames } from '../../utils/classNames'
 import { TaskCard } from './TaskCard'
@@ -79,9 +80,32 @@ export function TaskCarousel({
   onEditTask,
   onDeleteTask,
 }: TaskCarouselProps) {
+  const { locale } = useI18n()
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
+  const copy =
+    locale === 'es'
+      ? {
+          focusQueue: 'Cola de enfoque',
+          taskCarousel: 'Carrusel de tareas',
+          tasks: 'tareas',
+          addTask: 'Agregar tarea',
+          scrollHorizontally: 'Desliza horizontalmente',
+          scrollLeft: 'Desplazar tareas a la izquierda',
+          scrollRight: 'Desplazar tareas a la derecha',
+          emptyState: 'Aun no hay tareas. Usa el boton Agregar tarea para crear la primera.',
+        }
+      : {
+          focusQueue: 'Focus Queue',
+          taskCarousel: 'Task Carousel',
+          tasks: 'tasks',
+          addTask: 'Add Task',
+          scrollHorizontally: 'Scroll horizontally',
+          scrollLeft: 'Scroll tasks left',
+          scrollRight: 'Scroll tasks right',
+          emptyState: 'No tasks yet. Use the Add Task button to create your first task.',
+        }
 
   const updateScrollButtons = useCallback(() => {
     const element = scrollerRef.current
@@ -162,12 +186,12 @@ export function TaskCarousel({
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Focus Queue</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{copy.focusQueue}</p>
             <div className="mt-1 flex items-center gap-2">
-              <h2 className="truncate text-sm font-semibold text-slate-100 sm:text-base">Task Carousel</h2>
+              <h2 className="truncate text-sm font-semibold text-slate-100 sm:text-base">{copy.taskCarousel}</h2>
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/60 px-2 py-0.5 text-[11px] font-medium text-slate-300">
                 <FontAwesomeIcon className="text-[10px] text-slate-400" icon={faLayerGroup} />
-                {tasks.length} tasks
+                {tasks.length} {copy.tasks}
               </span>
             </div>
           </div>
@@ -179,15 +203,15 @@ export function TaskCarousel({
               type="button"
             >
               <FontAwesomeIcon className="text-[12px]" icon={faPlus} />
-              <span className="hidden sm:inline">Add Task</span>
+              <span className="hidden sm:inline">{copy.addTask}</span>
             </button>
 
             <span className="hidden rounded-full bg-slate-900/45 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500 sm:inline-flex">
-              Scroll horizontally
+              {copy.scrollHorizontally}
             </span>
 
             <button
-              aria-label="Scroll tasks left"
+              aria-label={copy.scrollLeft}
               className={classNames(
                 'grid h-8 w-8 place-items-center rounded-xl text-sm transition',
                 canScrollLeft
@@ -202,7 +226,7 @@ export function TaskCarousel({
             </button>
 
             <button
-              aria-label="Scroll tasks right"
+              aria-label={copy.scrollRight}
               className={classNames(
                 'grid h-8 w-8 place-items-center rounded-xl text-sm transition',
                 canScrollRight
@@ -246,7 +270,7 @@ export function TaskCarousel({
             >
               {tasks.length === 0 ? (
                 <div className="grid h-36 w-full place-items-center rounded-2xl bg-slate-900/20 px-4 text-center text-sm text-slate-400 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.28)]">
-                  No tasks yet. Use the Add Task button to create your first task.
+                  {copy.emptyState}
                 </div>
               ) : (
                 tasks.map((task) => (

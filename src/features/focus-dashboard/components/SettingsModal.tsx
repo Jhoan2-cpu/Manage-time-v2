@@ -10,6 +10,7 @@ import {
   faMagnifyingGlass,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../i18n'
 import { taskColorMap, taskIconMap } from '../constants/taskOptions'
 import type { DashboardStats, LogEntry, Task } from '../types'
 import { formatSecondsCompact, parseDurationLabelToMinutes, parseDurationLabelToSeconds } from '../utils/time'
@@ -68,6 +69,7 @@ export function SettingsModal({
   onToggleAutoDetectTimeZone,
   onTimeZoneChange,
 }: SettingsModalProps) {
+  const { locale } = useI18n()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTaskFilter, setSelectedTaskFilter] = useState<string>('all')
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'today' | 'last7' | 'last30'>('all')
@@ -99,7 +101,73 @@ export function SettingsModal({
     () => entries[0]?.date ?? toIsoDateString(new Date(), effectiveTimeZone),
     [effectiveTimeZone, entries],
   )
-  const currentDayLabel = useMemo(() => formatIsoDateLong(currentDayIsoDate), [currentDayIsoDate])
+  const currentDayLabel = useMemo(() => formatIsoDateLong(currentDayIsoDate), [currentDayIsoDate, locale])
+  const copy =
+    locale === 'es'
+      ? {
+          settingsAndHistory: 'Configuracion e Historial',
+          subtitle: 'Preferencias de Velor e insights del registro diario',
+          closeSettings: 'Cerrar configuracion',
+          close: 'Cerrar',
+          history: 'Historial',
+          allDaysLogRecords: 'Registros del registro diario de todos los dias',
+          allDaysSummary: 'Resumen por dia (vista 24h). Abre un dia para inspeccionar las sesiones detalladas.',
+          matchingDays: 'dias coincidentes',
+          searchPlaceholder: 'Buscar por fecha o tarea...',
+          allTasks: 'Todas las tareas',
+          allDates: 'Todas las fechas',
+          today: 'Hoy',
+          last7Days: 'Ultimos 7 dias',
+          last30Days: 'Ultimos 30 dias',
+          date: 'Fecha',
+          activities: 'Actividades',
+          trackedTime: 'Tiempo registrado',
+          details: 'Detalles',
+          sessions: 'sesiones',
+          noTaskIcons: 'Sin iconos de tarea',
+          taskTypes: 'tipos de tarea',
+          daySuffix: '% dia',
+          noRecordsMatch: 'No hay registros que coincidan con los filtros actuales.',
+          showing: 'Mostrando',
+          of: 'de',
+          days: 'dias',
+          prev: 'Anterior',
+          next: 'Siguiente',
+          page: 'Pagina',
+          otherActivity: 'Otra actividad',
+        }
+      : {
+          settingsAndHistory: 'Settings & History',
+          subtitle: 'Velor preferences and Daily Log insights',
+          closeSettings: 'Close settings',
+          close: 'Close',
+          history: 'History',
+          allDaysLogRecords: 'All Days Log Records',
+          allDaysSummary: 'Summary by day (24h view). Open a day to inspect the detailed sessions performed.',
+          matchingDays: 'matching days',
+          searchPlaceholder: 'Search by date or task...',
+          allTasks: 'All tasks',
+          allDates: 'All dates',
+          today: 'Today',
+          last7Days: 'Last 7 days',
+          last30Days: 'Last 30 days',
+          date: 'Date',
+          activities: 'Activities',
+          trackedTime: 'Tracked Time',
+          details: 'Details',
+          sessions: 'sessions',
+          noTaskIcons: 'No task icons',
+          taskTypes: 'task types',
+          daySuffix: '% day',
+          noRecordsMatch: 'No records match the current filters.',
+          showing: 'Showing',
+          of: 'of',
+          days: 'days',
+          prev: 'Prev',
+          next: 'Next',
+          page: 'Page',
+          otherActivity: 'Other activity',
+        }
   const taskMap = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks])
 
   const currentDayRows = useMemo<HistoryRecordRow[]>(
@@ -114,13 +182,13 @@ export function SettingsModal({
           seconds: parseDurationLabelToSeconds(entry.duration),
           minutes: parseDurationLabelToMinutes(entry.duration),
           taskId: task?.id,
-          taskTitle: task?.title ?? entry.activity ?? 'Other activity',
+          taskTitle: task?.title ?? entry.activity ?? copy.otherActivity,
           taskColorTag: task?.colorTag,
           taskIconTag: task?.iconTag,
-          activityLabel: entry.activity ?? task?.title ?? 'Other activity',
+          activityLabel: entry.activity ?? task?.title ?? copy.otherActivity,
         }
       }),
-    [currentDayIsoDate, entries, taskMap],
+    [copy.otherActivity, currentDayIsoDate, entries, taskMap],
   )
 
   const history = useMemo(() => buildDayHistoryStatsFromRows(currentDayRows), [currentDayRows])
@@ -140,10 +208,10 @@ export function SettingsModal({
           seconds: parseDurationLabelToSeconds(entry.duration),
           minutes: parseDurationLabelToMinutes(entry.duration),
           taskId: task?.id,
-          taskTitle: task?.title ?? entry.activity ?? 'Other activity',
+          taskTitle: task?.title ?? entry.activity ?? copy.otherActivity,
           taskColorTag: task?.colorTag,
           taskIconTag: task?.iconTag,
-          activityLabel: entry.activity ?? task?.title ?? 'Other activity',
+          activityLabel: entry.activity ?? task?.title ?? copy.otherActivity,
         }
       })
       .sort((a, b) => {
@@ -152,7 +220,7 @@ export function SettingsModal({
         }
         return a.id < b.id ? 1 : -1
       })
-  }, [currentDayIsoDate, historyEntries, tasks])
+  }, [copy.otherActivity, currentDayIsoDate, historyEntries, tasks])
 
   const historyDaySummaries = useMemo<HistoryDaySummary[]>(() => {
     const byDate = new Map<string, HistoryDaySummary>()
@@ -297,20 +365,20 @@ export function SettingsModal({
             </span>
             <div className="min-w-0">
               <h2 className="truncate text-lg font-semibold tracking-tight text-slate-100 sm:text-xl">
-                Settings & History
+                {copy.settingsAndHistory}
               </h2>
-              <p className="truncate text-xs text-slate-500">Velor preferences and Daily Log insights</p>
+              <p className="truncate text-xs text-slate-500">{copy.subtitle}</p>
             </div>
           </div>
 
           <button
-            aria-label="Close settings"
+            aria-label={copy.closeSettings}
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900/60 px-3 py-2 text-sm text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.45)] transition hover:bg-slate-800/80 hover:text-slate-100"
             onClick={onClose}
             type="button"
           >
             <FontAwesomeIcon icon={faXmark} />
-            <span className="hidden sm:inline">Close</span>
+            <span className="hidden sm:inline">{copy.close}</span>
           </button>
         </header>
 
@@ -334,7 +402,7 @@ export function SettingsModal({
             <section className="relative rounded-2xl bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_44%),linear-gradient(180deg,rgba(8,16,34,0.93),rgba(5,12,25,0.96))] p-4 shadow-[0_20px_55px_rgba(2,8,20,0.32),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-5">
               <div className="mb-5 flex items-center gap-2">
                 <FontAwesomeIcon className="text-slate-400" icon={faChartPie} />
-                <h3 className="text-base font-semibold text-slate-100">History</h3>
+                <h3 className="text-base font-semibold text-slate-100">{copy.history}</h3>
               </div>
 
               <HistoryOverviewPanel
@@ -347,13 +415,13 @@ export function SettingsModal({
               <div className="mt-4 rounded-2xl bg-slate-950/20 p-4 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.26)]">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">All Days Log Records</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.allDaysLogRecords}</p>
                     <p className="mt-1 text-sm text-slate-400">
-                      Summary by day (24h view). Open a day to inspect the detailed sessions performed.
+                      {copy.allDaysSummary}
                     </p>
                   </div>
                   <div className="text-xs text-slate-500">
-                    {historyPagination.totalItems} matching days
+                    {historyPagination.totalItems} {copy.matchingDays}
                   </div>
                 </div>
 
@@ -365,7 +433,7 @@ export function SettingsModal({
                     <input
                       className="w-full rounded-xl bg-slate-900/35 py-2 pl-9 pr-3 text-sm text-slate-100 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.35)] outline-none transition placeholder:text-slate-500 focus:shadow-[inset_0_0_0_1px_rgba(59,130,246,0.45)]"
                       onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder="Search by date or task..."
+                      placeholder={copy.searchPlaceholder}
                       value={searchQuery}
                     />
                   </label>
@@ -378,7 +446,7 @@ export function SettingsModal({
                       value={selectedTaskFilter}
                     >
                       <option className="bg-slate-900" value="all">
-                        All tasks
+                        {copy.allTasks}
                       </option>
                       {tasks.map((task) => (
                         <option className="bg-slate-900" key={task.id} value={task.id}>
@@ -396,16 +464,16 @@ export function SettingsModal({
                       value={dateRangeFilter}
                     >
                       <option className="bg-slate-900" value="all">
-                        All dates
+                        {copy.allDates}
                       </option>
                       <option className="bg-slate-900" value="today">
-                        Today
+                        {copy.today}
                       </option>
                       <option className="bg-slate-900" value="last7">
-                        Last 7 days
+                        {copy.last7Days}
                       </option>
                       <option className="bg-slate-900" value="last30">
-                        Last 30 days
+                        {copy.last30Days}
                       </option>
                     </select>
                   </label>
@@ -413,10 +481,10 @@ export function SettingsModal({
 
                 <div className="mt-4 overflow-hidden rounded-2xl shadow-[inset_0_0_0_1px_rgba(51,65,85,0.24)]">
                   <div className="hidden grid-cols-[170px_minmax(0,1fr)_140px_140px] gap-3 bg-slate-900/35 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 md:grid">
-                    <span>Date</span>
-                    <span>Activities</span>
-                    <span>Tracked Time</span>
-                    <span>Details</span>
+                    <span>{copy.date}</span>
+                    <span>{copy.activities}</span>
+                    <span>{copy.trackedTime}</span>
+                    <span>{copy.details}</span>
                   </div>
 
                   <div className="divide-y divide-slate-800/70 bg-slate-950/15">
@@ -444,17 +512,17 @@ export function SettingsModal({
                               <div className="min-w-0">
                                 <div className="flex items-center justify-between gap-2 md:block">
                                   <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 md:hidden">
-                                    Date
+                                    {copy.date}
                                   </span>
                                   <p className="text-sm font-medium text-slate-200">{formatIsoDateShort(day.dateIso)}</p>
                                 </div>
-                                <p className="mt-1 text-xs text-slate-500">{day.sessionCount} sessions</p>
+                                <p className="mt-1 text-xs text-slate-500">{day.sessionCount} {copy.sessions}</p>
                               </div>
 
                               <div className="min-w-0">
                                 <div className="flex items-center justify-between gap-2 md:hidden">
                                   <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                    Activities
+                                    {copy.activities}
                                   </span>
                                 </div>
                                 <div className="mt-1 flex items-center gap-2 md:mt-0">
@@ -478,7 +546,7 @@ export function SettingsModal({
                                         )
                                       })
                                     ) : (
-                                      <span className="text-xs text-slate-500">No task icons</span>
+                                      <span className="text-xs text-slate-500">{copy.noTaskIcons}</span>
                                     )}
                                     {hiddenIconsCount > 0 ? (
                                       <span className="-ml-1 inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-800/80 px-1.5 text-[10px] text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.35)]">
@@ -486,20 +554,20 @@ export function SettingsModal({
                                       </span>
                                     ) : null}
                                   </div>
-                                  <span className="truncate text-xs text-slate-500">{day.taskIds.length} task types</span>
+                                  <span className="truncate text-xs text-slate-500">{day.taskIds.length} {copy.taskTypes}</span>
                                 </div>
                               </div>
 
                               <div>
                                 <div className="flex items-center justify-between gap-2 md:block">
                                   <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 md:hidden">
-                                    Tracked Time
+                                    {copy.trackedTime}
                                   </span>
                                   <span className="inline-flex items-center rounded-md bg-slate-900/45 px-2 py-1 font-mono text-xs text-slate-200 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.3)]">
                                     {formatSecondsCompact(day.totalSeconds).toUpperCase()}
                                   </span>
                                 </div>
-                                <p className="mt-1 text-xs text-slate-500">{((day.totalSeconds / DAY_TOTAL_SECONDS) * 100).toFixed(1)}% day</p>
+                                <p className="mt-1 text-xs text-slate-500">{((day.totalSeconds / DAY_TOTAL_SECONDS) * 100).toFixed(1)}{copy.daySuffix}</p>
                               </div>
 
                               <div className="flex justify-end md:justify-start">
@@ -509,7 +577,7 @@ export function SettingsModal({
                                   type="button"
                                 >
                                   <FontAwesomeIcon className="text-[11px]" icon={faChevronRight} />
-                                  <span>Details</span>
+                                  <span>{copy.details}</span>
                                 </button>
                               </div>
                             </div>
@@ -518,7 +586,7 @@ export function SettingsModal({
                       })
                     ) : (
                       <div className="px-4 py-8 text-center text-sm text-slate-400">
-                        No records match the current filters.
+                        {copy.noRecordsMatch}
                       </div>
                     )}
                   </div>
@@ -526,13 +594,13 @@ export function SettingsModal({
 
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-slate-500">
-                    Showing{' '}
+                    {copy.showing}{' '}
                     <span className="font-medium text-slate-300">
                       {historyPagination.totalItems === 0 ? 0 : historyPagination.startIndex + 1}
                     </span>
                     {' - '}
-                    <span className="font-medium text-slate-300">{historyPagination.endIndex}</span> of{' '}
-                    <span className="font-medium text-slate-300">{historyPagination.totalItems}</span> days
+                    <span className="font-medium text-slate-300">{historyPagination.endIndex}</span> {copy.of}{' '}
+                    <span className="font-medium text-slate-300">{historyPagination.totalItems}</span> {copy.days}
                   </p>
 
                   <div className="flex items-center gap-2">
@@ -543,11 +611,11 @@ export function SettingsModal({
                       type="button"
                     >
                       <FontAwesomeIcon icon={faChevronLeft} />
-                      Prev
+                      {copy.prev}
                     </button>
 
                     <span className="rounded-lg bg-slate-900/30 px-3 py-2 text-sm text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.25)]">
-                      Page {historyPagination.currentPage} / {historyPagination.totalPages}
+                      {copy.page} {historyPagination.currentPage} / {historyPagination.totalPages}
                     </span>
 
                     <button
@@ -556,7 +624,7 @@ export function SettingsModal({
                       onClick={() => setHistoryPage((page) => Math.min(historyPagination.totalPages, page + 1))}
                       type="button"
                     >
-                      Next
+                      {copy.next}
                       <FontAwesomeIcon icon={faChevronRight} />
                     </button>
                   </div>

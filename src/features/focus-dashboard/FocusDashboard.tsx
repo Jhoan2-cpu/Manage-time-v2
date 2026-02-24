@@ -23,6 +23,7 @@ import { useCurrentTime } from './hooks/useCurrentTime'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { classNames } from './utils/classNames'
 import { formatSecondsHms, getBrowserTimeZone, getSupportedTimeZones, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
+import { getCurrentIntlLocaleTag, useI18n } from '../../i18n'
 import {
   getBackgroundMusicVolume,
   getUiInteractionSfxEnabled,
@@ -54,6 +55,7 @@ type FocusDashboardProps = {
 }
 
 export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboardProps = {}) {
+  const { locale } = useI18n()
   const [taskList, setTaskList] = useState<Task[]>(tasks)
   const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(initialLogEntries)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
@@ -112,6 +114,30 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     startLabel: string
     dateKey: string
   } | null>(null)
+  const copy =
+    locale === 'es'
+      ? {
+          exitFocusOnlyMode: 'Salir del modo solo enfoque',
+          exitFocusOnlyShort: 'Salir de Solo enfoque',
+          silenceTimerAlarm: 'Silenciar alarma del temporizador',
+          silenceAlarmShort: 'Silenciar alarma',
+          closeDailyLogOverlay: 'Cerrar overlay del registro diario',
+          closeDailyLog: 'Cerrar registro diario',
+          openDailyLog: 'Abrir registro diario',
+          untrackedTime: 'Tiempo no registrado',
+          scheduledPrefix: 'Programado',
+        }
+      : {
+          exitFocusOnlyMode: 'Exit Focus Only mode',
+          exitFocusOnlyShort: 'Exit Focus Only',
+          silenceTimerAlarm: 'Silence timer alarm',
+          silenceAlarmShort: 'Silence Alarm',
+          closeDailyLogOverlay: 'Close Daily Log overlay',
+          closeDailyLog: 'Close Daily Log',
+          openDailyLog: 'Open Daily Log',
+          untrackedTime: 'Untracked Time',
+          scheduledPrefix: 'Scheduled',
+        }
 
   const browserTimeZone = useMemo(() => getBrowserTimeZone(), [])
   const supportedTimeZones = useMemo(() => getSupportedTimeZones(), [])
@@ -123,6 +149,14 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const effectiveTimeZone = autoDetectTimeZone ? browserTimeZone : selectedTimeZone
 
   const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(effectiveTimeZone)
+  const localizedDailyLogEntries = useMemo(
+    () => localizeStaticLogActivities(dailyLogEntries, copy.untrackedTime),
+    [copy.untrackedTime, dailyLogEntries],
+  )
+  const localizedHistoryEntries = useMemo(
+    () => localizeStaticLogActivities(historyLogEntries, copy.untrackedTime),
+    [copy.untrackedTime],
+  )
   const sessionCountByTaskId = useMemo(() => {
     return dailyLogEntries.reduce<Record<string, number>>((acc, entry) => {
       if (!entry.taskId) {
@@ -146,6 +180,11 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const activeTask = useMemo(() => {
     return taskList.find((task) => task.state === 'active') ?? taskList[0] ?? null
   }, [taskList])
+  const localizedTaskList = useMemo(() => taskList.map((task) => localizeStaticTaskTitle(task, locale)), [locale, taskList])
+  const activeTaskDisplay = useMemo(
+    () => (activeTask ? localizeStaticTaskTitle(activeTask, locale) : null),
+    [activeTask, locale],
+  )
   const activeTaskHasLiveSession = Boolean(activeTask && activeFocusSessionMeta?.taskId === activeTask.id)
   const activeWorkspaceAccentColor = activeTask?.colorTag ?? 'blue'
   const workspaceAccentRgb = workspaceAccentRgbByColor[activeWorkspaceAccentColor]
@@ -168,7 +207,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     : '00:00:00'
   const carouselTaskList = useMemo(
     () =>
-      taskList.map((task) =>
+      localizedTaskList.map((task) =>
         activeTask && task.id === activeTask.id
           ? {
               ...task,
@@ -176,21 +215,21 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
             }
           : task,
       ),
-    [activeTask, taskList, timerDisplayLabel],
+    [activeTask, localizedTaskList, timerDisplayLabel],
   )
   const sidebarLogEntries = activeUntrackedSession
     ? sortLogEntriesByTime([
-        ...dailyLogEntries,
+        ...localizedDailyLogEntries,
         {
           id: 'log-live-untracked',
           date: activeUntrackedSession.dateKey,
           start: activeUntrackedSession.startLabel,
           duration: formatLogDurationFromSeconds(Math.floor((Date.now() - activeUntrackedSession.startedAtMs) / 1000)),
-          activity: 'Untracked Time',
+          activity: copy.untrackedTime,
           tone: 'faded',
         },
       ])
-    : dailyLogEntries
+    : localizedDailyLogEntries
   useEffect(() => {
     return subscribeBackgroundMusicState(setIsBackgroundMusicPlaying)
   }, [])
@@ -298,7 +337,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       return
     }
 
-    const createdAtLabel = new Intl.DateTimeFormat('en-US', {
+    const createdAtLabel = new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
       hour: 'numeric',
       minute: '2-digit',
     }).format(new Date())
@@ -308,7 +347,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         id: `task-${crypto.randomUUID()}`,
         title,
         details: details.trim(),
-        statusText: `Scheduled: ${createdAtLabel}`,
+        statusText: `${copy.scheduledPrefix}: ${createdAtLabel}`,
         duration: '00:00:00',
         state: 'scheduled',
         colorTag,
@@ -444,7 +483,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         date: currentSession.dateKey,
         start: currentSession.startLabel,
         duration: formatLogDurationFromSeconds(elapsedSeconds),
-        activity: 'Untracked Time',
+        activity: copy.untrackedTime,
         tone: 'faded',
       }
 
@@ -609,7 +648,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
           </div>
 
           <button
-            aria-label="Exit Focus Only mode"
+            aria-label={copy.exitFocusOnlyMode}
             className="focus-only-controls-enter focus-only-mobile-toggle-morph absolute right-4 top-4 z-20 inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-[#0a1427]/90 px-2.5 py-2 text-sm text-slate-200 shadow-[0_12px_30px_rgba(1,8,22,0.45)] transition hover:border-blue-500/40 hover:text-slate-100 sm:right-5 sm:top-5 sm:px-3"
             onClick={handleExitFocusOnlyMode}
             type="button"
@@ -621,7 +660,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
             <span className="hidden sm:grid sm:h-4 sm:w-4 sm:place-items-center" aria-hidden="true">
               <FontAwesomeIcon className="text-[12px]" icon={faXmark} />
             </span>
-            <span className="hidden font-medium sm:inline">Exit Focus Only</span>
+            <span className="hidden font-medium sm:inline">{copy.exitFocusOnlyShort}</span>
           </button>
 
           <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-4 sm:px-8 sm:py-8">
@@ -642,21 +681,21 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
           {isTimerAlarmPlaying ? (
             <button
-              aria-label="Silence timer alarm"
+              aria-label={copy.silenceTimerAlarm}
               className="timer-alarm-stop-glow fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-rose-300/55 bg-rose-500/18 px-3 py-2 text-sm text-rose-50 ring-1 ring-rose-300/45 backdrop-blur-md transition hover:border-rose-200/70 hover:bg-rose-500/24 hover:ring-rose-200/60"
               onClick={stopTimerEndAlarm}
               type="button"
             >
               <FontAwesomeIcon className="text-[12px] drop-shadow-[0_0_8px_rgba(251,113,133,0.35)]" icon={faBellSlash} />
-              <span className="hidden font-medium sm:inline">Silence Alarm</span>
+              <span className="hidden font-medium sm:inline">{copy.silenceAlarmShort}</span>
             </button>
           ) : null}
         </section>
       ) : (
         <>
           {isDailyLogOpen ? (
-            <button
-              aria-label="Close Daily Log overlay"
+              <button
+                aria-label={copy.closeDailyLogOverlay}
               className="fixed inset-0 top-16 z-30 bg-[#020814]/55 backdrop-blur-[2px] xl:hidden"
               onClick={handleToggleDailyLog}
               type="button"
@@ -667,7 +706,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
             <DailyLogPanel
               entries={sidebarLogEntries}
               isOpen={isDailyLogOpen}
-              tasks={taskList}
+              tasks={localizedTaskList}
               totalTracked={dashboardStats.totalTracked}
             />
 
@@ -698,7 +737,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
                     tasks={carouselTaskList}
                   />
                   <TimerPanel
-                    activeTask={activeTask}
+                    activeTask={activeTaskDisplay}
                     canUseTimerMode={Boolean(activeTaskTargetSeconds)}
                     isRunning={isFocusRunning}
                     isTimerComplete={isTimerComplete}
@@ -716,7 +755,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
           <button
             key={`daily-log-toggle-mobile-${dailyLogTogglePulseKey}`}
-            aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
+            aria-label={isDailyLogOpen ? copy.closeDailyLog : copy.openDailyLog}
             className={classNames(
               'fixed bottom-4 left-4 z-40 grid h-11 w-11 place-items-center rounded-full text-slate-200 transition xl:hidden',
               isDailyLogOpen
@@ -735,14 +774,14 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
           <button
             key={`daily-log-toggle-desktop-${dailyLogTogglePulseKey}`}
-            aria-label={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
+            aria-label={isDailyLogOpen ? copy.closeDailyLog : copy.openDailyLog}
             className={classNames(
               'fixed top-1/2 z-40 hidden h-12 w-9 -translate-y-1/2 place-items-center rounded-r-xl border border-l-0 border-slate-700/80 bg-[#0a1427]/95 text-slate-300 shadow-[0_10px_30px_rgba(1,8,22,0.45)] transition-[left,border-color,color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-blue-500/40 hover:text-blue-300 xl:grid',
               dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
             )}
             onClick={handleToggleDailyLog}
             style={{ left: isDailyLogOpen ? 420 : 0 }}
-            title={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
+            title={isDailyLogOpen ? copy.closeDailyLog : copy.openDailyLog}
             type="button"
           >
             <span className="flex flex-col items-center gap-0.5">
@@ -753,13 +792,13 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
           {isTimerAlarmPlaying ? (
             <button
-              aria-label="Silence timer alarm"
+              aria-label={copy.silenceTimerAlarm}
               className="timer-alarm-stop-glow fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-rose-300/55 bg-rose-500/18 px-3 py-2 text-sm text-rose-50 ring-1 ring-rose-300/45 backdrop-blur-md transition hover:border-rose-200/70 hover:bg-rose-500/24 hover:ring-rose-200/60"
               onClick={stopTimerEndAlarm}
               type="button"
             >
               <FontAwesomeIcon className="text-[12px] drop-shadow-[0_0_8px_rgba(251,113,133,0.35)]" icon={faBellSlash} />
-              <span className="hidden font-medium sm:inline">Silence Alarm</span>
+              <span className="hidden font-medium sm:inline">{copy.silenceAlarmShort}</span>
             </button>
           ) : null}
         </>
@@ -776,12 +815,12 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         isOpen={taskPendingDelete !== null}
         onClose={handleCloseDeleteTaskModal}
         onConfirm={handleConfirmDeleteTask}
-        task={taskPendingDelete}
+        task={taskPendingDelete ? localizeStaticTaskTitle(taskPendingDelete, locale) : null}
       />
       <SwitchTaskConfirmModal
-        currentTask={activeTask}
+        currentTask={activeTaskDisplay}
         isOpen={taskPendingSwitchConfirm !== null}
-        nextTask={taskPendingSwitchConfirm}
+        nextTask={taskPendingSwitchConfirm ? localizeStaticTaskTitle(taskPendingSwitchConfirm, locale) : null}
         onClose={handleCloseSwitchTaskConfirm}
         onConfirm={handleConfirmSwitchTask}
       />
@@ -796,8 +835,8 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         backgroundMusicVolume={backgroundMusicVolume}
         dashboardStats={dashboardStats}
         effectiveTimeZone={effectiveTimeZone}
-        entries={dailyLogEntries}
-        historyEntries={historyLogEntries}
+        entries={localizedDailyLogEntries}
+        historyEntries={localizedHistoryEntries}
         isOpen={isSettingsModalOpen}
         onBackgroundMusicVolumeChange={handleBackgroundMusicVolumeChange}
         onClose={handleCloseSettings}
@@ -807,7 +846,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         onToggleUiInteractionSfx={handleToggleUiInteractionSfx}
         requireTaskSwitchConfirmation={requireTaskSwitchConfirmation}
         selectedTimeZone={selectedTimeZone}
-        tasks={taskList}
+        tasks={localizedTaskList}
         timeZoneOptions={timeZoneOptions}
         uiInteractionSfxEnabled={uiInteractionSfxEnabled}
       />
@@ -816,7 +855,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 }
 
 function formatLogStartTime(date: Date, timeZone?: string) {
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
     timeZone,
     hour: 'numeric',
     minute: '2-digit',
@@ -836,6 +875,68 @@ function formatLocalDateKey(date: Date, timeZone?: string) {
 
 function formatLogDurationFromSeconds(totalSeconds: number) {
   return formatSecondsHms(totalSeconds)
+}
+
+function localizeStaticLogActivities(entries: LogEntry[], untrackedLabel: string) {
+  return entries.map((entry) => {
+    if (!entry.activity) {
+      return entry
+    }
+
+    if (!isStaticUntrackedActivity(entry.activity)) {
+      return entry
+    }
+
+    if (entry.activity === untrackedLabel) {
+      return entry
+    }
+
+    return {
+      ...entry,
+      activity: untrackedLabel,
+    }
+  })
+}
+
+function isStaticUntrackedActivity(activity: string) {
+  const normalized = activity.trim().toLowerCase()
+  return normalized === 'untracked time' || normalized === 'tiempo no registrado'
+}
+
+function localizeStaticTaskTitle(task: Task, locale: 'es' | 'en'): Task {
+  const titleByTaskId: Partial<Record<Task['id'], { es: string; en: string }>> = {
+    'task-q3-report': {
+      es: 'Redaccion de reporte Q3',
+      en: 'Q3 Report Writing',
+    },
+    'task-email-cleanup': {
+      es: 'Limpieza de correos',
+      en: 'Email Cleanup',
+    },
+    'task-design-review': {
+      es: 'Revision de diseno',
+      en: 'Design Review',
+    },
+  }
+
+  const localized = titleByTaskId[task.id]
+  if (!localized) {
+    return task
+  }
+
+  if (task.title !== localized.es && task.title !== localized.en) {
+    return task
+  }
+
+  const nextTitle = localized[locale]
+  if (task.title === nextTitle) {
+    return task
+  }
+
+  return {
+    ...task,
+    title: nextTitle,
+  }
 }
 
 function sortLogEntriesByTime(entries: LogEntry[]) {

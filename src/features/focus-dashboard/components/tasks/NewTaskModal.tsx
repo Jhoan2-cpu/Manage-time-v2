@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faClock, faHourglassHalf, faTrashCan, faXmark } from '@fortawesome/free-solid-svg-icons'
-import { taskColorOptions, taskIconOptions } from '../../constants/taskOptions'
+import { useI18n } from '../../../../i18n'
+import { getTaskColorOptionLabel, getTaskIconOptionLabel, taskColorOptions, taskIconOptions } from '../../constants/taskOptions'
 import type { Task, TaskColorKey, TaskIconKey } from '../../types'
 import { classNames } from '../../utils/classNames'
 
@@ -71,6 +72,7 @@ export function NewTaskModal({
   editingTask = null,
   onRequestDeleteTask,
 }: NewTaskModalProps) {
+  const { locale } = useI18n()
   const titleId = useId()
   const targetDurationHoursId = useId()
   const alarmHourId = useId()
@@ -170,6 +172,67 @@ export function NewTaskModal({
   if (!isOpen) {
     return null
   }
+
+  const copy =
+    locale === 'es'
+      ? {
+          editTask: 'Editar tarea',
+          newTask: 'Nueva tarea',
+          closeModal: 'Cerrar modal',
+          taskLabel: 'Tarea',
+          taskPlaceholder: 'p. ej. Estudiar algebra',
+          taskHint: 'Nombre simple de la tarea.',
+          timerOptional: 'Temporizador (Opcional)',
+          countdownTime: 'Tiempo de cuenta regresiva',
+          countdownHint: 'Define duracion objetivo para modo temporizador',
+          timerMinutesAria: 'Minutos del temporizador',
+          timerSecondsAria: 'Segundos del temporizador',
+          countdownFooterHint: 'Horas, minutos y segundos para modo temporizador (ej. 00:25:30).',
+          alarmOptional: 'Alarma (Opcional)',
+          startAlarm: 'Alarma de inicio',
+          alarmHint: 'Hora de recordatorio opcional',
+          alarmMinutesAria: 'Minutos de alarma',
+          alarmSecondsAria: 'Segundos de alarma',
+          alarmPeriodAria: 'Periodo de alarma',
+          alarmFooterHint: 'Hora sugerida para iniciar esta tarea.',
+          icon: 'Icono',
+          colorTag: 'Color',
+          chooseIcon: 'Elegir icono de {label}',
+          chooseColor: 'Elegir color {label}',
+          delete: 'Eliminar',
+          cancel: 'Cancelar',
+          saveChanges: 'Guardar cambios',
+          createTask: 'Crear tarea',
+        }
+      : {
+          editTask: 'Edit Task',
+          newTask: 'New Task',
+          closeModal: 'Close modal',
+          taskLabel: 'Task',
+          taskPlaceholder: 'e.g. Study algebra',
+          taskHint: 'Simple task name.',
+          timerOptional: 'Timer (Optional)',
+          countdownTime: 'Countdown Time',
+          countdownHint: 'Set target duration for timer mode',
+          timerMinutesAria: 'Timer minutes',
+          timerSecondsAria: 'Timer seconds',
+          countdownFooterHint: 'Hours, minutes and seconds for countdown mode (e.g. 00:25:30).',
+          alarmOptional: 'Alarm (Optional)',
+          startAlarm: 'Start Alarm',
+          alarmHint: 'Optional reminder time',
+          alarmMinutesAria: 'Alarm minutes',
+          alarmSecondsAria: 'Alarm seconds',
+          alarmPeriodAria: 'Alarm period',
+          alarmFooterHint: 'Suggested time to start this task.',
+          icon: 'Icon',
+          colorTag: 'Color Tag',
+          chooseIcon: 'Choose {label} icon',
+          chooseColor: 'Choose {label} color',
+          delete: 'Delete',
+          cancel: 'Cancel',
+          saveChanges: 'Save Changes',
+          createTask: 'Create Task',
+        }
 
   const isEditing = editingTask !== null
   const canSubmit = title.trim().length > 0
@@ -297,10 +360,10 @@ export function NewTaskModal({
         <form className="relative z-10 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
           <header className="flex items-center justify-between border-b border-slate-800/80 px-6 py-5">
             <h2 className="text-2xl font-semibold tracking-tight text-slate-100" id="new-task-modal-title">
-              {isEditing ? 'Edit Task' : 'New Task'}
+              {isEditing ? copy.editTask : copy.newTask}
             </h2>
             <button
-              aria-label="Close modal"
+              aria-label={copy.closeModal}
               className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
               onClick={onClose}
               type="button"
@@ -312,17 +375,17 @@ export function NewTaskModal({
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" htmlFor={titleId}>
-                Tarea
+                {copy.taskLabel}
               </label>
               <input
                 autoFocus
                 className={fieldClassName}
                 id={titleId}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="e.g. Estudiar algebra"
+                placeholder={copy.taskPlaceholder}
                 value={title}
               />
-              <p className="mt-1 text-[11px] text-slate-500">Nombre simple de la tarea.</p>
+              <p className="mt-1 text-[11px] text-slate-500">{copy.taskHint}</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -331,7 +394,7 @@ export function NewTaskModal({
                   className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"
                   htmlFor={targetDurationHoursId}
                 >
-                  Timer (Optional)
+                  {copy.timerOptional}
                 </label>
                 <div
                   className="relative overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,rgba(2,6,23,0.26),rgba(2,6,23,0.12))] p-2.5"
@@ -357,8 +420,8 @@ export function NewTaskModal({
                       <FontAwesomeIcon icon={faHourglassHalf} />
                     </span>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Countdown Time</p>
-                      <p className="text-[11px] text-slate-500">Set target duration for timer mode</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">{copy.countdownTime}</p>
+                      <p className="text-[11px] text-slate-500">{copy.countdownHint}</p>
                     </div>
                   </div>
 
@@ -379,7 +442,7 @@ export function NewTaskModal({
                     <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
                     <div className={timeUnitFieldClassName}>
                       <input
-                        aria-label="Timer minutes"
+                        aria-label={copy.timerMinutesAria}
                         className={compactTimeFieldClassName}
                         inputMode="numeric"
                         maxLength={2}
@@ -393,7 +456,7 @@ export function NewTaskModal({
                     <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
                     <div className={timeUnitFieldClassName}>
                       <input
-                        aria-label="Timer seconds"
+                        aria-label={copy.timerSecondsAria}
                         className={compactTimeFieldClassName}
                         inputMode="numeric"
                         maxLength={2}
@@ -406,7 +469,7 @@ export function NewTaskModal({
                     </div>
                   </div>
                 </div>
-                <p className="mt-2 text-[11px] leading-4 text-slate-500">Hours, minutes and seconds for countdown mode (e.g. 00:25:30).</p>
+                <p className="mt-2 text-[11px] leading-4 text-slate-500">{copy.countdownFooterHint}</p>
               </div>
 
               <div>
@@ -414,7 +477,7 @@ export function NewTaskModal({
                   className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"
                   htmlFor={alarmHourId}
                 >
-                  Alarm (Optional)
+                  {copy.alarmOptional}
                 </label>
                 <div
                   className="relative overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,rgba(2,6,23,0.26),rgba(2,6,23,0.12))] p-2.5"
@@ -441,8 +504,8 @@ export function NewTaskModal({
                       <FontAwesomeIcon icon={faClock} />
                     </span>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Start Alarm</p>
-                      <p className="text-[11px] text-slate-500">Optional reminder time</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">{copy.startAlarm}</p>
+                      <p className="text-[11px] text-slate-500">{copy.alarmHint}</p>
                     </div>
                   </div>
 
@@ -463,7 +526,7 @@ export function NewTaskModal({
                     <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
                     <div className={timeUnitFieldClassName}>
                       <input
-                        aria-label="Alarm minutes"
+                        aria-label={copy.alarmMinutesAria}
                         className={compactTimeFieldClassName}
                         inputMode="numeric"
                         maxLength={2}
@@ -477,7 +540,7 @@ export function NewTaskModal({
                     <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
                     <div className={timeUnitFieldClassName}>
                       <input
-                        aria-label="Alarm seconds"
+                        aria-label={copy.alarmSecondsAria}
                         className={compactTimeFieldClassName}
                         inputMode="numeric"
                         maxLength={2}
@@ -490,7 +553,7 @@ export function NewTaskModal({
                     </div>
                     <div className="flex flex-col items-center justify-center px-0.5 py-0">
                       <select
-                        aria-label="Alarm period"
+                        aria-label={copy.alarmPeriodAria}
                         className={classNames(compactTimeSelectClassName, 'w-[4.2rem]')}
                         onChange={(event) => setAlarmPeriod(event.target.value as 'AM' | 'PM')}
                         value={alarmPeriod}
@@ -502,19 +565,20 @@ export function NewTaskModal({
                     </div>
                   </div>
                 </div>
-                <p className="mt-2 text-[11px] leading-4 text-slate-500">Suggested time to start this task.</p>
+                <p className="mt-2 text-[11px] leading-4 text-slate-500">{copy.alarmFooterHint}</p>
               </div>
             </div>
 
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Icon</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.icon}</p>
               <div className="flex flex-wrap gap-2.5">
                 {taskIconOptions.map((option) => {
                   const isSelected = option.id === iconTag
+                  const optionLabel = getTaskIconOptionLabel(option.id, locale)
 
                   return (
                     <button
-                      aria-label={`Choose ${option.label} icon`}
+                      aria-label={copy.chooseIcon.replace('{label}', optionLabel)}
                       className={classNames(
                         'grid h-10 w-10 place-items-center rounded-full border text-sm transition',
                         isSelected
@@ -523,7 +587,7 @@ export function NewTaskModal({
                       )}
                       key={option.id}
                       onClick={() => setIconTag(option.id)}
-                      title={option.label}
+                      title={optionLabel}
                       type="button"
                     >
                       <FontAwesomeIcon icon={option.icon} />
@@ -534,14 +598,15 @@ export function NewTaskModal({
             </section>
 
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Color Tag</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.colorTag}</p>
               <div className="flex items-center gap-2.5">
                 {taskColorOptions.map((option) => {
                   const isSelected = option.id === colorTag
+                  const optionLabel = getTaskColorOptionLabel(option.id, locale)
 
                   return (
                     <button
-                      aria-label={`Choose ${option.label} color`}
+                      aria-label={copy.chooseColor.replace('{label}', optionLabel)}
                         className={classNames(
                           'relative h-8 w-8 rounded-full ring-1 ring-slate-700/80 transition',
                           option.swatchClassName,
@@ -578,7 +643,7 @@ export function NewTaskModal({
                   type="button"
                 >
                   <FontAwesomeIcon icon={faTrashCan} />
-                  <span>Eliminar</span>
+                  <span>{copy.delete}</span>
                 </button>
               ) : null}
             </div>
@@ -589,14 +654,14 @@ export function NewTaskModal({
                 onClick={onClose}
                 type="button"
               >
-                Cancel
+                {copy.cancel}
               </button>
               <button
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!canSubmit}
                 type="submit"
               >
-                {isEditing ? 'Save Changes' : 'Create Task'}
+                {isEditing ? copy.saveChanges : copy.createTask}
               </button>
             </div>
           </footer>

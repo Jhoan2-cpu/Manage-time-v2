@@ -8,6 +8,7 @@ import {
   faUser,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../i18n'
 
 type ProfileModalProps = {
   isOpen: boolean
@@ -22,6 +23,7 @@ export function ProfileModal({
   userName = 'Anton Rivera',
   userEmail = 'anton@velor.app',
 }: ProfileModalProps) {
+  const { locale } = useI18n()
   const [activeSection, setActiveSection] = useState<'profile' | 'password'>('profile')
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -79,6 +81,46 @@ export function ProfileModal({
   }
 
   const isPasswordSection = activeSection === 'password'
+  const copy =
+    locale === 'es'
+      ? {
+          backToProfile: 'Volver al perfil',
+          profileTitle: 'Perfil personal',
+          changePasswordTitle: 'Cambiar contrasena',
+          closeProfile: 'Cerrar perfil',
+          updatePasswordTitle: 'Actualizar tu contrasena',
+          updatePasswordDescription: 'Ingresa tu contrasena actual y elige una nueva.',
+          currentPassword: 'Contrasena actual',
+          newPassword: 'Nueva contrasena',
+          confirmNewPassword: 'Confirmar nueva contrasena',
+          cancel: 'Cancelar',
+          savePassword: 'Guardar contrasena',
+          displayName: 'Nombre visible',
+          email: 'Correo',
+          security: 'Seguridad',
+          managePassword: 'Gestiona la contrasena de tu cuenta.',
+          changePasswordCta: 'Cambiar contrasena',
+          close: 'Cerrar',
+        }
+      : {
+          backToProfile: 'Back to profile',
+          profileTitle: 'Personal Profile',
+          changePasswordTitle: 'Change Password',
+          closeProfile: 'Close profile',
+          updatePasswordTitle: 'Update your password',
+          updatePasswordDescription: 'Enter your current password and choose a new one.',
+          currentPassword: 'Current Password',
+          newPassword: 'New Password',
+          confirmNewPassword: 'Confirm New Password',
+          cancel: 'Cancel',
+          savePassword: 'Save Password',
+          displayName: 'Display Name',
+          email: 'Email',
+          security: 'Security',
+          managePassword: 'Manage your account password.',
+          changePasswordCta: 'Change Password',
+          close: 'Close',
+        }
 
   return (
     <div
@@ -96,7 +138,7 @@ export function ProfileModal({
           <div className="flex items-center gap-3">
             {isPasswordSection ? (
               <button
-                aria-label="Back to profile"
+                aria-label={copy.backToProfile}
                 className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700/70 bg-slate-900/30 text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
                 onClick={() => setActiveSection('profile')}
                 type="button"
@@ -109,11 +151,11 @@ export function ProfileModal({
               </span>
             )}
             <h2 className="text-lg font-semibold tracking-tight text-slate-100" id="profile-modal-title">
-              {isPasswordSection ? 'Change Password' : 'Personal Profile'}
+              {isPasswordSection ? copy.changePasswordTitle : copy.profileTitle}
             </h2>
           </div>
           <button
-            aria-label="Close profile"
+            aria-label={copy.closeProfile}
             className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
             onClick={onClose}
             type="button"
@@ -129,25 +171,25 @@ export function ProfileModal({
             <div className="relative rounded-2xl border border-slate-800/80 bg-slate-950/20 p-4">
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-200">
                 <FontAwesomeIcon className="text-slate-400" icon={faLock} />
-                <span>Update your password</span>
+                <span>{copy.updatePasswordTitle}</span>
               </div>
               <p className="mb-4 text-sm text-slate-400">
-                Enter your current password and choose a new one.
+                {copy.updatePasswordDescription}
               </p>
 
               <div className="grid gap-3">
                 <PasswordField
-                  label="Current Password"
+                  label={copy.currentPassword}
                   value={passwordForm.currentPassword}
                   onChange={(value) => setPasswordForm((current) => ({ ...current, currentPassword: value }))}
                 />
                 <PasswordField
-                  label="New Password"
+                  label={copy.newPassword}
                   value={passwordForm.newPassword}
                   onChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))}
                 />
                 <PasswordField
-                  label="Confirm New Password"
+                  label={copy.confirmNewPassword}
                   value={passwordForm.confirmPassword}
                   onChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))}
                 />
@@ -160,7 +202,7 @@ export function ProfileModal({
                   onClick={() => setActiveSection('profile')}
                   type="button"
                 >
-                  Cancel
+                  {copy.cancel}
                 </button>
                 <button
                   className="inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:border-blue-400/35 hover:bg-blue-500/16 disabled:cursor-not-allowed disabled:opacity-45"
@@ -174,7 +216,7 @@ export function ProfileModal({
                   type="button"
                 >
                   <FontAwesomeIcon className="text-xs" icon={faKey} />
-                  <span>Save Password</span>
+                  <span>{copy.savePassword}</span>
                 </button>
               </div>
             </div>
@@ -192,16 +234,16 @@ export function ProfileModal({
               </div>
 
               <div className="mt-4 grid gap-3">
-                <ProfileField icon={faUser} label="Display Name" value={userName} />
-                <ProfileField icon={faEnvelope} label="Email" value={userEmail} />
+                <ProfileField icon={faUser} label={copy.displayName} value={userName} />
+                <ProfileField icon={faEnvelope} label={copy.email} value={userEmail} />
               </div>
 
               <div className="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/20 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                   <FontAwesomeIcon className="text-slate-400" icon={faKey} />
-                  <span>Security</span>
+                  <span>{copy.security}</span>
                 </div>
-                <p className="mt-2 text-sm text-slate-400">Manage your account password.</p>
+                <p className="mt-2 text-sm text-slate-400">{copy.managePassword}</p>
                 <button
                   className="mt-3 inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:bg-blue-500/16 hover:border-blue-400/35"
                   data-sfx-type="off"
@@ -209,7 +251,7 @@ export function ProfileModal({
                   type="button"
                 >
                   <FontAwesomeIcon className="text-xs" icon={faKey} />
-                  <span>Change Password</span>
+                  <span>{copy.changePasswordCta}</span>
                 </button>
               </div>
             </>
@@ -223,7 +265,7 @@ export function ProfileModal({
               onClick={onClose}
               type="button"
             >
-              Close
+              {copy.close}
             </button>
           ) : null}
         </footer>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useI18n } from './i18n'
 import { LoginPage } from './features/auth/components/LoginPage'
 import { RegisterPage } from './features/auth/components/RegisterPage'
 import { FocusDashboard } from './features/focus-dashboard/FocusDashboard'
@@ -13,8 +14,11 @@ const SESSION_STORAGE_KEY = 'velor.session.user'
 type AppRoute = 'home' | 'login' | 'register' | 'app'
 
 function App() {
+  const { locale } = useI18n()
   const [sessionUser, setSessionUser] = useState<AppSessionUser | null>(null)
   const [currentPath, setCurrentPath] = useState(() => getBrowserPath())
+  const fallbackDisplayName = locale === 'es' ? 'Usuario Velor' : 'Velor User'
+  const googleUserDisplayName = locale === 'es' ? 'Usuario de Google' : 'Google User'
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -37,12 +41,12 @@ function App() {
         displayName:
           typeof parsed.displayName === 'string' && parsed.displayName.trim()
             ? parsed.displayName.trim()
-            : deriveDisplayNameFromEmail(parsed.email),
+            : deriveDisplayNameFromEmail(parsed.email, fallbackDisplayName),
       })
     } catch {
       window.localStorage.removeItem(SESSION_STORAGE_KEY)
     }
-  }, [])
+  }, [fallbackDisplayName])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -92,7 +96,7 @@ function App() {
   const handleLogin = ({ email }: { email: string; password: string }) => {
     const nextUser = {
       email,
-      displayName: deriveDisplayNameFromEmail(email),
+      displayName: deriveDisplayNameFromEmail(email, fallbackDisplayName),
     }
 
     setSessionUser(nextUser)
@@ -112,7 +116,7 @@ function App() {
   }) => {
     const nextUser = {
       email,
-      displayName: displayName.trim() || deriveDisplayNameFromEmail(email),
+      displayName: displayName.trim() || deriveDisplayNameFromEmail(email, fallbackDisplayName),
     }
 
     setSessionUser(nextUser)
@@ -125,7 +129,7 @@ function App() {
   const handleGoogleAuth = () => {
     const nextUser = {
       email: 'google.user@velor.app',
-      displayName: 'Google User',
+      displayName: googleUserDisplayName,
     }
 
     setSessionUser(nextUser)
@@ -224,9 +228,8 @@ function App() {
 
 export default App
 
-function deriveDisplayNameFromEmail(email: string) {
+function deriveDisplayNameFromEmail(email: string, fallback = 'Velor User') {
   const localPart = email.trim().split('@')[0] ?? ''
-  const fallback = 'Velor User'
 
   if (!localPart) {
     return fallback

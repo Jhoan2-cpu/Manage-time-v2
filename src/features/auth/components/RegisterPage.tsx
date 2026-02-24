@@ -10,6 +10,7 @@ import {
   faUser,
 } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
+import { useI18n } from '../../../i18n'
 
 type RegisterPageProps = {
   onRegister: (payload: { displayName: string; email: string; password: string }) => void
@@ -19,6 +20,7 @@ type RegisterPageProps = {
 }
 
 export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, onGoBack }: RegisterPageProps) {
+  const { t } = useI18n()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -37,7 +39,7 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
 
     const localPart = email.trim().split('@')[0] ?? ''
     if (!localPart) {
-      return 'New workspace'
+      return t('auth.register.newWorkspaceFallback')
     }
 
     return localPart
@@ -55,22 +57,22 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
     const normalizedName = displayName.trim()
 
     if (!normalizedName || !normalizedEmail || !password || !confirmPassword) {
-      setErrorMessage('Complete all required fields.')
+      setErrorMessage(t('auth.register.errors.missingFields'))
       return
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setErrorMessage('Enter a valid email address.')
+      setErrorMessage(t('auth.register.errors.invalidEmail'))
       return
     }
 
     if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.')
+      setErrorMessage(t('auth.register.errors.shortPassword'))
       return
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.')
+      setErrorMessage(t('auth.register.errors.passwordMismatch'))
       return
     }
 
@@ -97,19 +99,18 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                 <span className="text-2xl font-semibold tracking-tight text-slate-100">Velor</span>
               </div>
 
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300/85">Create Workspace</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300/85">{t('auth.register.heroEyebrow')}</p>
               <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight text-slate-50 xl:text-5xl">
-                Create your account and start tracking.
+                {t('auth.register.heroTitle')}
               </h1>
               <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">
-                Set up your Velor workspace to manage tasks, run focus sessions, and keep a clean Daily Log from the
-                first day.
+                {t('auth.register.heroDescription')}
               </p>
 
               <div className="mt-8 grid max-w-lg grid-cols-3 gap-3">
-                <MetricCard label="Onboarding" value="Fast setup" />
-                <MetricCard label="Sign In" value="Email or Google" />
-                <MetricCard label="Workspace" value="Ready today" />
+                <MetricCard label={t('auth.register.metricOnboardingLabel')} value={t('auth.register.metricOnboardingValue')} />
+                <MetricCard label={t('auth.register.metricSignInLabel')} value={t('auth.register.metricSignInValue')} />
+                <MetricCard label={t('auth.register.metricWorkspaceLabel')} value={t('auth.register.metricWorkspaceValue')} />
               </div>
             </div>
           </section>
@@ -124,8 +125,8 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                 </div>
                 <div className="mt-1 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-lg font-semibold tracking-tight text-slate-100">Register</p>
-                    <p className="text-sm text-slate-400">Create your Velor account.</p>
+                    <p className="text-lg font-semibold tracking-tight text-slate-100">{t('auth.register.cardTitle')}</p>
+                    <p className="text-sm text-slate-400">{t('auth.register.cardSubtitle')}</p>
                   </div>
                   <button
                     className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800/60 hover:text-slate-100"
@@ -134,22 +135,22 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                     type="button"
                   >
                     <FontAwesomeIcon className="text-xs" icon={faArrowLeft} />
-                    Back
+                    {t('common.actions.back')}
                   </button>
                 </div>
               </div>
 
               <form className="px-5 py-5 sm:px-6 sm:py-6" onSubmit={handleSubmit}>
                 <div className="mb-4 rounded-2xl border border-slate-800/80 bg-slate-950/25 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Workspace</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{t('auth.register.workspaceLabel')}</p>
                   <p className="mt-1 truncate text-lg font-semibold tracking-tight text-slate-100">
                     {workspaceNamePreview}
                   </p>
-                  <p className="mt-1 text-sm text-slate-400">Velor personal workspace</p>
+                  <p className="mt-1 text-sm text-slate-400">{t('auth.register.workspaceSubtitle')}</p>
                 </div>
 
                 <div className="grid gap-3">
-                  <FieldLabel label="Display Name">
+                  <FieldLabel label={t('auth.register.fieldDisplayName')}>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                         <FontAwesomeIcon icon={faUser} />
@@ -158,14 +159,14 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                         autoComplete="name"
                         className="h-10 w-full rounded-xl border border-slate-700/70 bg-slate-950/45 pl-10 pr-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-emerald-400/45 focus:bg-slate-900/70"
                         onChange={(event) => setDisplayName(event.target.value)}
-                        placeholder="Anton Rivera"
+                        placeholder={t('auth.register.displayNamePlaceholder')}
                         type="text"
                         value={displayName}
                       />
                     </div>
                   </FieldLabel>
 
-                  <FieldLabel label="Email">
+                  <FieldLabel label={t('auth.register.fieldEmail')}>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                         <FontAwesomeIcon icon={faEnvelope} />
@@ -174,7 +175,7 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                         autoComplete="email"
                         className="h-10 w-full rounded-xl border border-slate-700/70 bg-slate-950/45 pl-10 pr-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-emerald-400/45 focus:bg-slate-900/70"
                         onChange={(event) => setEmail(event.target.value)}
-                        placeholder="you@velor.app"
+                        placeholder={t('auth.register.emailPlaceholder')}
                         type="email"
                         value={email}
                       />
@@ -182,21 +183,25 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                   </FieldLabel>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FieldLabel label="Password">
+                    <FieldLabel label={t('auth.register.fieldPassword')}>
                       <PasswordInput
                         onChange={setPassword}
-                        placeholder="Min 6 characters"
+                        hidePasswordLabel={t('auth.register.hidePassword')}
+                        placeholder={t('auth.register.passwordPlaceholder')}
                         showPassword={showPassword}
+                        showPasswordLabel={t('auth.register.showPassword')}
                         toggleShowPassword={() => setShowPassword((current) => !current)}
                         value={password}
                       />
                     </FieldLabel>
 
-                    <FieldLabel label="Confirm Password">
+                    <FieldLabel label={t('auth.register.fieldConfirmPassword')}>
                       <PasswordInput
                         onChange={setConfirmPassword}
-                        placeholder="Repeat password"
+                        hidePasswordLabel={t('auth.register.hidePassword')}
+                        placeholder={t('auth.register.confirmPasswordPlaceholder')}
                         showPassword={showConfirmPassword}
+                        showPasswordLabel={t('auth.register.showPassword')}
                         toggleShowPassword={() => setShowConfirmPassword((current) => !current)}
                         value={confirmPassword}
                       />
@@ -211,7 +216,7 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                   type="button"
                 >
                   <FontAwesomeIcon className="text-base text-[#EA4335]" icon={faGoogle} />
-                  <span>Sign up with Google</span>
+                  <span>{t('auth.register.signUpWithGoogle')}</span>
                 </button>
 
                 {errorMessage ? (
@@ -226,21 +231,21 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                   type="submit"
                 >
                   <FontAwesomeIcon icon={faRightToBracket} />
-                  <span>Create Account</span>
+                  <span>{t('auth.register.createAccount')}</span>
                 </button>
 
                 <p className="mt-3 text-center text-xs text-slate-500">
-                  Demo register enabled. This creates a local session only.
+                  {t('auth.register.demoNotice')}
                 </p>
                 <p className="mt-2 text-center text-sm text-slate-400">
-                  Already have an account?{' '}
+                  {t('auth.register.alreadyHaveAccount')}{' '}
                   <button
                     className="font-semibold text-emerald-300 transition hover:text-emerald-200"
                     data-sfx-type="off"
                     onClick={onOpenLogin}
                     type="button"
                   >
-                    Log in
+                    {t('auth.register.logIn')}
                   </button>
                 </p>
               </form>
@@ -285,10 +290,20 @@ type PasswordInputProps = {
   onChange: (value: string) => void
   placeholder: string
   showPassword: boolean
+  showPasswordLabel: string
+  hidePasswordLabel: string
   toggleShowPassword: () => void
 }
 
-function PasswordInput({ value, onChange, placeholder, showPassword, toggleShowPassword }: PasswordInputProps) {
+function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  showPassword,
+  showPasswordLabel,
+  hidePasswordLabel,
+  toggleShowPassword,
+}: PasswordInputProps) {
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
@@ -302,7 +317,7 @@ function PasswordInput({ value, onChange, placeholder, showPassword, toggleShowP
         value={value}
       />
       <button
-        aria-label={showPassword ? 'Hide password' : 'Show password'}
+        aria-label={showPassword ? hidePasswordLabel : showPasswordLabel}
         className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
         data-sfx-type="off"
         onClick={toggleShowPassword}

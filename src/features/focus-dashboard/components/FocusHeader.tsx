@@ -10,6 +10,7 @@ import {
   faRightFromBracket,
   faUser,
 } from '@fortawesome/free-solid-svg-icons'
+import { useI18n } from '../../../i18n'
 
 type FocusHeaderProps = {
   timeLabel: string
@@ -38,8 +39,39 @@ export function FocusHeader({
   userName = 'Anton',
   userEmail = 'anton@velor.app',
 }: FocusHeaderProps) {
+  const { locale } = useI18n()
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
+  const copy =
+    locale === 'es'
+      ? {
+          pauseMusic: 'Pausar musica de fondo',
+          playMusic: 'Reproducir musica de fondo',
+          openSettings: 'Abrir configuracion',
+          enterFocusOnly: 'Entrar en modo solo enfoque',
+          focusOnlyMode: 'Modo solo enfoque',
+          focusOnlyShort: 'Solo enfoque',
+          openUserMenu: 'Abrir menu de usuario',
+          personalProfile: 'Perfil personal',
+          workspaceSettings: 'Configuracion del espacio',
+          focusStats: 'Estadisticas de enfoque',
+          weeklyReport: 'Reporte semanal disponible',
+          signOut: 'Cerrar sesion',
+        }
+      : {
+          pauseMusic: 'Pause background music',
+          playMusic: 'Play background music',
+          openSettings: 'Open settings',
+          enterFocusOnly: 'Enter Focus Only mode',
+          focusOnlyMode: 'Focus Only mode',
+          focusOnlyShort: 'Focus Only',
+          openUserMenu: 'Open user menu',
+          personalProfile: 'Personal Profile',
+          workspaceSettings: 'Workspace Settings',
+          focusStats: 'Focus Statistics',
+          weeklyReport: 'Weekly report available',
+          signOut: 'Sign Out',
+        }
   const userInitials = useMemo(() => {
     const parts = userName
       .trim()
@@ -119,17 +151,17 @@ export function FocusHeader({
         <div className="hidden h-8 w-px bg-slate-800 md:block" />
 
         <button
-          aria-label={isBackgroundMusicPlaying ? 'Pause background music' : 'Play background music'}
+          aria-label={isBackgroundMusicPlaying ? copy.pauseMusic : copy.playMusic}
           className="grid h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
           onClick={onToggleBackgroundMusic}
-          title={isBackgroundMusicPlaying ? 'Pause background music' : 'Play background music'}
+          title={isBackgroundMusicPlaying ? copy.pauseMusic : copy.playMusic}
           type="button"
         >
           <FontAwesomeIcon icon={isBackgroundMusicPlaying ? faPause : faMusic} />
         </button>
 
         <button
-          aria-label="Open settings"
+          aria-label={copy.openSettings}
           className="hidden h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-slate-100 sm:grid"
           onClick={onOpenSettings}
           type="button"
@@ -138,21 +170,21 @@ export function FocusHeader({
         </button>
 
         <button
-          aria-label="Enter Focus Only mode"
+          aria-label={copy.enterFocusOnly}
           className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/40 text-slate-300 transition hover:border-blue-500/40 hover:bg-slate-800/70 hover:text-slate-100 md:h-auto md:w-auto md:gap-2 md:px-3 md:py-1.5 md:rounded-full"
           onClick={onEnterFocusOnlyMode}
-          title="Focus Only mode"
+          title={copy.focusOnlyMode}
           type="button"
         >
           <FontAwesomeIcon className="text-[12px]" icon={faBullseye} />
-          <span className="hidden font-medium md:inline">Focus Only</span>
+          <span className="hidden font-medium md:inline">{copy.focusOnlyShort}</span>
         </button>
 
         <div className="relative" ref={userMenuRef}>
           <button
             aria-expanded={isUserMenuOpen}
             aria-haspopup="menu"
-            aria-label="Open user menu"
+            aria-label={copy.openUserMenu}
             className="flex items-center gap-2 rounded-full pl-1 pr-2 text-slate-200 transition hover:bg-slate-800/90"
             onClick={() => setIsUserMenuOpen((current) => !current)}
             type="button"
@@ -198,7 +230,7 @@ export function FocusHeader({
                     <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
                       <FontAwesomeIcon icon={faUser} />
                     </span>
-                    <span className="text-base text-slate-200">Personal Profile</span>
+                    <span className="text-base text-slate-200">{copy.personalProfile}</span>
                   </button>
 
                   <button
@@ -210,7 +242,7 @@ export function FocusHeader({
                     <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
                       <FontAwesomeIcon icon={faGear} />
                     </span>
-                    <span className="text-base text-slate-200">Workspace Settings</span>
+                    <span className="text-base text-slate-200">{copy.workspaceSettings}</span>
                   </button>
 
                   <button
@@ -223,8 +255,8 @@ export function FocusHeader({
                       <FontAwesomeIcon icon={faChartColumn} />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-base leading-tight text-slate-200">Focus Statistics</span>
-                      <span className="block truncate text-xs text-slate-500">Weekly report available</span>
+                      <span className="block text-base leading-tight text-slate-200">{copy.focusStats}</span>
+                      <span className="block truncate text-xs text-slate-500">{copy.weeklyReport}</span>
                     </span>
                   </button>
                 </div>
@@ -239,7 +271,7 @@ export function FocusHeader({
                     <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
                       <FontAwesomeIcon icon={faRightFromBracket} />
                     </span>
-                    <span className="text-base text-slate-200">Sign Out</span>
+                    <span className="text-base text-slate-200">{copy.signOut}</span>
                   </button>
                 </div>
               </div>

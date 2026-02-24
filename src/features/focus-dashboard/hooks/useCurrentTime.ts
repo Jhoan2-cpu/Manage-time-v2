@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getCurrentIntlLocaleTag, useI18n } from '../../../i18n'
 import { formatUtcOffsetForTimeZone } from '../utils/time'
 
 export function useCurrentTime(timeZone?: string | null) {
+  const { locale } = useI18n()
   const [currentTime, setCurrentTime] = useState(() => new Date())
 
   useEffect(() => {
@@ -15,7 +17,7 @@ export function useCurrentTime(timeZone?: string | null) {
   }, [])
 
   const timeLabel = useMemo(() => {
-    return currentTime.toLocaleTimeString('en-US', {
+    return currentTime.toLocaleTimeString(getCurrentIntlLocaleTag(), {
       timeZone: timeZone ?? undefined,
       hour: 'numeric',
       minute: '2-digit',
@@ -23,15 +25,15 @@ export function useCurrentTime(timeZone?: string | null) {
   }, [currentTime, timeZone])
 
   const timeZoneName = useMemo(() => {
-    const timeZonePart = new Intl.DateTimeFormat('en-US', {
+    const timeZonePart = new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
       timeZone: timeZone ?? undefined,
       timeZoneName: 'short',
     })
       .formatToParts(currentTime)
       .find((part) => part.type === 'timeZoneName')
 
-    return timeZonePart?.value ?? 'Local'
-  }, [currentTime, timeZone])
+    return timeZonePart?.value ?? (locale === 'es' ? 'Local' : 'Local')
+  }, [currentTime, locale, timeZone])
 
   const utcOffsetLabel = useMemo(() => {
     if (timeZone) {

@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft, faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
+import { useI18n } from '../../../i18n'
 
 type LoginPageProps = {
   onLogin: (payload: { email: string; password: string }) => void
@@ -11,6 +12,7 @@ type LoginPageProps = {
 }
 
 export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack }: LoginPageProps) {
+  const { t } = useI18n()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -21,7 +23,7 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
   const emailPreviewName = useMemo(() => {
     const localPart = email.trim().split('@')[0] ?? ''
     if (!localPart) {
-      return 'Welcome back'
+      return t('auth.login.welcomeBackFallback')
     }
 
     return localPart
@@ -37,12 +39,12 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
 
     const normalizedEmail = email.trim().toLowerCase()
     if (!normalizedEmail || !password) {
-      setErrorMessage('Enter your email and password.')
+      setErrorMessage(t('auth.login.errors.missingFields'))
       return
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setErrorMessage('Enter a valid email address.')
+      setErrorMessage(t('auth.login.errors.invalidEmail'))
       return
     }
 
@@ -69,19 +71,18 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                 <span className="text-2xl font-semibold tracking-tight text-slate-100">Velor</span>
               </div>
 
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-300/85">Focus Workspace</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-300/85">{t('auth.login.heroEyebrow')}</p>
               <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight text-slate-50 xl:text-5xl">
-                Sign in to resume your flow.
+                {t('auth.login.heroTitle')}
               </h1>
               <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">
-                Continue tracking focused work sessions, review your Daily Log, and manage tasks inside your Velor
-                workspace.
+                {t('auth.login.heroDescription')}
               </p>
 
               <div className="mt-8 grid max-w-lg grid-cols-3 gap-3">
-                <MetricCard label="Session Mode" value="Timer + Stopwatch" />
-                <MetricCard label="Daily Log" value="Excel-ready" />
-                <MetricCard label="Workspace" value="Task-driven" />
+                <MetricCard label={t('auth.login.metricSessionModeLabel')} value={t('auth.login.metricSessionModeValue')} />
+                <MetricCard label={t('auth.login.metricDailyLogLabel')} value={t('auth.login.metricDailyLogValue')} />
+                <MetricCard label={t('auth.login.metricWorkspaceLabel')} value={t('auth.login.metricWorkspaceValue')} />
               </div>
             </div>
           </section>
@@ -96,8 +97,8 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                 </div>
                 <div className="mt-1 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-lg font-semibold tracking-tight text-slate-100">Log In</p>
-                    <p className="text-sm text-slate-400">Access your focus workspace.</p>
+                    <p className="text-lg font-semibold tracking-tight text-slate-100">{t('auth.login.cardTitle')}</p>
+                    <p className="text-sm text-slate-400">{t('auth.login.cardSubtitle')}</p>
                   </div>
                   <button
                     className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800/60 hover:text-slate-100"
@@ -106,22 +107,22 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                     type="button"
                   >
                     <FontAwesomeIcon className="text-xs" icon={faArrowLeft} />
-                    Back
+                    {t('common.actions.back')}
                   </button>
                 </div>
               </div>
 
               <form className="px-5 py-5 sm:px-6 sm:py-6" onSubmit={handleSubmit}>
                 <div className="mb-5 rounded-2xl border border-slate-800/80 bg-slate-950/25 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Workspace</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{t('auth.login.workspaceLabel')}</p>
                   <p className="mt-1 truncate text-lg font-semibold tracking-tight text-slate-100">
                     {emailPreviewName}
                   </p>
-                  <p className="mt-1 text-sm text-slate-400">Velor personal workspace</p>
+                  <p className="mt-1 text-sm text-slate-400">{t('auth.login.workspaceSubtitle')}</p>
                 </div>
 
                 <div className="grid gap-4">
-                  <FieldLabel label="Email">
+                  <FieldLabel label={t('auth.login.fieldEmail')}>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                         <FontAwesomeIcon icon={faEnvelope} />
@@ -130,14 +131,14 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                         autoComplete="email"
                         className="h-11 w-full rounded-xl border border-slate-700/70 bg-slate-950/45 pl-10 pr-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-400/45 focus:bg-slate-900/70"
                         onChange={(event) => setEmail(event.target.value)}
-                        placeholder="you@velor.app"
+                        placeholder={t('auth.login.emailPlaceholder')}
                         type="email"
                         value={email}
                       />
                     </div>
                   </FieldLabel>
 
-                  <FieldLabel label="Password">
+                  <FieldLabel label={t('auth.login.fieldPassword')}>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                         <FontAwesomeIcon icon={faLock} />
@@ -146,12 +147,12 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                         autoComplete="current-password"
                         className="h-11 w-full rounded-xl border border-slate-700/70 bg-slate-950/45 pl-10 pr-11 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-400/45 focus:bg-slate-900/70"
                         onChange={(event) => setPassword(event.target.value)}
-                        placeholder="Enter your password"
+                        placeholder={t('auth.login.passwordPlaceholder')}
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                       />
                       <button
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-label={showPassword ? t('auth.login.hidePassword') : t('auth.login.showPassword')}
                         className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
                         data-sfx-type="off"
                         onClick={() => setShowPassword((current) => !current)}
@@ -170,7 +171,7 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                   type="button"
                 >
                   <FontAwesomeIcon className="text-base text-[#EA4335]" icon={faGoogle} />
-                  <span>Continue with Google</span>
+                  <span>{t('auth.login.continueWithGoogle')}</span>
                 </button>
 
                 {errorMessage ? (
@@ -185,21 +186,21 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                   type="submit"
                 >
                   <FontAwesomeIcon icon={faRightToBracket} />
-                  <span>Enter Velor</span>
+                  <span>{t('auth.login.enterVelor')}</span>
                 </button>
 
                 <p className="mt-4 text-center text-xs text-slate-500">
-                  Demo login enabled. Any valid email and password will open the dashboard.
+                  {t('auth.login.demoNotice')}
                 </p>
                 <p className="mt-3 text-center text-sm text-slate-400">
-                  Need an account?{' '}
+                  {t('auth.login.needAccount')}{' '}
                   <button
                     className="font-semibold text-blue-300 transition hover:text-blue-200"
                     data-sfx-type="off"
                     onClick={onOpenRegister}
                     type="button"
                   >
-                    Create one
+                    {t('auth.login.createOne')}
                   </button>
                 </p>
               </form>

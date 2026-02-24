@@ -1,4 +1,5 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useI18n } from '../../../../i18n'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
 import { formatSecondsCompact } from '../../utils/time'
 import { chartColorHexByTag, type HistorySlice } from './historyUtils'
@@ -11,14 +12,34 @@ type HistoryTimeByTaskListProps = {
 
 export function HistoryTimeByTaskList({
   slices,
-  emptyLabel = 'No Daily Log data available yet.',
-  headerHint = 'Icons + accumulated time + % of 24h day',
+  emptyLabel,
+  headerHint,
 }: HistoryTimeByTaskListProps) {
+  const { locale } = useI18n()
+  const copy =
+    locale === 'es'
+      ? {
+          title: 'Tiempo por tarea',
+          headerHint: 'Iconos + tiempo acumulado + % del dia (24h)',
+          empty: 'Aun no hay datos del registro diario.',
+          sessions: 'sesiones',
+          percentOfDay: '% del dia',
+        }
+      : {
+          title: 'Time by Task',
+          headerHint: 'Icons + accumulated time + % of 24h day',
+          empty: 'No Daily Log data available yet.',
+          sessions: 'sessions',
+          percentOfDay: '% of day',
+        }
+  const resolvedEmptyLabel = emptyLabel ?? copy.empty
+  const resolvedHeaderHint = headerHint ?? copy.headerHint
+
   return (
     <div className="rounded-2xl bg-slate-950/25 p-4 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Time by Task</p>
-        <p className="text-xs text-slate-500">{headerHint}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.title}</p>
+        <p className="text-xs text-slate-500">{resolvedHeaderHint}</p>
       </div>
 
       <div className="space-y-2">
@@ -50,7 +71,7 @@ export function HistoryTimeByTaskList({
                   ) : null}
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-slate-100">{slice.title}</p>
-                    <p className="text-[11px] text-slate-500">{slice.sessionCount} sessions</p>
+                    <p className="text-[11px] text-slate-500">{slice.sessionCount} {copy.sessions}</p>
                   </div>
                 </div>
 
@@ -58,14 +79,14 @@ export function HistoryTimeByTaskList({
                   <p className="font-mono text-sm font-semibold text-slate-200">
                     {formatSecondsCompact(slice.seconds).toUpperCase()}
                   </p>
-                  <p className="text-xs text-slate-400">{slice.percentage.toFixed(1)}% of day</p>
+                  <p className="text-xs text-slate-400">{slice.percentage.toFixed(1)}{copy.percentOfDay}</p>
                 </div>
               </div>
             )
           })
         ) : (
           <div className="rounded-xl bg-slate-900/25 px-3 py-4 text-sm text-slate-400 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.2)]">
-            {emptyLabel}
+            {resolvedEmptyLabel}
           </div>
         )}
       </div>
