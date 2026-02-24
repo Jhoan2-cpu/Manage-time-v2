@@ -114,7 +114,8 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const activeTaskHasLiveSession = Boolean(activeTask && activeFocusSessionMeta?.taskId === activeTask.id)
   const activeWorkspaceAccentColor = activeTask?.colorTag ?? 'blue'
   const workspaceAccentRgb = workspaceAccentRgbByColor[activeWorkspaceAccentColor]
-  const activeTaskTargetSeconds = (activeTask?.targetDurationMinutes ?? 0) > 0 ? (activeTask?.targetDurationMinutes ?? 0) * 60 : null
+  const activeTaskTargetSeconds =
+    (activeTask?.targetDurationMinutes ?? 0) > 0 ? Math.round((activeTask?.targetDurationMinutes ?? 0) * 60) : null
   const timerProgressPercent =
     timerMode === 'timer' && activeTaskTargetSeconds
       ? Math.max(0, Math.min(100, (sessionElapsedSeconds / activeTaskTargetSeconds) * 100))

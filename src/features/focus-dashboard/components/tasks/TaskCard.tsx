@@ -11,7 +11,7 @@ import {
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
 import type { Task, TaskState } from '../../types'
 import { classNames } from '../../utils/classNames'
-import { formatMinutesCompact } from '../../utils/time'
+import { formatMinutesCompact, formatSecondsHms } from '../../utils/time'
 
 type TaskCardProps = {
   task: Task
@@ -123,7 +123,7 @@ export function TaskCard({
           {task.targetDurationMinutes ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/28 px-1.5 py-0.5 text-[10px] text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]">
               <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faHourglassHalf} />
-              <span>{formatMinutesCompact(task.targetDurationMinutes).toUpperCase()}</span>
+              <span>{formatTargetTimerChip(task.targetDurationMinutes).toUpperCase()}</span>
             </span>
           ) : null}
           {task.alarmTime ? (
@@ -198,4 +198,27 @@ function formatAlarmTimeChip(alarmTime: string) {
   const date = new Date()
   date.setHours(hours, minutes, 0, 0)
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date)
+}
+
+function formatTargetTimerChip(totalMinutes: number) {
+  const totalSeconds = Math.max(0, Math.round(totalMinutes * 60))
+  if (totalSeconds <= 0) {
+    return '0m'
+  }
+
+  if (totalSeconds % 60 === 0) {
+    return formatMinutesCompact(totalMinutes)
+  }
+
+  const hms = formatSecondsHms(totalSeconds)
+  const [hours, minutes, seconds] = hms.split(':').map((part) => Number(part))
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return formatMinutesCompact(totalMinutes)
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+  }
+
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`
 }

@@ -59,6 +59,7 @@ export function NewTaskModal({
   const [iconTag, setIconTag] = useState<TaskIconKey>(defaultIconTag)
   const [colorTag, setColorTag] = useState<TaskColorKey>(defaultColorTag)
   const [targetDurationMinutesInput, setTargetDurationMinutesInput] = useState('')
+  const [targetDurationSecondsInput, setTargetDurationSecondsInput] = useState('')
   const [alarmTime, setAlarmTime] = useState('')
 
   useEffect(() => {
@@ -70,11 +71,12 @@ export function NewTaskModal({
       setTitle(editingTask.title)
       setIconTag(editingTask.iconTag)
       setColorTag(editingTask.colorTag)
-      setTargetDurationMinutesInput(
+      const targetTotalSeconds =
         editingTask.targetDurationMinutes && editingTask.targetDurationMinutes > 0
-          ? `${editingTask.targetDurationMinutes}`
-          : '',
-      )
+          ? Math.max(0, Math.round(editingTask.targetDurationMinutes * 60))
+          : 0
+      setTargetDurationMinutesInput(targetTotalSeconds > 0 ? `${Math.floor(targetTotalSeconds / 60)}` : '')
+      setTargetDurationSecondsInput(targetTotalSeconds > 0 ? `${targetTotalSeconds % 60}`.padStart(2, '0') : '')
       setAlarmTime(editingTask.alarmTime ?? '')
       return
     }
@@ -83,6 +85,7 @@ export function NewTaskModal({
     setIconTag(defaultIconTag)
     setColorTag(defaultColorTag)
     setTargetDurationMinutesInput('')
+    setTargetDurationSecondsInput('')
     setAlarmTime('')
   }, [editingTask, isOpen])
 
@@ -121,9 +124,12 @@ export function NewTaskModal({
       return
     }
 
-    const parsedTargetDuration = Number.parseInt(targetDurationMinutesInput.trim(), 10)
-    const normalizedTargetDuration =
-      Number.isFinite(parsedTargetDuration) && parsedTargetDuration > 0 ? Math.min(parsedTargetDuration, 24 * 60) : null
+    const parsedTargetMinutes = Number.parseInt(targetDurationMinutesInput.trim(), 10)
+    const parsedTargetSeconds = Number.parseInt(targetDurationSecondsInput.trim(), 10)
+    const normalizedMinutes = Number.isFinite(parsedTargetMinutes) && parsedTargetMinutes >= 0 ? parsedTargetMinutes : 0
+    const normalizedSeconds = Number.isFinite(parsedTargetSeconds) && parsedTargetSeconds >= 0 ? Math.min(parsedTargetSeconds, 59) : 0
+    const totalTargetSeconds = Math.min(normalizedMinutes * 60 + normalizedSeconds, 24 * 60 * 60)
+    const normalizedTargetDuration = totalTargetSeconds > 0 ? totalTargetSeconds / 60 : null
 
     onCreateTask({
       title: title.trim(),
@@ -203,17 +209,32 @@ export function NewTaskModal({
                 >
                   Timer (Optional)
                 </label>
-                <input
-                  className={fieldClassName}
-                  id={targetDurationId}
-                  inputMode="numeric"
-                  min={1}
-                  onChange={(event) => setTargetDurationMinutesInput(event.target.value.replace(/[^\d]/g, ''))}
-                  placeholder="Minutes (e.g. 25)"
-                  type="text"
-                  value={targetDurationMinutesInput}
-                />
-                <p className="mt-1 text-[11px] text-slate-500">If set, the task can use countdown mode.</p>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <div>
+                    <input
+                      className={fieldClassName}
+                      id={targetDurationId}
+                      inputMode="numeric"
+                      onChange={(event) => setTargetDurationMinutesInput(event.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+                      placeholder="Min"
+                      type="text"
+                      value={targetDurationMinutesInput}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-500">:</span>
+                  <div>
+                    <input
+                      aria-label="Timer seconds"
+                      className={fieldClassName}
+                      inputMode="numeric"
+                      onChange={(event) => setTargetDurationSecondsInput(event.target.value.replace(/[^\d]/g, '').slice(0, 2))}
+                      placeholder="Sec"
+                      type="text"
+                      value={targetDurationSecondsInput}
+                    />
+                  </div>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">Minutes and seconds for countdown mode (e.g. 25:30).</p>
               </div>
 
               <div>
