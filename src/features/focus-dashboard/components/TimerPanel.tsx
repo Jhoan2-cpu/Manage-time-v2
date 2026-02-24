@@ -85,6 +85,19 @@ const timerAccentStyles: Record<
       'border-rose-500/35 bg-rose-500/15 text-rose-100 shadow-[0_10px_28px_rgba(244,63,94,0.2)] hover:border-rose-400/50 hover:bg-rose-500/25',
     playIconClassName: 'text-rose-100',
   },
+  pink: {
+    glowClassName: 'shadow-[0_0_40px_rgba(236,72,153,0.18)]',
+    panelBackgroundClassName:
+      'bg-[radial-gradient(circle_at_top,rgba(236,72,153,0.10),transparent_50%),linear-gradient(180deg,rgba(8,16,34,0.94),rgba(5,12,25,0.94))]',
+    timeGlowClassName: 'drop-shadow-[0_0_18px_rgba(236,72,153,0.18)]',
+    dividerClassName: 'border-pink-500/15',
+    totalValueClassName: 'text-pink-200',
+    chipClassName: 'border-pink-500/20 bg-pink-500/8 text-pink-100',
+    blurClassName: 'bg-pink-500/18',
+    playButtonClassName:
+      'border-pink-500/35 bg-pink-500/15 text-pink-100 shadow-[0_10px_28px_rgba(236,72,153,0.2)] hover:border-pink-400/50 hover:bg-pink-500/25',
+    playIconClassName: 'text-pink-100',
+  },
   violet: {
     glowClassName: 'shadow-[0_0_40px_rgba(139,92,246,0.18)]',
     panelBackgroundClassName:
@@ -105,6 +118,7 @@ const timerPlayGlowRgbByColor: Record<TaskColorKey, string> = {
   green: '16,185,129',
   amber: '245,158,11',
   rose: '244,63,94',
+  pink: '236,72,153',
   violet: '139,92,246',
 }
 

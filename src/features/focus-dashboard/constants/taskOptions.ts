@@ -4,6 +4,7 @@ import {
   faBriefcase,
   faCartShopping,
   faCode,
+  faGamepad,
   faGraduationCap,
   faPen,
   faScrewdriverWrench,
@@ -35,6 +36,7 @@ export const taskIconOptions: TaskIconOption[] = [
   { id: 'book', label: 'Read', icon: faBookOpen },
   { id: 'pen', label: 'Write', icon: faPen },
   { id: 'cart', label: 'Errands', icon: faCartShopping },
+  { id: 'game', label: 'Gaming', icon: faGamepad },
 ]
 
 export const taskIconMap: Record<TaskIconKey, TaskIconOption> = {
@@ -45,6 +47,7 @@ export const taskIconMap: Record<TaskIconKey, TaskIconOption> = {
   book: taskIconOptions[4],
   pen: taskIconOptions[5],
   cart: taskIconOptions[6],
+  game: taskIconOptions[7],
 }
 
 export const taskColorOptions: TaskColorOption[] = [
@@ -93,6 +96,17 @@ export const taskColorOptions: TaskColorOption[] = [
     pulseClassName: 'bg-rose-400',
   },
   {
+    id: 'pink',
+    label: 'Pink',
+    swatchClassName: 'bg-pink-500',
+    selectedRingClassName: 'ring-pink-300/80',
+    cardClassName:
+      'ring-1 ring-inset ring-pink-400/16 bg-pink-950/75 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+    iconShellClassName: 'border-pink-400/25 bg-pink-500/18 text-pink-100',
+    badgeClassName: 'bg-pink-500/16 text-pink-100',
+    pulseClassName: 'bg-pink-400',
+  },
+  {
     id: 'violet',
     label: 'Violet',
     swatchClassName: 'bg-violet-500',
@@ -110,5 +124,6 @@ export const taskColorMap: Record<TaskColorKey, TaskColorOption> = {
   green: taskColorOptions[1],
   amber: taskColorOptions[2],
   rose: taskColorOptions[3],
-  violet: taskColorOptions[4],
+  pink: taskColorOptions[4],
+  violet: taskColorOptions[5],
 }

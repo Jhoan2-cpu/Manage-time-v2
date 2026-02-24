@@ -2,8 +2,8 @@ import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 
 export type TaskState = 'active' | 'done' | 'scheduled'
 export type LogTone = 'break' | 'warning' | 'active' | 'faded' | 'default'
-export type TaskColorKey = 'blue' | 'green' | 'amber' | 'rose' | 'violet'
-export type TaskIconKey = 'briefcase' | 'learning' | 'tools' | 'code' | 'book' | 'pen' | 'cart'
+export type TaskColorKey = 'blue' | 'green' | 'amber' | 'rose' | 'pink' | 'violet'
+export type TaskIconKey = 'briefcase' | 'learning' | 'tools' | 'code' | 'book' | 'pen' | 'cart' | 'game'
 export type FocusTimerMode = 'stopwatch' | 'timer'
 
 export interface Task {

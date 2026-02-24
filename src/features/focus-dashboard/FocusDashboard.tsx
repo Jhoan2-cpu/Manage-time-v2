@@ -40,6 +40,7 @@ const workspaceAccentRgbByColor: Record<TaskColorKey, string> = {
   green: '16,185,129',
   amber: '245,158,11',
   rose: '244,63,94',
+  pink: '236,72,153',
   violet: '139,92,246',
 }
 

@@ -87,6 +87,13 @@ const taskLogColorStyles: Record<TaskColorKey, { row: string; time: string; dura
     activity: 'font-semibold text-rose-100',
     icon: 'border-rose-400/35 bg-rose-500/15 text-rose-200',
   },
+  pink: {
+    row: 'border border-pink-500/25 bg-pink-500/8 shadow-[inset_3px_0_0_0_rgba(236,72,153,.85)]',
+    time: 'text-pink-100',
+    duration: 'bg-pink-500/15 text-pink-200',
+    activity: 'font-semibold text-pink-100',
+    icon: 'border-pink-400/35 bg-pink-500/15 text-pink-200',
+  },
   violet: {
     row: 'border border-violet-500/25 bg-violet-500/8 shadow-[inset_3px_0_0_0_rgba(139,92,246,.85)]',
     time: 'text-violet-100',

@@ -50,6 +50,14 @@ const carouselScrollbarStyleByColor: Record<TaskColorKey, CSSProperties> = {
     ['--task-carousel-scrollbar-thumb-hover-start' as string]: '#9e2b48',
     ['--task-carousel-scrollbar-thumb-hover-end' as string]: '#ff6580',
   },
+  pink: {
+    ['--task-carousel-scrollbar-track' as string]: 'rgba(9,20,38,0.72)',
+    ['--task-carousel-scrollbar-thumb' as string]: '#c23786',
+    ['--task-carousel-scrollbar-thumb-start' as string]: '#842359',
+    ['--task-carousel-scrollbar-thumb-end' as string]: '#ec4899',
+    ['--task-carousel-scrollbar-thumb-hover-start' as string]: '#a72f73',
+    ['--task-carousel-scrollbar-thumb-hover-end' as string]: '#f472b6',
+  },
   violet: {
     ['--task-carousel-scrollbar-track' as string]: 'rgba(9,20,38,0.72)',
     ['--task-carousel-scrollbar-thumb' as string]: '#6e46c8',

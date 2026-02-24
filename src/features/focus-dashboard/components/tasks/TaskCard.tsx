@@ -39,6 +39,7 @@ const taskCardIconTextClassByColor: Record<Task['colorTag'], string> = {
   green: 'text-emerald-200',
   amber: 'text-amber-200',
   rose: 'text-rose-200',
+  pink: 'text-pink-200',
   violet: 'text-violet-200',
 }
 
@@ -47,6 +48,7 @@ const taskCardGlowRgbByColor: Record<Task['colorTag'], string> = {
   green: '16,185,129',
   amber: '245,158,11',
   rose: '244,63,94',
+  pink: '236,72,153',
   violet: '139,92,246',
 }
 
@@ -55,6 +57,7 @@ const taskCardTiltClassByColor: Record<Task['colorTag'], string> = {
   green: 'rotate-[0.35deg]',
   amber: '-rotate-[0.4deg]',
   rose: 'rotate-[0.5deg]',
+  pink: 'rotate-[0.2deg]',
   violet: '-rotate-[0.25deg]',
 }
 
@@ -188,16 +191,41 @@ export function TaskCard({
 }
 
 function formatAlarmTimeChip(alarmTime: string) {
-  const [hoursRaw, minutesRaw] = alarmTime.split(':')
-  const hours = Number.parseInt(hoursRaw ?? '', 10)
-  const minutes = Number.parseInt(minutesRaw ?? '', 10)
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+  const raw = alarmTime.trim()
+  const twelveHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i)
+  if (twelveHourMatch) {
+    const hours12 = Number.parseInt(twelveHourMatch[1] ?? '', 10)
+    const minutes = Number.parseInt(twelveHourMatch[2] ?? '', 10)
+    const seconds = Number.parseInt(twelveHourMatch[3] ?? '0', 10)
+    if (!Number.isFinite(hours12) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return alarmTime
+    }
+
+    const date = new Date()
+    const period = (twelveHourMatch[4] ?? 'AM').toUpperCase()
+    let hours24 = hours12 % 12
+    if (period === 'PM') {
+      hours24 += 12
+    }
+    date.setHours(hours24, minutes, seconds, 0)
+    return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(date)
+  }
+
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  if (!twentyFourHourMatch) {
+    return alarmTime
+  }
+
+  const hours = Number.parseInt(twentyFourHourMatch[1] ?? '', 10)
+  const minutes = Number.parseInt(twentyFourHourMatch[2] ?? '', 10)
+  const seconds = Number.parseInt(twentyFourHourMatch[3] ?? '0', 10)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
     return alarmTime
   }
 
   const date = new Date()
-  date.setHours(hours, minutes, 0, 0)
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date)
+  date.setHours(hours, minutes, seconds, 0)
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(date)
 }
 
 function formatTargetTimerChip(totalMinutes: number) {

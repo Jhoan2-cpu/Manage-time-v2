@@ -50,6 +50,7 @@ export const chartColorHexByTag: Record<TaskColorKey, string> = {
   green: '#10b981',
   amber: '#f59e0b',
   rose: '#f43f5e',
+  pink: '#ec4899',
   violet: '#8b5cf6',
 }
 
