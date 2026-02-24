@@ -73,7 +73,6 @@ export function TaskCard({
   const colorStyles = taskColorMap[task.colorTag]
   const iconOption = taskIconMap[task.iconTag]
   const iconTextClassName = taskCardIconTextClassByColor[task.colorTag]
-  const tiltClassName = taskCardTiltClassByColor[task.colorTag]
   const sessionsLabel = sessionCount > 99 ? '99+' : String(sessionCount)
   const isActive = task.state === 'active'
   const isActiveRunning = isActive && isRunning
@@ -85,12 +84,10 @@ export function TaskCard({
   return (
     <article
       className={classNames(
-        'flex h-[7.5rem] w-64 shrink-0 cursor-pointer flex-col rounded-[18px] px-2.5 pb-2.5 pt-3 transition duration-200 hover:-translate-y-0.5',
+        'flex h-[7.5rem] w-64 shrink-0 cursor-pointer flex-col rounded-[12px] px-2.5 pb-2.5 pt-2.5 transition duration-200 hover:-translate-y-0.5',
         'relative overflow-hidden',
-        tiltClassName,
-        'before:pointer-events-none before:absolute before:left-1/2 before:top-1 before:z-10 before:h-2 before:w-12 before:-translate-x-1/2 before:rotate-[-2deg] before:rounded-[3px] before:bg-white/14 before:shadow-[0_1px_0_rgba(255,255,255,0.08),0_4px_10px_rgba(2,6,23,0.18)]',
-        'after:pointer-events-none after:absolute after:right-0 after:top-0 after:z-10 after:h-4 after:w-4 after:bg-white/10 after:[clip-path:polygon(100%_0,0_0,100%_100%)] after:shadow-[-1px_1px_0_rgba(255,255,255,0.08)]',
-        'shadow-[0_12px_20px_rgba(1,8,22,0.28),inset_0_1px_0_rgba(255,255,255,0.03)]',
+        'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-7 before:bg-gradient-to-b before:from-white/12 before:via-white/[0.04] before:to-transparent before:opacity-70',
+        'shadow-[0_14px_28px_rgba(1,8,22,0.34),0_4px_12px_rgba(1,8,22,0.16),inset_0_1px_0_rgba(255,255,255,0.04)]',
         isActive && 'task-card-focus-ignite',
         colorStyles.cardClassName,
         isActive && classNames('ring-2 ring-inset', colorStyles.selectedRingClassName),

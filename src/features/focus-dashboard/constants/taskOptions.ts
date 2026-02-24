@@ -57,7 +57,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-blue-500',
     selectedRingClassName: 'ring-blue-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-blue-300/26 bg-blue-900 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-blue-300/34 bg-[radial-gradient(circle_at_16%_14%,rgba(191,219,254,0.12),transparent_42%),linear-gradient(145deg,#1d4ed8_0%,#1e3a8a_55%,#172554_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
     iconShellClassName: 'border-blue-400/25 bg-blue-500/18 text-blue-100',
     badgeClassName: 'bg-blue-500/16 text-blue-100',
     pulseClassName: 'bg-blue-400',
@@ -68,7 +68,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-emerald-500',
     selectedRingClassName: 'ring-emerald-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-emerald-300/24 bg-emerald-900 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-emerald-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(209,250,229,0.10),transparent_42%),linear-gradient(145deg,#047857_0%,#065f46_55%,#022c22_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
     iconShellClassName: 'border-emerald-400/25 bg-emerald-500/18 text-emerald-100',
     badgeClassName: 'bg-emerald-500/16 text-emerald-100',
     pulseClassName: 'bg-emerald-400',
@@ -79,7 +79,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-amber-500',
     selectedRingClassName: 'ring-amber-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-amber-300/24 bg-amber-900 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-amber-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(254,243,199,0.10),transparent_42%),linear-gradient(145deg,#b45309_0%,#92400e_55%,#451a03_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
     iconShellClassName: 'border-amber-400/25 bg-amber-500/18 text-amber-100',
     badgeClassName: 'bg-amber-500/16 text-amber-100',
     pulseClassName: 'bg-amber-400',
@@ -90,7 +90,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-rose-500',
     selectedRingClassName: 'ring-rose-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-rose-300/24 bg-rose-900 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-rose-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(254,205,211,0.10),transparent_42%),linear-gradient(145deg,#be123c_0%,#9f1239_55%,#4c0519_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
     iconShellClassName: 'border-rose-400/25 bg-rose-500/18 text-rose-100',
     badgeClassName: 'bg-rose-500/16 text-rose-100',
     pulseClassName: 'bg-rose-400',
@@ -101,7 +101,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-pink-500',
     selectedRingClassName: 'ring-pink-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-pink-300/24 bg-pink-900 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-pink-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(251,207,232,0.10),transparent_42%),linear-gradient(145deg,#be185d_0%,#9d174d_55%,#500724_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
     iconShellClassName: 'border-pink-400/25 bg-pink-500/18 text-pink-100',
     badgeClassName: 'bg-pink-500/16 text-pink-100',
     pulseClassName: 'bg-pink-400',
@@ -112,7 +112,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-violet-500',
     selectedRingClassName: 'ring-violet-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-violet-300/24 bg-violet-900 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-violet-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(233,213,255,0.10),transparent_42%),linear-gradient(145deg,#6d28d9_0%,#5b21b6_55%,#2e1065_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
     iconShellClassName: 'border-violet-400/25 bg-violet-500/18 text-violet-100',
     badgeClassName: 'bg-violet-500/16 text-violet-100',
     pulseClassName: 'bg-violet-400',
