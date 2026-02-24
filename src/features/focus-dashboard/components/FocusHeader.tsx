@@ -263,15 +263,15 @@ export function FocusHeader({
 
                 <div className="border-t border-slate-800/90 px-3 py-3">
                   <button
-                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
+                    className="group flex w-full items-center gap-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-3 py-3 text-left transition hover:border-rose-400/30 hover:bg-rose-500/14"
                     onClick={handleSignOutFromMenu}
                     role="menuitem"
                     type="button"
                   >
-                    <span className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition group-hover:text-slate-200">
+                    <span className="grid h-8 w-8 place-items-center rounded-lg border border-rose-400/20 bg-rose-500/10 text-rose-200 transition group-hover:border-rose-300/30 group-hover:bg-rose-500/16 group-hover:text-rose-100">
                       <FontAwesomeIcon icon={faRightFromBracket} />
                     </span>
-                    <span className="text-base text-slate-200">{copy.signOut}</span>
+                    <span className="text-base text-rose-100">{copy.signOut}</span>
                   </button>
                 </div>
               </div>
