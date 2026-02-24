@@ -57,7 +57,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-blue-500',
     selectedRingClassName: 'ring-blue-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-blue-300/34 bg-[radial-gradient(circle_at_16%_14%,rgba(191,219,254,0.12),transparent_42%),linear-gradient(145deg,#1d4ed8_0%,#1e3a8a_55%,#172554_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-blue-300/42 bg-[radial-gradient(130%_88%_at_12%_0%,rgba(147,197,253,0.22),transparent_50%),radial-gradient(120%_120%_at_100%_100%,rgba(37,99,235,0.16),transparent_62%),linear-gradient(155deg,#10265f_0%,#1c449f_46%,#0a173f_100%)] shadow-[0_12px_24px_rgba(2,6,23,0.18),inset_0_1px_0_rgba(219,234,254,0.08),inset_0_-18px_28px_rgba(2,6,23,0.22)]',
     iconShellClassName: 'border-blue-400/25 bg-blue-500/18 text-blue-100',
     badgeClassName: 'bg-blue-500/16 text-blue-100',
     pulseClassName: 'bg-blue-400',
@@ -68,7 +68,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-emerald-500',
     selectedRingClassName: 'ring-emerald-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-emerald-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(209,250,229,0.10),transparent_42%),linear-gradient(145deg,#047857_0%,#065f46_55%,#022c22_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-emerald-300/40 bg-[radial-gradient(130%_88%_at_12%_0%,rgba(110,231,183,0.18),transparent_50%),radial-gradient(120%_120%_at_100%_100%,rgba(16,185,129,0.15),transparent_62%),linear-gradient(155deg,#05392f_0%,#066454_44%,#021b17_100%)] shadow-[0_12px_24px_rgba(2,6,23,0.18),inset_0_1px_0_rgba(209,250,229,0.06),inset_0_-18px_28px_rgba(2,6,23,0.22)]',
     iconShellClassName: 'border-emerald-400/25 bg-emerald-500/18 text-emerald-100',
     badgeClassName: 'bg-emerald-500/16 text-emerald-100',
     pulseClassName: 'bg-emerald-400',
@@ -79,7 +79,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-amber-500',
     selectedRingClassName: 'ring-amber-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-amber-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(254,243,199,0.10),transparent_42%),linear-gradient(145deg,#b45309_0%,#92400e_55%,#451a03_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-amber-300/40 bg-[radial-gradient(130%_88%_at_12%_0%,rgba(253,230,138,0.18),transparent_50%),radial-gradient(120%_120%_at_100%_100%,rgba(245,158,11,0.14),transparent_62%),linear-gradient(155deg,#4b2302_0%,#8a3f05_44%,#251103_100%)] shadow-[0_12px_24px_rgba(2,6,23,0.18),inset_0_1px_0_rgba(254,243,199,0.06),inset_0_-18px_28px_rgba(2,6,23,0.22)]',
     iconShellClassName: 'border-amber-400/25 bg-amber-500/18 text-amber-100',
     badgeClassName: 'bg-amber-500/16 text-amber-100',
     pulseClassName: 'bg-amber-400',
@@ -90,7 +90,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-rose-500',
     selectedRingClassName: 'ring-rose-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-rose-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(254,205,211,0.10),transparent_42%),linear-gradient(145deg,#be123c_0%,#9f1239_55%,#4c0519_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-rose-300/40 bg-[radial-gradient(130%_88%_at_12%_0%,rgba(253,164,175,0.18),transparent_50%),radial-gradient(120%_120%_at_100%_100%,rgba(244,63,94,0.14),transparent_62%),linear-gradient(155deg,#4f0821_0%,#97133a_44%,#270711_100%)] shadow-[0_12px_24px_rgba(2,6,23,0.18),inset_0_1px_0_rgba(254,205,211,0.06),inset_0_-18px_28px_rgba(2,6,23,0.22)]',
     iconShellClassName: 'border-rose-400/25 bg-rose-500/18 text-rose-100',
     badgeClassName: 'bg-rose-500/16 text-rose-100',
     pulseClassName: 'bg-rose-400',
@@ -101,7 +101,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-pink-500',
     selectedRingClassName: 'ring-pink-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-pink-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(251,207,232,0.10),transparent_42%),linear-gradient(145deg,#be185d_0%,#9d174d_55%,#500724_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-pink-300/40 bg-[radial-gradient(130%_88%_at_12%_0%,rgba(249,168,212,0.18),transparent_50%),radial-gradient(120%_120%_at_100%_100%,rgba(236,72,153,0.15),transparent_62%),linear-gradient(155deg,#531032_0%,#a11663_44%,#2c0a1b_100%)] shadow-[0_12px_24px_rgba(2,6,23,0.18),inset_0_1px_0_rgba(251,207,232,0.06),inset_0_-18px_28px_rgba(2,6,23,0.22)]',
     iconShellClassName: 'border-pink-400/25 bg-pink-500/18 text-pink-100',
     badgeClassName: 'bg-pink-500/16 text-pink-100',
     pulseClassName: 'bg-pink-400',
@@ -112,7 +112,7 @@ export const taskColorOptions: TaskColorOption[] = [
     swatchClassName: 'bg-violet-500',
     selectedRingClassName: 'ring-violet-300/80',
     cardClassName:
-      'ring-1 ring-inset ring-violet-300/32 bg-[radial-gradient(circle_at_16%_14%,rgba(233,213,255,0.10),transparent_42%),linear-gradient(145deg,#6d28d9_0%,#5b21b6_55%,#2e1065_100%)] shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]',
+      'ring-1 ring-inset ring-violet-300/42 bg-[radial-gradient(130%_88%_at_12%_0%,rgba(196,181,253,0.2),transparent_50%),radial-gradient(120%_120%_at_100%_100%,rgba(139,92,246,0.16),transparent_62%),linear-gradient(155deg,#2f146c_0%,#5d2cc7_44%,#170a34_100%)] shadow-[0_12px_24px_rgba(2,6,23,0.18),inset_0_1px_0_rgba(233,213,255,0.07),inset_0_-18px_28px_rgba(2,6,23,0.22)]',
     iconShellClassName: 'border-violet-400/25 bg-violet-500/18 text-violet-100',
     badgeClassName: 'bg-violet-500/16 text-violet-100',
     pulseClassName: 'bg-violet-400',

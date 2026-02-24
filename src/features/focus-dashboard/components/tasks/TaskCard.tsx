@@ -77,17 +77,16 @@ export function TaskCard({
   const isActive = task.state === 'active'
   const isActiveRunning = isActive && isRunning
   const showRestartIcon = isActive && showRestartAction && !isRunning
-  const activeCardGlowStyle = isActive
-    ? ({ '--task-card-glow-rgb': taskCardGlowRgbByColor[task.colorTag] } as CSSProperties)
-    : undefined
+  const cardGlowStyle = { '--task-card-glow-rgb': taskCardGlowRgbByColor[task.colorTag] } as CSSProperties
 
   return (
     <article
       className={classNames(
-        'flex h-[7.5rem] w-64 shrink-0 cursor-pointer flex-col rounded-[12px] px-2.5 pb-2.5 pt-2.5 transition duration-200 hover:-translate-y-0.5',
+        'flex h-[7.5rem] w-64 shrink-0 cursor-pointer flex-col rounded-[12px] px-2.5 pb-2.5 pt-2.5 transition duration-200',
         'relative overflow-hidden',
         'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-7 before:bg-gradient-to-b before:from-white/12 before:via-white/[0.04] before:to-transparent before:opacity-70',
         'shadow-[0_14px_28px_rgba(1,8,22,0.34),0_4px_12px_rgba(1,8,22,0.16),inset_0_1px_0_rgba(255,255,255,0.04)]',
+        !isActive && 'task-card-hover-glow',
         isActive && 'task-card-focus-ignite',
         colorStyles.cardClassName,
         isActive && classNames('ring-2 ring-inset', colorStyles.selectedRingClassName),
@@ -101,7 +100,7 @@ export function TaskCard({
 
         onEditTask?.(task)
       }}
-      style={activeCardGlowStyle}
+      style={cardGlowStyle}
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex flex-1 items-start gap-2">
@@ -159,7 +158,10 @@ export function TaskCard({
         <div className="flex items-center gap-1">
           <button
             aria-label={`${isActiveRunning ? 'Pause' : showRestartIcon ? 'Restart' : 'Play'} ${task.title}`}
-            className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/14 text-emerald-300 transition hover:bg-emerald-500/24 hover:text-emerald-200"
+            className={classNames(
+              'grid h-7 w-7 place-items-center rounded-full border transition shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:brightness-110',
+              colorStyles.iconShellClassName,
+            )}
             onClick={() => onPlayTask?.(task)}
             type="button"
           >

@@ -253,7 +253,7 @@ export function TimerPanel({
               aria-label={showRestartAction ? 'Restart timer' : isRunning ? 'Pause focus' : 'Start focus'}
               className={classNames(
                 'grid h-14 w-14 place-items-center rounded-full border transition hover:-translate-y-0.5 active:translate-y-0',
-                isRunning && 'timer-play-active-glow',
+                !isRunning && !showRestartAction && 'timer-play-paused-blink',
                 accents.playButtonClassName,
               )}
               onClick={onStartFocus}
