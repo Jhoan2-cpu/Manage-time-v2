@@ -247,7 +247,7 @@ export function FocusHeader({
 
                   <button
                     className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-800/70"
-                    onClick={() => setIsUserMenuOpen(false)}
+                    onClick={handleOpenSettingsFromMenu}
                     role="menuitem"
                     type="button"
                   >
