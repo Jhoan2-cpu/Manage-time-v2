@@ -741,7 +741,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
               dailyLogTogglePulseKey > 0 && 'daily-log-toggle-ignite',
             )}
             onClick={handleToggleDailyLog}
-            style={{ left: isDailyLogOpen ? 380 : 0 }}
+            style={{ left: isDailyLogOpen ? 420 : 0 }}
             title={isDailyLogOpen ? 'Close Daily Log' : 'Open Daily Log'}
             type="button"
           >
