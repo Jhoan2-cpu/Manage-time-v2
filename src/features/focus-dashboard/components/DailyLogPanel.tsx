@@ -144,7 +144,7 @@ export function DailyLogPanel({
     locale === 'es'
       ? {
           title: 'Registro diario',
-          subtitle: 'Tabla seleccionable (copiar y pegar en Excel)',
+          subtitle: 'Registro cronologico de tu jornada con bloques de tiempo por actividad.',
           start: 'Inicio',
           duration: 'Duracion',
           activity: 'Actividad',
@@ -153,7 +153,7 @@ export function DailyLogPanel({
         }
       : {
           title: 'Daily Log',
-          subtitle: 'Selectable table (copy and paste into Excel)',
+          subtitle: 'Chronological record of your day with time blocks by activity.',
           start: 'Start',
           duration: 'Duration',
           activity: 'Activity',
