@@ -27,6 +27,7 @@ let uiInteractionSfxEnabled = true
 let backgroundMusicVolume = 0.08
 let backgroundMusicFadeStopTimeoutId: number | null = null
 let timerRingtoneFallbackStartTimeoutId: number | null = null
+let shouldResumeBackgroundMusicAfterTimerAlarm = false
 
 const BACKGROUND_MUSIC_SRC_CANDIDATES = [
   encodeURI('/loop/Dark Ambient No Copyright Music  c152 - missed call.mp3'),
@@ -209,11 +210,13 @@ export function toggleBackgroundMusic() {
   try {
     cancelPendingBackgroundMusicFadeStop()
     if (backgroundMusicHowl.playing()) {
+      shouldResumeBackgroundMusicAfterTimerAlarm = false
       backgroundMusicHowl.pause()
       emitBackgroundMusicState()
       return false
     }
 
+    shouldResumeBackgroundMusicAfterTimerAlarm = false
     backgroundMusicHowl.play()
     emitBackgroundMusicState()
     return true
@@ -336,15 +339,17 @@ export function triggerTimerEndAlarm() {
     }
 
     if (!backgroundMusicHowl || !backgroundMusicHowl.playing()) {
+      shouldResumeBackgroundMusicAfterTimerAlarm = false
       return playAlarm()
     }
 
     cancelPendingBackgroundMusicFadeStop()
     cancelPendingTimerRingtoneFallbackStart()
+    shouldResumeBackgroundMusicAfterTimerAlarm = true
 
     const currentVolume = clamp(backgroundMusicHowl.volume(), 0, 1)
     if (currentVolume <= 0.001) {
-      backgroundMusicHowl.stop()
+      backgroundMusicHowl.pause()
       backgroundMusicHowl.volume(backgroundMusicVolume)
       emitBackgroundMusicState()
       return playAlarm()
@@ -357,7 +362,7 @@ export function triggerTimerEndAlarm() {
       }
 
       try {
-        backgroundMusicHowl.stop()
+        backgroundMusicHowl.pause()
         backgroundMusicHowl.volume(backgroundMusicVolume)
       } catch {
         // Ignore platform playback edge-cases.
@@ -381,13 +386,16 @@ export function stopTimerEndAlarm() {
   }
 
   try {
+    cancelPendingBackgroundMusicFadeStop()
     cancelPendingTimerRingtoneFallbackStart()
     timerRingtoneHowl?.stop()
     timerRingtoneFallbackHowl?.stop()
     emitTimerRingtoneState()
+    resumeBackgroundMusicAfterTimerAlarm()
     return false
   } catch {
     emitTimerRingtoneState()
+    resumeBackgroundMusicAfterTimerAlarm()
     return false
   }
 }
@@ -418,6 +426,64 @@ function cancelPendingTimerRingtoneFallbackStart() {
 
   window.clearTimeout(timerRingtoneFallbackStartTimeoutId)
   timerRingtoneFallbackStartTimeoutId = null
+}
+
+function resumeBackgroundMusicAfterTimerAlarm() {
+  if (!shouldResumeBackgroundMusicAfterTimerAlarm || !backgroundMusicHowl) {
+    return
+  }
+
+  shouldResumeBackgroundMusicAfterTimerAlarm = false
+
+  const targetVolume = clamp(backgroundMusicVolume, 0, 1)
+  if (targetVolume <= 0.001) {
+    return
+  }
+
+  try {
+    if (!backgroundMusicHowl.playing()) {
+      let didStartFade = false
+      const startFadeIn = () => {
+        if (didStartFade || !backgroundMusicHowl) {
+          return
+        }
+        didStartFade = true
+
+        try {
+          backgroundMusicHowl.fade(0, targetVolume, 650)
+        } catch {
+          backgroundMusicHowl.volume(targetVolume)
+        } finally {
+          emitBackgroundMusicState()
+        }
+      }
+
+      backgroundMusicHowl.volume(0)
+      backgroundMusicHowl.once('play', startFadeIn)
+      backgroundMusicHowl.play()
+      emitBackgroundMusicState()
+
+      // Some html5-backed play() calls can report playing slightly later; this fallback ensures volume is restored.
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          if (!didStartFade && backgroundMusicHowl?.playing()) {
+            startFadeIn()
+          }
+        }, 140)
+      }
+      return
+    }
+
+    const currentVolume = clamp(backgroundMusicHowl.volume(), 0, 1)
+    if (currentVolume < targetVolume) {
+      backgroundMusicHowl.fade(currentVolume, targetVolume, 650)
+    } else {
+      backgroundMusicHowl.volume(targetVolume)
+    }
+    emitBackgroundMusicState()
+  } catch {
+    emitBackgroundMusicState()
+  }
 }
 
 function createUiClickWavDataUri() {
