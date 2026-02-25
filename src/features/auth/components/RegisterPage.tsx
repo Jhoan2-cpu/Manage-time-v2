@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState, type ReactNode } from 'react'
+import { FormEvent, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faArrowLeft,
@@ -30,25 +30,6 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const isSubmitDisabled = !displayName.trim() || !email.trim() || !password || !confirmPassword
-
-  const workspaceNamePreview = useMemo(() => {
-    const fromName = displayName.trim()
-    if (fromName) {
-      return fromName
-    }
-
-    const localPart = email.trim().split('@')[0] ?? ''
-    if (!localPart) {
-      return t('auth.register.newWorkspaceFallback')
-    }
-
-    return localPart
-      .split(/[._-]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-      .join(' ')
-  }, [displayName, email])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -141,14 +122,6 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
               </div>
 
               <form className="px-5 py-5 sm:px-6 sm:py-6" onSubmit={handleSubmit}>
-                <div className="mb-4 rounded-2xl border border-slate-800/80 bg-slate-950/25 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{t('auth.register.workspaceLabel')}</p>
-                  <p className="mt-1 truncate text-lg font-semibold tracking-tight text-slate-100">
-                    {workspaceNamePreview}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">{t('auth.register.workspaceSubtitle')}</p>
-                </div>
-
                 <div className="grid gap-3">
                   <FieldLabel label={t('auth.register.fieldDisplayName')}>
                     <div className="relative">

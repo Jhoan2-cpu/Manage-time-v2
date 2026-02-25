@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState, type ReactNode } from 'react'
+import { FormEvent, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft, faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
@@ -19,20 +19,6 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const isSubmitDisabled = !email.trim() || !password
-
-  const emailPreviewName = useMemo(() => {
-    const localPart = email.trim().split('@')[0] ?? ''
-    if (!localPart) {
-      return t('auth.login.welcomeBackFallback')
-    }
-
-    return localPart
-      .split(/[._-]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-      .join(' ')
-  }, [email])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -113,14 +99,6 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
               </div>
 
               <form className="px-5 py-5 sm:px-6 sm:py-6" onSubmit={handleSubmit}>
-                <div className="mb-5 rounded-2xl border border-slate-800/80 bg-slate-950/25 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{t('auth.login.workspaceLabel')}</p>
-                  <p className="mt-1 truncate text-lg font-semibold tracking-tight text-slate-100">
-                    {emailPreviewName}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">{t('auth.login.workspaceSubtitle')}</p>
-                </div>
-
                 <div className="grid gap-4">
                   <FieldLabel label={t('auth.login.fieldEmail')}>
                     <div className="relative">
