@@ -42,7 +42,7 @@ export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfi
           title: 'Cerrar sesion',
           close: 'Cerrar confirmacion de cierre de sesion',
           body: 'Seguro que quieres cerrar sesion de tu espacio de trabajo Velor?',
-          note: 'Tu sesion local se cerrara y volveras a la pagina de inicio de sesion.',
+          note: 'Tu sesion se cerrara y volveras a la pagina de inicio de sesion.',
           cancel: 'Cancelar',
           confirm: 'Cerrar sesion',
         }
@@ -50,7 +50,7 @@ export function SignOutConfirmModal({ isOpen, onClose, onConfirm }: SignOutConfi
           title: 'Sign Out',
           close: 'Close sign out confirmation',
           body: 'Are you sure you want to sign out of your Velor workspace?',
-          note: 'Your local session will be closed and you will return to the login page.',
+          note: 'Your session will be closed and you will return to the login page.',
           cancel: 'Cancel',
           confirm: 'Sign Out',
         }
