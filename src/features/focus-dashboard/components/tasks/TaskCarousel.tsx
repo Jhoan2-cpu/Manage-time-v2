@@ -291,9 +291,14 @@ export function TaskCarousel({
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{copy.focusQueue}</p>
             <div className="mt-1 flex items-center gap-2">
               <h2 className="truncate text-sm font-semibold text-slate-100 sm:text-base">{copy.taskCarousel}</h2>
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/60 px-2 py-0.5 text-[11px] font-medium text-slate-300">
+              <span
+                aria-label={`${tasks.length} ${copy.tasks}`}
+                className="hidden items-center gap-1 rounded-full bg-slate-900/60 px-2 py-0.5 text-[11px] font-medium text-slate-300 [@media(min-width:380px)]:inline-flex"
+                title={`${tasks.length} ${copy.tasks}`}
+              >
                 <FontAwesomeIcon className="text-[10px] text-slate-400" icon={faLayerGroup} />
-                {tasks.length} {copy.tasks}
+                <span className="tabular-nums">{tasks.length}</span>
+                <span>{copy.tasks}</span>
               </span>
             </div>
           </div>
