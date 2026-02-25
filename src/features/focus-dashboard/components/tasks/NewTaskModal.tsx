@@ -91,7 +91,6 @@ export function NewTaskModal({
     xPercent: 22,
     yPercent: 82,
   })
-  const [colorGlowPulseKey, setColorGlowPulseKey] = useState(0)
   const modalCardRef = useRef<HTMLDivElement | null>(null)
   const colorButtonRefs = useRef<Partial<Record<TaskColorKey, HTMLButtonElement | null>>>({})
 
@@ -247,12 +246,6 @@ export function NewTaskModal({
     backgroundColor: `rgba(${modalAccentRgb},0.18)`,
     boxShadow: `0 0 80px rgba(${modalAccentRgb},0.14)`,
   } as CSSProperties
-  const reactiveGlowPulseStyle = {
-    left: colorOriginLeft,
-    top: colorOriginTop,
-    '--task-modal-color-pulse-rgb': modalAccentRgb,
-  } as CSSProperties
-
   function updateColorGlowOriginFromElement(element: HTMLElement) {
     const modalRect = modalCardRef.current?.getBoundingClientRect()
     const elementRect = element.getBoundingClientRect()
@@ -271,7 +264,6 @@ export function NewTaskModal({
   function handleColorTagSelect(nextColorTag: TaskColorKey, sourceButton: HTMLButtonElement) {
     updateColorGlowOriginFromElement(sourceButton)
     setColorTag(nextColorTag)
-    setColorGlowPulseKey((value) => value + 1)
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -339,11 +331,6 @@ export function NewTaskModal({
               top: colorOriginTop,
               backgroundColor: `rgba(${modalAccentRgb},0.14)`,
             }}
-          />
-          <div
-            key={colorGlowPulseKey}
-            className="task-modal-color-origin-pulse absolute h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={reactiveGlowPulseStyle}
           />
           <div
             className="absolute inset-0"
