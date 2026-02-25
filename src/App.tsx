@@ -4,6 +4,7 @@ import { LoginPage } from './features/auth/components/LoginPage'
 import { RegisterPage } from './features/auth/components/RegisterPage'
 import { FocusDashboard } from './features/focus-dashboard/FocusDashboard'
 import { HomePage } from './features/home/components/HomePage'
+import { stopFocusAudioPlayback } from './lib/audio/uiSfx'
 
 type AppSessionUser = {
   displayName: string
@@ -141,6 +142,7 @@ function App() {
   }
 
   const handleSignOut = () => {
+    stopFocusAudioPlayback()
     setSessionUser(null)
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(SESSION_STORAGE_KEY)

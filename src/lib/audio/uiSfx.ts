@@ -400,6 +400,27 @@ export function stopTimerEndAlarm() {
   }
 }
 
+export function stopFocusAudioPlayback() {
+  try {
+    cancelPendingBackgroundMusicFadeStop()
+    cancelPendingTimerRingtoneFallbackStart()
+    shouldResumeBackgroundMusicAfterTimerAlarm = false
+
+    timerRingtoneHowl?.stop()
+    timerRingtoneFallbackHowl?.stop()
+
+    if (backgroundMusicHowl) {
+      backgroundMusicHowl.stop()
+      backgroundMusicHowl.volume(backgroundMusicVolume)
+    }
+  } catch {
+    // Ignore platform/audio lifecycle errors during sign-out teardown.
+  } finally {
+    emitTimerRingtoneState()
+    emitBackgroundMusicState()
+  }
+}
+
 function emitBackgroundMusicState() {
   const isPlaying = getBackgroundMusicPlaying()
   backgroundMusicListeners.forEach((listener) => listener(isPlaying))
