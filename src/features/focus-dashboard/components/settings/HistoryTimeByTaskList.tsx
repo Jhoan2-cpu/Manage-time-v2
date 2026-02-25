@@ -20,14 +20,14 @@ export function HistoryTimeByTaskList({
     locale === 'es'
       ? {
           title: 'Tiempo por tarea',
-          headerHint: 'Iconos + tiempo acumulado + % del dia (24h)',
+          headerHint: 'Compara el tiempo acumulado por tarea y su peso dentro del dia.',
           empty: 'Aun no hay datos del registro diario.',
           sessions: 'sesiones',
           percentOfDay: '% del dia',
         }
       : {
           title: 'Time by Task',
-          headerHint: 'Icons + accumulated time + % of 24h day',
+          headerHint: 'Compare accumulated time by task and how much of the day it represents.',
           empty: 'No Daily Log data available yet.',
           sessions: 'sessions',
           percentOfDay: '% of day',

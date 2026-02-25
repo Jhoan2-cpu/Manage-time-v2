@@ -132,12 +132,12 @@ export function SettingsModal({
     locale === 'es'
       ? {
           settingsAndHistory: 'Configuracion e Historial',
-          subtitle: 'Preferencias de Velor e insights del registro diario',
+          subtitle: 'Ajusta tu experiencia y revisa el historial de tu registro diario.',
           closeSettings: 'Cerrar configuracion',
           close: 'Cerrar',
           history: 'Historial',
           allDaysLogRecords: 'Registros del registro diario de todos los dias',
-          allDaysSummary: 'Resumen por dia (vista 24h). Abre un dia para inspeccionar las sesiones detalladas.',
+          allDaysSummary: 'Revisa tu registro diario por fecha para ver sesiones, actividades y tiempo registrado.',
           matchingDays: 'dias coincidentes',
           searchPlaceholder: 'Buscar por fecha o tarea...',
           allTasks: 'Todas las tareas',
@@ -164,12 +164,12 @@ export function SettingsModal({
         }
       : {
           settingsAndHistory: 'Settings & History',
-          subtitle: 'Velor preferences and Daily Log insights',
+          subtitle: 'Adjust your experience and review your Daily Log history.',
           closeSettings: 'Close settings',
           close: 'Close',
           history: 'History',
           allDaysLogRecords: 'All Days Log Records',
-          allDaysSummary: 'Summary by day (24h view). Open a day to inspect the detailed sessions performed.',
+          allDaysSummary: 'Review your Daily Log by date to see sessions, activities, and tracked time.',
           matchingDays: 'matching days',
           searchPlaceholder: 'Search by date or task...',
           allTasks: 'All tasks',

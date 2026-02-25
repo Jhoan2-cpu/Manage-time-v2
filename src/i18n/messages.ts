@@ -1,4 +1,4 @@
-export const messages = {
+﻿export const messages = {
   es: {
     common: {
       brand: {
@@ -111,37 +111,37 @@ export const messages = {
       panelTitle: 'Configuración',
       language: {
         title: 'Idioma',
-        description: 'Selecciona el idioma de la interfaz (preparado para expansión gradual).',
+        description: 'Elige el idioma que prefieres para usar Velor.',
         defaultBadge: 'Predeterminado: Español',
       },
       uiSounds: {
         label: 'Sonidos UI (Click + Escritura)',
-        description: 'Activa o desactiva los sonidos de clic y escritura de la interfaz.',
+        description: 'Reproduce sonidos cortos al hacer clic o escribir para tener respuesta de la interfaz.',
       },
       musicVolume: {
         label: 'Volumen de Música de Fondo',
-        description: 'Ajusta el volumen de la música en bucle.',
+        description: 'Controla el volumen de la música de fondo mientras trabajas.',
       },
       taskSwitchConfirm: {
         label: 'Confirmar Cambio de Tarea',
-        description: 'Pide confirmación antes de cambiar mientras otra tarea está en ejecución.',
+        description: 'Evita cambios accidentales: pide confirmación si ya hay una tarea en ejecución.',
       },
       timeZone: {
         title: 'Zona Horaria',
-        description: 'Se usa para el reloj del encabezado y nuevos registros del historial.',
+        description: 'Define la hora que se muestra en el reloj y en los nuevos registros.',
         autoDetectLabel: 'Detectar Zona Horaria Automáticamente',
-        currentDescription: 'Actual: {timeZone}',
+        currentDescription: 'Zona en uso: {timeZone}',
         manualTitle: 'Zona Horaria Manual',
         optionsCount: '{count} opciones',
         searchPlaceholder: 'Buscar zona horaria...',
         noMatches: 'No hay zonas horarias que coincidan con tu búsqueda.',
-        disableAutoHint: 'Desactiva la detección automática para elegir una zona horaria IANA diferente.',
-        activeHint: 'Activa: {timeZone}',
+        disableAutoHint: 'Desactiva la detección automática para elegir otra zona horaria manualmente.',
+        activeHint: 'Zona seleccionada: {timeZone}',
       },
       signOutConfirmation: {
-        title: 'Confirmación de Cierre de Sesión',
+        title: 'Confirmación al Cerrar Sesión',
         description:
-          'Cerrar sesión siempre requerirá confirmación. Esta configuración solo afecta el cambio de tareas que ya están en progreso.',
+          'Por seguridad, al cerrar sesión se te pedirá confirmación antes de salir de tu cuenta.',
       },
     },
   },
@@ -257,37 +257,37 @@ export const messages = {
       panelTitle: 'Settings',
       language: {
         title: 'Language',
-        description: 'Select the interface language (ready for gradual rollout).',
+        description: 'Choose the language you prefer to use Velor.',
         defaultBadge: 'Default: Spanish',
       },
       uiSounds: {
         label: 'UI Sounds (Click + Typing)',
-        description: 'Enable or disable UI click and typing sounds.',
+        description: 'Play short sounds when you click or type for interface feedback.',
       },
       musicVolume: {
         label: 'Background Music Volume',
-        description: 'Adjust the volume of the loop music.',
+        description: 'Control the background music volume while you work.',
       },
       taskSwitchConfirm: {
         label: 'Confirm Task Switch',
-        description: 'Ask for confirmation before switching while another task is currently running.',
+        description: 'Prevents accidental switches by asking before changing tasks while one is running.',
       },
       timeZone: {
         title: 'Time Zone',
-        description: 'Used for the header clock and new log timestamps.',
+        description: 'Sets the time shown in the clock and in new log entries.',
         autoDetectLabel: 'Auto-detect Time Zone',
-        currentDescription: 'Current: {timeZone}',
+        currentDescription: 'Time zone in use: {timeZone}',
         manualTitle: 'Manual Time Zone',
         optionsCount: '{count} options',
         searchPlaceholder: 'Search timezone...',
         noMatches: 'No time zones match your search.',
-        disableAutoHint: 'Disable auto-detect to choose a different IANA time zone.',
-        activeHint: 'Active: {timeZone}',
+        disableAutoHint: 'Turn off auto-detect to choose a different time zone manually.',
+        activeHint: 'Selected time zone: {timeZone}',
       },
       signOutConfirmation: {
         title: 'Sign Out Confirmation',
         description:
-          'Sign out will always require confirmation. This setting only affects switching tasks that are already in progress.',
+          'For security, signing out asks for confirmation before leaving your account.',
       },
     },
   },
@@ -318,3 +318,4 @@ export function getCurrentIntlLocaleTag() {
 
   return toIntlLocaleTag(DEFAULT_APP_LOCALE)
 }
+
