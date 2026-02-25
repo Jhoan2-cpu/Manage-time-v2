@@ -257,7 +257,7 @@ export function TaskCarousel({
           />
 
           <div
-            className="task-carousel-scroll overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-2 pt-1.5"
+            className="task-carousel-scroll relative z-10 -mb-4 overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-8 pt-1.5 sm:-mb-6 sm:pb-10"
             onWheel={handleWheelScroll}
             ref={scrollerRef}
             style={carouselScrollbarStyleByColor[accentColorTag]}
