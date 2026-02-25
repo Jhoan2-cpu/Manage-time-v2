@@ -232,8 +232,8 @@ function FeaturePill({ icon, title, subtitle }: FeaturePillProps) {
           <FontAwesomeIcon icon={icon} />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-semibold text-slate-100 sm:text-sm">{title}</p>
-          <p className="truncate text-[11px] text-slate-500 sm:text-xs">{subtitle}</p>
+          <p className="text-[13px] font-semibold leading-tight text-slate-100 sm:text-sm">{title}</p>
+          <p className="mt-0.5 text-[11px] leading-4 text-slate-500 sm:text-xs">{subtitle}</p>
         </div>
       </div>
     </div>
