@@ -92,7 +92,7 @@ export function HomePage({ hasSession = false, onOpenLogin, onOpenRegister, onOp
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 content-start gap-6 pb-5 pt-5 sm:pt-6 lg:items-center lg:gap-6 lg:pb-0 lg:pt-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <div className="grid min-h-0 flex-1 content-start gap-6 pb-5 pt-5 sm:pt-6 lg:content-center lg:items-center lg:gap-6 lg:pb-0 lg:pt-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.26em] text-blue-300/85">{t('home.heroEyebrow')}</p>
             <h1 className="mt-3 max-w-2xl text-[clamp(2rem,8.4vw,2.65rem)] font-semibold leading-[1.06] tracking-tight text-slate-50 sm:text-5xl sm:leading-tight lg:text-6xl">
