@@ -53,7 +53,7 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
   }
 
   return (
-    <div className="relative h-[100svh] overflow-hidden bg-[#040b17] text-slate-100">
+    <div className="relative min-h-[100svh] overflow-x-hidden bg-[#040b17] text-slate-100 lg:h-[100svh] lg:overflow-hidden">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#020712_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(72%_68%_at_50%_38%,rgba(59,130,246,0.18),transparent_70%)]" />
@@ -62,8 +62,8 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
         <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(148,163,184,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.22)_1px,transparent_1px)] [background-size:34px_34px]" />
       </div>
 
-      <section className="relative z-10 mx-auto flex h-full w-full max-w-6xl items-center px-4 py-4 sm:px-6 lg:px-10">
-        <div className="grid w-full items-center gap-6 lg:grid-cols-[minmax(0,1.05fr)_420px]">
+      <section className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-6xl items-start px-4 py-4 sm:px-6 sm:py-5 lg:h-full lg:min-h-0 lg:items-center lg:px-10">
+        <div className="grid w-full items-start gap-6 lg:items-center lg:grid-cols-[minmax(0,1.05fr)_420px]">
           <section className="hidden lg:block">
             <div className="max-w-xl">
               <div className="mb-6 flex items-center gap-3">
