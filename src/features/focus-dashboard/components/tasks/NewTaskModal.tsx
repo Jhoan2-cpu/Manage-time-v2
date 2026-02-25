@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faClock, faHourglassHalf, faTrashCan, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../../i18n'
@@ -383,80 +384,42 @@ export function NewTaskModal({
                 >
                   {copy.timerOptional}
                 </label>
-                <div
-                  className="relative overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,rgba(2,6,23,0.26),rgba(2,6,23,0.12))] p-2.5"
-                  style={{
-                    borderColor: softAccentBorder,
-                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 0 0 1px ${softAccentGlow}`,
-                  }}
+                <TaskModalInfoCard
+                  accentRgb={modalAccentRgb}
+                  glowPosition="left"
+                  headerHint={copy.countdownHint}
+                  headerIcon={faHourglassHalf}
+                  headerTitle={copy.countdownTime}
+                  footerHint={copy.countdownFooterHint}
+                  softAccentBorder={softAccentBorder}
+                  softAccentGlow={softAccentGlow}
                 >
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -left-8 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full blur-2xl"
-                    style={{ backgroundColor: `rgba(${modalAccentRgb},0.12)` }}
-                  />
-                  <div className="relative mb-2 flex items-center gap-2">
-                    <span
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs"
-                      style={{
-                        borderColor: `rgba(${modalAccentRgb},0.35)`,
-                        backgroundColor: `rgba(${modalAccentRgb},0.14)`,
-                        color: 'rgba(241,245,249,0.95)',
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faHourglassHalf} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">{copy.countdownTime}</p>
-                      <p className="text-[11px] text-slate-500">{copy.countdownHint}</p>
-                    </div>
-                  </div>
-
                   <div className="relative flex items-center gap-1">
-                    <div className={timeUnitFieldClassName}>
-                      <input
-                        className={compactTimeFieldClassName}
-                        id={targetDurationHoursId}
-                        inputMode="numeric"
-                        maxLength={2}
-                        onChange={(event) => setTargetDurationHoursInput(sanitizeTwoDigitInput(event.target.value))}
-                        placeholder="00"
-                        type="text"
-                        value={targetDurationHoursInput}
-                      />
-                      <span className={timeUnitLabelClassName}>HH</span>
-                    </div>
-                    <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
-                    <div className={timeUnitFieldClassName}>
-                      <input
-                        aria-label={copy.timerMinutesAria}
-                        className={compactTimeFieldClassName}
-                        inputMode="numeric"
-                        maxLength={2}
-                        onChange={(event) => setTargetDurationMinutesInput(sanitizeTwoDigitInput(event.target.value))}
-                        placeholder="00"
-                        type="text"
-                        value={targetDurationMinutesInput}
-                      />
-                      <span className={timeUnitLabelClassName}>MM</span>
-                    </div>
-                    <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
-                    <div className={timeUnitFieldClassName}>
-                      <input
-                        aria-label={copy.timerSecondsAria}
-                        className={compactTimeFieldClassName}
-                        inputMode="numeric"
-                        maxLength={2}
-                        onChange={(event) => setTargetDurationSecondsInput(sanitizeTwoDigitInput(event.target.value))}
-                        placeholder="00"
-                        type="text"
-                        value={targetDurationSecondsInput}
-                      />
-                      <span className={timeUnitLabelClassName}>SS</span>
-                    </div>
+                    <CompactTimeUnitInput
+                      id={targetDurationHoursId}
+                      onChange={setTargetDurationHoursInput}
+                      placeholder="00"
+                      unitLabel="HH"
+                      value={targetDurationHoursInput}
+                    />
+                    <TimeUnitSeparator />
+                    <CompactTimeUnitInput
+                      ariaLabel={copy.timerMinutesAria}
+                      onChange={setTargetDurationMinutesInput}
+                      placeholder="00"
+                      unitLabel="MM"
+                      value={targetDurationMinutesInput}
+                    />
+                    <TimeUnitSeparator />
+                    <CompactTimeUnitInput
+                      ariaLabel={copy.timerSecondsAria}
+                      onChange={setTargetDurationSecondsInput}
+                      placeholder="00"
+                      unitLabel="SS"
+                      value={targetDurationSecondsInput}
+                    />
                   </div>
-                </div>
-                <p className="mt-2 text-[11px] leading-4 text-slate-500">{copy.countdownFooterHint}</p>
+                </TaskModalInfoCard>
               </div>
 
               <div>
@@ -466,93 +429,51 @@ export function NewTaskModal({
                 >
                   {copy.alarmOptional}
                 </label>
-                <div
-                  className="relative overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,rgba(2,6,23,0.26),rgba(2,6,23,0.12))] p-2.5"
-                  style={{
-                    borderColor: softAccentBorder,
-                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 0 0 1px ${softAccentGlow}`,
-                  }}
+                <TaskModalInfoCard
+                  accentRgb={modalAccentRgb}
+                  glowPosition="right"
+                  headerHint={copy.alarmHint}
+                  headerIcon={faClock}
+                  headerTitle={copy.startAlarm}
+                  footerHint={copy.alarmFooterHint}
+                  softAccentBorder={softAccentBorder}
+                  softAccentGlow={softAccentGlow}
                 >
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute right-0 top-0 h-16 w-16 translate-x-3 -translate-y-3 rounded-full blur-2xl"
-                    style={{ backgroundColor: `rgba(${modalAccentRgb},0.10)` }}
-                  />
-
-                  <div className="relative mb-2 flex items-center gap-2">
-                    <span
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs"
-                      style={{
-                        borderColor: `rgba(${modalAccentRgb},0.35)`,
-                        backgroundColor: `rgba(${modalAccentRgb},0.14)`,
-                        color: 'rgba(241,245,249,0.95)',
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faClock} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">{copy.startAlarm}</p>
-                      <p className="text-[11px] text-slate-500">{copy.alarmHint}</p>
-                    </div>
-                  </div>
-
                   <div className="relative flex flex-wrap items-center gap-x-1 gap-y-2 md:flex-nowrap">
-                    <div className={timeUnitFieldClassName}>
-                      <input
-                        className={compactTimeFieldClassName}
-                        id={alarmHourId}
-                        inputMode="numeric"
-                        maxLength={2}
-                        onChange={(event) => setAlarmHourInput(sanitizeTwoDigitInput(event.target.value))}
-                        placeholder="08"
-                        type="text"
-                        value={alarmHourInput}
-                      />
-                      <span className={timeUnitLabelClassName}>HH</span>
-                    </div>
-                    <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
-                    <div className={timeUnitFieldClassName}>
-                      <input
-                        aria-label={copy.alarmMinutesAria}
-                        className={compactTimeFieldClassName}
-                        inputMode="numeric"
-                        maxLength={2}
-                        onChange={(event) => setAlarmMinuteInput(sanitizeTwoDigitInput(event.target.value))}
-                        placeholder="00"
-                        type="text"
-                        value={alarmMinuteInput}
-                      />
-                      <span className={timeUnitLabelClassName}>MM</span>
-                    </div>
-                    <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
-                    <div className={timeUnitFieldClassName}>
-                      <input
-                        aria-label={copy.alarmSecondsAria}
-                        className={compactTimeFieldClassName}
-                        inputMode="numeric"
-                        maxLength={2}
-                        onChange={(event) => setAlarmSecondInput(sanitizeTwoDigitInput(event.target.value))}
-                        placeholder="00"
-                        type="text"
-                        value={alarmSecondInput}
-                      />
-                      <span className={timeUnitLabelClassName}>SS</span>
-                    </div>
-                    <div className="flex flex-col items-center justify-center px-0.5 py-0">
-                      <select
-                        aria-label={copy.alarmPeriodAria}
-                        className={classNames(compactTimeSelectClassName, 'w-[4.2rem]')}
-                        onChange={(event) => setAlarmPeriod(event.target.value as 'AM' | 'PM')}
-                        value={alarmPeriod}
-                      >
-                        <option value="AM">AM</option>
-                        <option value="PM">PM</option>
-                      </select>
-                      <span className={timeUnitLabelClassName}>AM/PM</span>
-                    </div>
+                    <CompactTimeUnitInput
+                      id={alarmHourId}
+                      onChange={setAlarmHourInput}
+                      placeholder="08"
+                      unitLabel="HH"
+                      value={alarmHourInput}
+                    />
+                    <TimeUnitSeparator />
+                    <CompactTimeUnitInput
+                      ariaLabel={copy.alarmMinutesAria}
+                      onChange={setAlarmMinuteInput}
+                      placeholder="00"
+                      unitLabel="MM"
+                      value={alarmMinuteInput}
+                    />
+                    <TimeUnitSeparator />
+                    <CompactTimeUnitInput
+                      ariaLabel={copy.alarmSecondsAria}
+                      onChange={setAlarmSecondInput}
+                      placeholder="00"
+                      unitLabel="SS"
+                      value={alarmSecondInput}
+                    />
+                    <CompactTimeSelectField
+                      ariaLabel={copy.alarmPeriodAria}
+                      onChange={(nextValue) => setAlarmPeriod(nextValue as 'AM' | 'PM')}
+                      unitLabel="AM/PM"
+                      value={alarmPeriod}
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </CompactTimeSelectField>
                   </div>
-                </div>
-                <p className="mt-2 text-[11px] leading-4 text-slate-500">{copy.alarmFooterHint}</p>
+                </TaskModalInfoCard>
               </div>
             </div>
 
@@ -654,6 +575,127 @@ export function NewTaskModal({
           </footer>
         </form>
       </div>
+    </div>
+  )
+}
+
+type TaskModalInfoCardProps = {
+  accentRgb: string
+  softAccentBorder: string
+  softAccentGlow: string
+  headerIcon: IconDefinition
+  headerTitle: string
+  headerHint: string
+  footerHint: string
+  glowPosition: 'left' | 'right'
+  children: ReactNode
+}
+
+function TaskModalInfoCard({
+  accentRgb,
+  softAccentBorder,
+  softAccentGlow,
+  headerIcon,
+  headerTitle,
+  headerHint,
+  footerHint,
+  glowPosition,
+  children,
+}: TaskModalInfoCardProps) {
+  return (
+    <>
+      <div
+        className="relative overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,rgba(2,6,23,0.26),rgba(2,6,23,0.12))] p-2.5"
+        style={{
+          borderColor: softAccentBorder,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 0 0 1px ${softAccentGlow}`,
+        }}
+      >
+        <div
+          aria-hidden="true"
+          className={classNames(
+            'pointer-events-none absolute rounded-full blur-2xl',
+            glowPosition === 'left'
+              ? '-left-8 top-1/2 h-20 w-20 -translate-y-1/2'
+              : 'right-0 top-0 h-16 w-16 translate-x-3 -translate-y-3',
+          )}
+          style={{ backgroundColor: glowPosition === 'left' ? `rgba(${accentRgb},0.12)` : `rgba(${accentRgb},0.10)` }}
+        />
+        <div className="relative mb-2 flex items-center gap-2">
+          <span
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs"
+            style={{
+              borderColor: `rgba(${accentRgb},0.35)`,
+              backgroundColor: `rgba(${accentRgb},0.14)`,
+              color: 'rgba(241,245,249,0.95)',
+            }}
+          >
+            <FontAwesomeIcon icon={headerIcon} />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">{headerTitle}</p>
+            <p className="text-[11px] text-slate-500">{headerHint}</p>
+          </div>
+        </div>
+        {children}
+      </div>
+      <p className="mt-2 text-[11px] leading-4 text-slate-500">{footerHint}</p>
+    </>
+  )
+}
+
+type CompactTimeUnitInputProps = {
+  value: string
+  onChange: (nextValue: string) => void
+  placeholder: string
+  unitLabel: string
+  id?: string
+  ariaLabel?: string
+}
+
+function CompactTimeUnitInput({ value, onChange, placeholder, unitLabel, id, ariaLabel }: CompactTimeUnitInputProps) {
+  return (
+    <div className={timeUnitFieldClassName}>
+      <input
+        aria-label={ariaLabel}
+        className={compactTimeFieldClassName}
+        id={id}
+        inputMode="numeric"
+        maxLength={2}
+        onChange={(event) => onChange(sanitizeTwoDigitInput(event.target.value))}
+        placeholder={placeholder}
+        type="text"
+        value={value}
+      />
+      <span className={timeUnitLabelClassName}>{unitLabel}</span>
+    </div>
+  )
+}
+
+function TimeUnitSeparator() {
+  return <span className="pb-4 text-sm font-semibold text-slate-500">:</span>
+}
+
+type CompactTimeSelectFieldProps = {
+  value: string
+  onChange: (nextValue: string) => void
+  unitLabel: string
+  ariaLabel?: string
+  children: ReactNode
+}
+
+function CompactTimeSelectField({ value, onChange, unitLabel, ariaLabel, children }: CompactTimeSelectFieldProps) {
+  return (
+    <div className="flex flex-col items-center justify-center px-0.5 py-0">
+      <select
+        aria-label={ariaLabel}
+        className={classNames(compactTimeSelectClassName, 'w-[4.2rem]')}
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        {children}
+      </select>
+      <span className={timeUnitLabelClassName}>{unitLabel}</span>
     </div>
   )
 }
