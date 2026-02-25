@@ -396,6 +396,20 @@ body {
   animation: home-preview-float 7.8s ease-in-out infinite;
 }
 
+@media (max-width: 1023px) {
+  .home-preview-float {
+    animation: none;
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-preview-float {
+    animation: none;
+    filter: none;
+  }
+}
+
 @keyframes daily-log-toggle-ignite {
   0% {
     box-shadow:
