@@ -88,7 +88,7 @@ export function TaskCarousel({
     locale === 'es'
       ? {
           focusQueue: 'Cola de enfoque',
-          taskCarousel: 'Carrusel de tareas',
+          taskCarousel: 'Registro de tareas',
           tasks: 'tareas',
           addTask: 'Agregar tarea',
           scrollHorizontally: 'Desliza horizontalmente',
