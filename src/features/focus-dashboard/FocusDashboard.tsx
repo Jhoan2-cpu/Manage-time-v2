@@ -20,10 +20,11 @@ import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
 import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tasks } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
+import { useFocusSessionController } from './hooks/useFocusSessionController'
 import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { classNames } from './utils/classNames'
-import { formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
+import { parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
 import { getCurrentIntlLocaleTag, useI18n } from '../../i18n'
 import {
   stopTimerEndAlarm,
@@ -86,23 +87,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     handleEnterFocusOnlyMode,
     handleExitFocusOnlyMode,
   } = useFocusDashboardShellState({ onSignOut })
-  const [isFocusRunning, setIsFocusRunning] = useState(false)
-  const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0)
   const [workspaceGlowPulseKey, setWorkspaceGlowPulseKey] = useState(0)
-  const [timerMode, setTimerMode] = useState<FocusTimerMode>(() => {
-    const initialActiveTask = tasks.find((task) => task.state === 'active') ?? tasks[0] ?? null
-    return initialActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch'
-  })
-  const [activeUntrackedSession, setActiveUntrackedSession] = useState<{
-    startedAtMs: number
-    startLabel: string
-    dateKey: string
-  } | null>(null)
-  const [activeFocusSessionMeta, setActiveFocusSessionMeta] = useState<{
-    taskId: string
-    startLabel: string
-    dateKey: string
-  } | null>(null)
   const copy =
     locale === 'es'
       ? {
@@ -160,31 +145,38 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
   const activeTask = useMemo(() => {
     return taskList.find((task) => task.state === 'active') ?? taskList[0] ?? null
   }, [taskList])
+  const initialTimerMode = useMemo<FocusTimerMode>(
+    () => (((tasks.find((task) => task.state === 'active') ?? tasks[0] ?? null)?.targetDurationMinutes ? 'timer' : 'stopwatch')),
+    [],
+  )
+  const {
+    isFocusRunning,
+    setIsFocusRunning,
+    sessionElapsedSeconds,
+    setSessionElapsedSeconds,
+    timerMode,
+    setTimerMode,
+    activeUntrackedSession,
+    setActiveUntrackedSession,
+    activeFocusSessionMeta,
+    setActiveFocusSessionMeta,
+    activeTaskTargetSeconds,
+    timerProgressPercent,
+    timerDisplayLabel,
+    isTimerComplete,
+    activeTaskTotalTimeLabel,
+  } = useFocusSessionController({
+    activeTask,
+    initialTimerMode,
+    loggedSecondsByTaskId,
+  })
   const localizedTaskList = useMemo(() => taskList.map((task) => localizeStaticTaskTitle(task, locale)), [locale, taskList])
   const activeTaskDisplay = useMemo(
     () => (activeTask ? localizeStaticTaskTitle(activeTask, locale) : null),
     [activeTask, locale],
   )
-  const activeTaskHasLiveSession = Boolean(activeTask && activeFocusSessionMeta?.taskId === activeTask.id)
   const activeWorkspaceAccentColor = activeTask?.colorTag ?? 'blue'
   const workspaceAccentRgb = workspaceAccentRgbByColor[activeWorkspaceAccentColor]
-  const activeTaskTargetSeconds =
-    (activeTask?.targetDurationMinutes ?? 0) > 0 ? Math.round((activeTask?.targetDurationMinutes ?? 0) * 60) : null
-  const timerProgressPercent =
-    timerMode === 'timer' && activeTaskTargetSeconds
-      ? Math.max(0, Math.min(100, (sessionElapsedSeconds / activeTaskTargetSeconds) * 100))
-      : null
-  const timerDisplaySeconds =
-    timerMode === 'timer' && activeTaskTargetSeconds
-      ? Math.max(0, activeTaskTargetSeconds - sessionElapsedSeconds)
-      : sessionElapsedSeconds
-  const timerDisplayLabel = formatSecondsHms(timerDisplaySeconds)
-  const isTimerComplete = Boolean(
-    timerMode === 'timer' && activeTaskTargetSeconds && sessionElapsedSeconds >= activeTaskTargetSeconds,
-  )
-  const activeTaskTotalTimeLabel = activeTask
-    ? formatSecondsHms((loggedSecondsByTaskId[activeTask.id] ?? 0) + (activeTaskHasLiveSession ? sessionElapsedSeconds : 0))
-    : '00:00:00'
   const carouselTaskList = useMemo(
     () =>
       localizedTaskList.map((task) =>
@@ -211,20 +203,6 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     ])
     : localizedDailyLogEntries
   useEffect(() => {
-    if (!isFocusRunning) {
-      return
-    }
-
-    const intervalId = window.setInterval(() => {
-      setSessionElapsedSeconds((currentSeconds) => currentSeconds + 1)
-    }, 1000)
-
-    return () => {
-      window.clearInterval(intervalId)
-    }
-  }, [isFocusRunning])
-
-  useEffect(() => {
     if (timerMode !== 'timer' || !isFocusRunning || !activeTaskTargetSeconds) {
       return
     }
@@ -236,17 +214,6 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       triggerTimerEndAlarm()
     }
   }, [activeTaskTargetSeconds, isFocusRunning, sessionElapsedSeconds, timerMode])
-
-  useEffect(() => {
-    if (timerMode === 'timer' && !activeTaskTargetSeconds) {
-      setTimerMode('stopwatch')
-      return
-    }
-
-    if (timerMode === 'timer' && activeTaskTargetSeconds) {
-      setSessionElapsedSeconds((currentSeconds) => Math.min(currentSeconds, activeTaskTargetSeconds))
-    }
-  }, [activeTaskTargetSeconds, timerMode])
 
   const handleAddTask = () => {
     setEditingTask(null)
