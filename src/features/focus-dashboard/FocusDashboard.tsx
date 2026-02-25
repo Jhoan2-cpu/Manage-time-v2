@@ -14,7 +14,7 @@ import { ProfileModal } from './components/ProfileModal'
 import { SignOutConfirmModal } from './components/SignOutConfirmModal'
 import { SettingsModal } from './components/SettingsModal'
 import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModal'
-import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
+import { NewTaskModal } from './components/tasks/NewTaskModal'
 import { SwitchTaskConfirmModal } from './components/tasks/SwitchTaskConfirmModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
@@ -22,10 +22,11 @@ import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tas
 import { useCurrentTime } from './hooks/useCurrentTime'
 import { useFocusSessionController } from './hooks/useFocusSessionController'
 import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState'
+import { useTaskManagementState } from './hooks/useTaskManagementState'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { classNames } from './utils/classNames'
-import { parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
-import { getCurrentIntlLocaleTag, useI18n } from '../../i18n'
+import { formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
+import { useI18n } from '../../i18n'
 import {
   stopTimerEndAlarm,
   triggerTimerEndAlarm,
@@ -48,11 +49,7 @@ type FocusDashboardProps = {
 
 export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboardProps = {}) {
   const { locale } = useI18n()
-  const [taskList, setTaskList] = useState<Task[]>(tasks)
   const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(initialLogEntries)
-  const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
-  const [taskPendingDelete, setTaskPendingDelete] = useState<Task | null>(null)
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<Task | null>(null)
   const {
     isProfileModalOpen,
@@ -112,6 +109,24 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         untrackedTime: 'Untracked Time',
         scheduledPrefix: 'Scheduled',
       }
+  const {
+    taskList,
+    setTaskList,
+    isNewTaskModalOpen,
+    editingTask,
+    taskPendingDelete,
+    handleAddTask,
+    handleCloseNewTaskModal,
+    handleCreateTask,
+    handleEditTask,
+    handleRequestDeleteTask,
+    handleRequestDeleteFromTaskModal,
+    handleCloseDeleteTaskModal,
+    cleanupTaskUiStateAfterDelete,
+  } = useTaskManagementState({
+    initialTasks: tasks,
+    scheduledPrefixLabel: copy.scheduledPrefix,
+  })
 
   const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(effectiveTimeZone)
   const localizedDailyLogEntries = useMemo(
@@ -189,19 +204,27 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       ),
     [activeTask, localizedTaskList, timerDisplayLabel],
   )
-  const sidebarLogEntries = activeUntrackedSession
-    ? sortLogEntriesByTime([
-      ...localizedDailyLogEntries,
-      {
-        id: 'log-live-untracked',
-        date: activeUntrackedSession.dateKey,
-        start: activeUntrackedSession.startLabel,
-        duration: formatLogDurationFromSeconds(Math.floor((Date.now() - activeUntrackedSession.startedAtMs) / 1000)),
-        activity: copy.untrackedTime,
-        tone: 'faded',
-      },
-    ])
-    : localizedDailyLogEntries
+  const sidebarLogEntries = useMemo(() => {
+    if (!activeUntrackedSession) {
+      return localizedDailyLogEntries
+    }
+
+    try {
+      return sortLogEntriesByTime([
+        ...localizedDailyLogEntries,
+        {
+          id: 'log-live-untracked',
+          date: activeUntrackedSession.dateKey,
+          start: activeUntrackedSession.startLabel,
+          duration: formatLogDurationFromSeconds(Math.floor((Date.now() - activeUntrackedSession.startedAtMs) / 1000)),
+          activity: copy.untrackedTime,
+          tone: 'faded',
+        },
+      ])
+    } catch {
+      return localizedDailyLogEntries
+    }
+  }, [activeUntrackedSession, copy.untrackedTime, localizedDailyLogEntries])
   useEffect(() => {
     if (timerMode !== 'timer' || !isFocusRunning || !activeTaskTargetSeconds) {
       return
@@ -215,69 +238,6 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     }
   }, [activeTaskTargetSeconds, isFocusRunning, sessionElapsedSeconds, timerMode])
 
-  const handleAddTask = () => {
-    setEditingTask(null)
-    setIsNewTaskModalOpen(true)
-  }
-  const handleCloseNewTaskModal = () => {
-    setIsNewTaskModalOpen(false)
-    setEditingTask(null)
-  }
-  const handleCreateTask = ({ title, details, colorTag, iconTag, targetDurationMinutes, alarmTime }: NewTaskPayload) => {
-    if (editingTask) {
-      setTaskList((currentTasks) =>
-        currentTasks.map((task) =>
-          task.id === editingTask.id
-            ? {
-              ...task,
-              title,
-              details: details.trim(),
-              colorTag,
-              iconTag,
-              targetDurationMinutes,
-              alarmTime,
-            }
-            : task,
-        ),
-      )
-      return
-    }
-
-    const createdAtLabel = new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(new Date())
-
-    setTaskList((currentTasks) => [
-      {
-        id: `task-${crypto.randomUUID()}`,
-        title,
-        details: details.trim(),
-        statusText: `${copy.scheduledPrefix}: ${createdAtLabel}`,
-        duration: '00:00:00',
-        state: 'scheduled',
-        colorTag,
-        iconTag,
-        targetDurationMinutes,
-        alarmTime,
-      },
-      ...currentTasks,
-    ])
-  }
-  const handleEditTask = (task: Task) => {
-    setEditingTask(task)
-    setIsNewTaskModalOpen(true)
-  }
-  const handleRequestDeleteTask = (task: Task) => {
-    setTaskPendingDelete(task)
-  }
-  const handleRequestDeleteFromTaskModal = (task: Task) => {
-    setIsNewTaskModalOpen(false)
-    setTaskPendingDelete(task)
-  }
-  const handleCloseDeleteTaskModal = () => {
-    setTaskPendingDelete(null)
-  }
   const handleConfirmDeleteTask = () => {
     if (!taskPendingDelete) {
       return
@@ -309,11 +269,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       setTimerMode(nextActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch')
     }
 
-    if (editingTask?.id === taskPendingDelete.id) {
-      setIsNewTaskModalOpen(false)
-      setEditingTask(null)
-    }
-    setTaskPendingDelete(null)
+    cleanupTaskUiStateAfterDelete(taskPendingDelete.id)
     setTaskPendingSwitchConfirm((current) => (current?.id === taskPendingDelete.id ? null : current))
   }
   const startFocusSessionMeta = (task: Task) => {
@@ -383,9 +339,9 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     setActiveFocusSessionMeta(null)
   }
   const activateTaskAndStartNewCount = (selectedTask: Task) => {
-    stopTimerEndAlarm()
-    handleFinishUntrackedSession()
-    commitCurrentFocusSession()
+    runNonBlockingFocusSideEffect(stopTimerEndAlarm)
+    runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
+    runNonBlockingFocusSideEffect(commitCurrentFocusSession)
     setWorkspaceGlowPulseKey((current) => current + 1)
     setTaskList((currentTasks) =>
       currentTasks.map((task) => {
@@ -402,7 +358,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     )
     setSessionElapsedSeconds(0)
     setTimerMode(selectedTask.targetDurationMinutes ? 'timer' : 'stopwatch')
-    startFocusSessionMeta(selectedTask)
+    runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
     setIsFocusRunning(true)
   }
   const handleStartFocus = () => {
@@ -410,15 +366,15 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       return
     }
 
-    stopTimerEndAlarm()
+    runNonBlockingFocusSideEffect(stopTimerEndAlarm)
 
     if (isFocusRunning) {
       setIsFocusRunning(false)
-      handleStartUntrackedSession()
+      runNonBlockingFocusSideEffect(handleStartUntrackedSession)
       return
     }
 
-    handleFinishUntrackedSession()
+    runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
 
     const willResetCompletedTimer = Boolean(
       timerMode === 'timer' && activeTaskTargetSeconds && sessionElapsedSeconds >= activeTaskTargetSeconds,
@@ -434,7 +390,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       activeFocusSessionMeta.taskId !== activeTask.id
 
     if (shouldStartNewFocusSession) {
-      startFocusSessionMeta(activeTask)
+      runNonBlockingFocusSideEffect(() => startFocusSessionMeta(activeTask))
     }
 
     setIsFocusRunning(true)
@@ -444,7 +400,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
       return
     }
 
-    stopTimerEndAlarm()
+    runNonBlockingFocusSideEffect(stopTimerEndAlarm)
     setTimerMode(nextMode)
   }
   const handlePlayTask = (selectedTask: Task) => {
@@ -715,11 +671,20 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 }
 
 function formatLogStartTime(date: Date, timeZone?: string) {
-  return new Intl.DateTimeFormat(getCurrentIntlLocaleTag(), {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date)
+  } catch {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date)
+  }
 }
 
 function formatLocalDateKey(date: Date, timeZone?: string) {
@@ -812,7 +777,19 @@ function sortLogEntriesByTime(entries: LogEntry[]) {
 }
 
 function parseStartLabelToMinutes(label: string) {
-  const match = label.trim().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
+  if (typeof label !== 'string') {
+    return Number.MAX_SAFE_INTEGER
+  }
+
+  const normalizedLabel = label
+    .trim()
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\b(a)\s*m\b/i, 'AM')
+    .replace(/\b(p)\s*m\b/i, 'PM')
+    .toUpperCase()
+
+  const match = normalizedLabel.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
   if (!match) {
     return Number.MAX_SAFE_INTEGER
   }
@@ -824,4 +801,12 @@ function parseStartLabelToMinutes(label: string) {
   const hour24 = meridiem === 'PM' ? normalizedHours + 12 : normalizedHours
 
   return hour24 * 60 + minutes
+}
+
+function runNonBlockingFocusSideEffect(action: () => void) {
+  try {
+    action()
+  } catch {
+    // Audio/log side effects should not block timer controls.
+  }
 }

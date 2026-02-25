@@ -465,6 +465,10 @@ export function DailyLogPanel({
 }
 
 function formatStartTimeWithSeconds(startLabel: string) {
+  if (typeof startLabel !== 'string') {
+    return ''
+  }
+
   const raw = startLabel.trim()
   if (!raw) {
     return startLabel
