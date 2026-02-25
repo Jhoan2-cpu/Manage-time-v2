@@ -180,10 +180,10 @@ export function TimerPanel({
           )}
         >
           <div className="flex justify-center">
-            <div className=" flex max-w-full items-center gap-3 sm:gap-4">
+            <div className="flex max-w-full items-start gap-3 sm:gap-4">
               <span
                 className={classNames(
-                  'inline-flex h-7 w-7 shrink-0 items-center justify-center text-xl sm:h-8 sm:w-8 sm:text-2xl',
+                  'inline-flex h-7 w-7 shrink-0 items-center justify-center pt-0.5 text-xl sm:h-8 sm:w-8 sm:pt-1 sm:text-2xl',
                   activeTask ? accents.totalValueClassName : 'text-slate-300',
                 )}
               >
@@ -193,7 +193,7 @@ export function TimerPanel({
               <div className="min-w-0">
                 <h2
                   className={classNames(
-                    'truncate text-center text-2xl font-semibold tracking-tight text-slate-100 sm:text-4xl',
+                    'overflow-hidden break-words text-center text-2xl font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] sm:text-4xl',
                     isFocusOnlyMode ? 'sm:text-center' : 'sm:text-left',
                   )}
                 >
