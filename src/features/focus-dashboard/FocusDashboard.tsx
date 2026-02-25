@@ -542,9 +542,10 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
                   <div className="relative z-10 mx-auto flex min-h-full w-full flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] pt-4 sm:h-full sm:flex-1 sm:pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:px-6 md:pb-0 [@media(max-height:840px)]:h-auto [@media(max-height:840px)]:pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
                     <TaskCarousel
-                      accentColorTag={activeWorkspaceAccentColor}
-                      isActiveTaskTimerComplete={isTimerComplete}
-                      isFocusRunning={isFocusRunning}
+                       accentColorTag={activeWorkspaceAccentColor}
+                       effectiveTimeZone={effectiveTimeZone}
+                       isActiveTaskTimerComplete={isTimerComplete}
+                       isFocusRunning={isFocusRunning}
                       onAddTask={handleAddTask}
                       onDeleteTask={handleRequestDeleteTask}
                       onEditTask={handleEditTask}

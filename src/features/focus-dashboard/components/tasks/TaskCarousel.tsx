@@ -4,6 +4,7 @@ import { faChevronLeft, faChevronRight, faLayerGroup, faPlus } from '@fortawesom
 import { useI18n } from '../../../../i18n'
 import type { Task, TaskColorKey } from '../../types'
 import { classNames } from '../../utils/classNames'
+import { toIsoDateStringInTimeZone } from '../../utils/time'
 import { TaskCard } from './TaskCard'
 
 type TaskCarouselProps = {
@@ -12,6 +13,7 @@ type TaskCarouselProps = {
   isFocusRunning?: boolean
   isActiveTaskTimerComplete?: boolean
   accentColorTag?: TaskColorKey
+  effectiveTimeZone?: string
   onAddTask: () => void
   onPlayTask?: (task: Task) => void
   onEditTask?: (task: Task) => void
@@ -75,6 +77,7 @@ export function TaskCarousel({
   isFocusRunning = false,
   isActiveTaskTimerComplete = false,
   accentColorTag = 'blue',
+  effectiveTimeZone,
   onAddTask,
   onPlayTask,
   onEditTask,
@@ -84,6 +87,8 @@ export function TaskCarousel({
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
+  const [alarmAttentionByTaskId, setAlarmAttentionByTaskId] = useState<Record<string, boolean>>({})
+  const [lastAlarmTriggerKeyByTaskId, setLastAlarmTriggerKeyByTaskId] = useState<Record<string, string>>({})
   const copy =
     locale === 'es'
       ? {
@@ -135,6 +140,103 @@ export function TaskCarousel({
       window.removeEventListener('resize', handleScroll)
     }
   }, [tasks.length, updateScrollButtons])
+
+  useEffect(() => {
+    const taskIds = new Set(tasks.map((task) => task.id))
+    setAlarmAttentionByTaskId((current) => {
+      let changed = false
+      const nextEntries = Object.entries(current).filter(([taskId, isActive]) => {
+        const keep = taskIds.has(taskId) && isActive
+        if (!keep) {
+          changed = true
+        }
+        return keep
+      })
+      return changed ? Object.fromEntries(nextEntries) : current
+    })
+    setLastAlarmTriggerKeyByTaskId((current) => {
+      let changed = false
+      const nextEntries = Object.entries(current).filter(([taskId]) => {
+        const keep = taskIds.has(taskId)
+        if (!keep) {
+          changed = true
+        }
+        return keep
+      })
+      return changed ? Object.fromEntries(nextEntries) : current
+    })
+  }, [tasks])
+
+  useEffect(() => {
+    const checkDueTaskAlarms = () => {
+      const now = new Date()
+      const currentMinuteKey = getTimeKeyForAlarmTrigger(now, effectiveTimeZone)
+      if (!currentMinuteKey) {
+        return
+      }
+      const currentDateKey = getDateKeyForAlarmTrigger(now, effectiveTimeZone)
+      if (!currentDateKey) {
+        return
+      }
+
+      const dueTriggers = tasks.flatMap((task) => {
+        if (!task.alarmTime) {
+          return []
+        }
+
+        const normalizedAlarmTime = normalizeAlarmTimeForTrigger(task.alarmTime)
+        if (!normalizedAlarmTime || normalizedAlarmTime !== currentMinuteKey) {
+          return []
+        }
+
+        const triggerKey = `${currentDateKey}|${normalizedAlarmTime}`
+        if (lastAlarmTriggerKeyByTaskId[task.id] === triggerKey) {
+          return []
+        }
+
+        return [{ taskId: task.id, triggerKey }]
+      })
+
+      if (dueTriggers.length === 0) {
+        return
+      }
+
+      setLastAlarmTriggerKeyByTaskId((current) => {
+        const next = { ...current }
+        dueTriggers.forEach(({ taskId, triggerKey }) => {
+          next[taskId] = triggerKey
+        })
+        return next
+      })
+
+      setAlarmAttentionByTaskId((current) => {
+        const next = { ...current }
+        dueTriggers.forEach(({ taskId }) => {
+          next[taskId] = true
+        })
+        return next
+      })
+    }
+
+    checkDueTaskAlarms()
+    const intervalId = window.setInterval(checkDueTaskAlarms, 1000)
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [effectiveTimeZone, lastAlarmTriggerKeyByTaskId, tasks])
+
+  const handleAcknowledgeAlarmAttention = useCallback((task: Task) => {
+    setAlarmAttentionByTaskId((current) => {
+      if (!current[task.id]) {
+        return current
+      }
+
+      return {
+        ...current,
+        [task.id]: false,
+      }
+    })
+  }, [])
 
   const handleScrollBy = (direction: 'left' | 'right') => {
     const element = scrollerRef.current
@@ -257,7 +359,7 @@ export function TaskCarousel({
           />
 
           <div
-            className="task-carousel-scroll relative z-10 -mb-4 overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-8 pt-1.5 sm:-mb-6 sm:pb-10"
+            className="task-carousel-scroll relative z-10 -mb-4 -mt-3 overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-8 pt-4 sm:-mb-6 sm:-mt-4 sm:pb-10 sm:pt-5"
             onWheel={handleWheelScroll}
             ref={scrollerRef}
             style={carouselScrollbarStyleByColor[accentColorTag]}
@@ -276,7 +378,9 @@ export function TaskCarousel({
                 tasks.map((task) => (
                   <div className="snap-start" key={task.id}>
                     <TaskCard
+                      isAlarmAttentionActive={Boolean(alarmAttentionByTaskId[task.id])}
                       isRunning={isFocusRunning}
+                      onAcknowledgeAlarmAttention={handleAcknowledgeAlarmAttention}
                       onEditTask={onEditTask}
                       onPlayTask={onPlayTask}
                       sessionCount={sessionCountByTaskId[task.id] ?? 0}
@@ -292,4 +396,65 @@ export function TaskCarousel({
       </section>
     </div>
   )
+}
+
+function normalizeAlarmTimeForTrigger(alarmTime: string) {
+  const raw = alarmTime.trim()
+  if (!raw) {
+    return null
+  }
+
+  const twelveHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i)
+  if (twelveHourMatch) {
+    const hours12 = Number.parseInt(twelveHourMatch[1] ?? '', 10)
+    const minutes = Number.parseInt(twelveHourMatch[2] ?? '', 10)
+    if (!Number.isFinite(hours12) || !Number.isFinite(minutes) || minutes < 0 || minutes > 59) {
+      return null
+    }
+
+    let hours24 = hours12 % 12
+    if ((twelveHourMatch[3] ?? '').toUpperCase() === 'PM') {
+      hours24 += 12
+    }
+    return `${String(hours24).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  }
+
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!twentyFourHourMatch) {
+    return null
+  }
+
+  const hours = Number.parseInt(twentyFourHourMatch[1] ?? '', 10)
+  const minutes = Number.parseInt(twentyFourHourMatch[2] ?? '', 10)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null
+  }
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+function getTimeKeyForAlarmTrigger(date: Date, timeZone?: string) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: timeZone || undefined,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date)
+  } catch {
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${hours}:${minutes}`
+  }
+}
+
+function getDateKeyForAlarmTrigger(date: Date, timeZone?: string) {
+  try {
+    return timeZone ? toIsoDateStringInTimeZone(date, timeZone) : toIsoDateStringInTimeZone(date, Intl.DateTimeFormat().resolvedOptions().timeZone)
+  } catch {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 }

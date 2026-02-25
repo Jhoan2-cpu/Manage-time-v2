@@ -19,6 +19,8 @@ type TaskCardProps = {
   sessionCount: number
   isRunning?: boolean
   showRestartAction?: boolean
+  isAlarmAttentionActive?: boolean
+  onAcknowledgeAlarmAttention?: (task: Task) => void
   onPlayTask?: (task: Task) => void
   onEditTask?: (task: Task) => void
 }
@@ -67,6 +69,8 @@ export function TaskCard({
   sessionCount,
   isRunning = false,
   showRestartAction = false,
+  isAlarmAttentionActive = false,
+  onAcknowledgeAlarmAttention,
   onPlayTask,
   onEditTask,
 }: TaskCardProps) {
@@ -110,11 +114,14 @@ export function TaskCard({
         'shadow-[0_14px_28px_rgba(1,8,22,0.34),0_4px_12px_rgba(1,8,22,0.16),inset_0_1px_0_rgba(255,255,255,0.04)]',
         !isActive && 'task-card-hover-glow',
         isActive && 'task-card-focus-ignite',
+        isAlarmAttentionActive && 'task-card-scheduled-alarm-alert',
         colorStyles.cardClassName,
         isActive && classNames('ring-2 ring-inset', colorStyles.selectedRingClassName),
         stateStyles.shell,
       )}
       onClick={(event) => {
+        onAcknowledgeAlarmAttention?.(task)
+
         const target = event.target
         if (target instanceof Element && target.closest('button')) {
           return
@@ -148,9 +155,16 @@ export function TaskCard({
             </span>
           ) : null}
           {task.alarmTime ? (
-            <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-950/28 px-1.5 py-0.5 text-[10px] text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]">
+            <span
+              className={classNames(
+                'inline-flex items-center gap-0.5 rounded-md bg-slate-950/28 px-1.5 py-0.5 text-[10px] text-slate-200 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.22)]',
+                isAlarmAttentionActive && 'task-card-alarm-chip-alert',
+              )}
+            >
               <FontAwesomeIcon className="text-[9px] text-slate-400" icon={faBell} />
-              <span>{formatAlarmTimeChip(task.alarmTime)}</span>
+              <span className={classNames(isAlarmAttentionActive && 'task-card-alarm-time-alert')}>
+                {formatAlarmTimeChip(task.alarmTime)}
+              </span>
             </span>
           ) : null}
           <span
@@ -184,7 +198,10 @@ export function TaskCard({
               'grid h-7 w-7 place-items-center rounded-full border transition shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:brightness-110',
               colorStyles.iconShellClassName,
             )}
-            onClick={() => onPlayTask?.(task)}
+            onClick={() => {
+              onAcknowledgeAlarmAttention?.(task)
+              onPlayTask?.(task)
+            }}
             type="button"
           >
             <FontAwesomeIcon
@@ -199,7 +216,10 @@ export function TaskCard({
               'inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:brightness-110',
               colorStyles.iconShellClassName,
             )}
-            onClick={() => onEditTask?.(task)}
+            onClick={() => {
+              onAcknowledgeAlarmAttention?.(task)
+              onEditTask?.(task)
+            }}
             type="button"
           >
             <FontAwesomeIcon className="text-[10px]" icon={faEye} />
