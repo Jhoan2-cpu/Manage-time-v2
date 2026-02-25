@@ -184,7 +184,12 @@ export function TimerPanel({
           )}
         >
           <div className="flex w-full justify-center">
-            <div className="flex w-full max-w-[min(100%,58rem)] items-start justify-center gap-3 sm:gap-4">
+            <div
+              className={classNames(
+                'flex max-w-[min(100%,58rem)] items-start gap-3 sm:gap-4',
+                isFocusOnlyMode ? 'w-auto justify-center' : 'w-full justify-center',
+              )}
+            >
               <span
                 className={classNames(
                   'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center text-xl sm:mt-1.5 sm:h-8 sm:w-8 sm:text-2xl',
@@ -194,13 +199,13 @@ export function TimerPanel({
                 {activeTaskIcon ? <FontAwesomeIcon icon={activeTaskIcon.icon} /> : <FontAwesomeIcon icon={faLayerGroup} />}
               </span>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <h2
                   className={classNames(
                     'w-full overflow-hidden break-words text-center font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]',
                     isFocusOnlyMode
                       ? 'text-[clamp(1.7rem,8vw,2.4rem)] sm:text-center sm:text-4xl'
-                      : 'text-2xl sm:text-left sm:text-4xl',
+                      : 'text-2xl sm:text-center sm:text-4xl',
                   )}
                 >
                   {taskTitle}
@@ -208,7 +213,7 @@ export function TimerPanel({
                 <div
                   className={classNames(
                     'mt-2 flex flex-wrap items-center justify-center gap-2',
-                    isFocusOnlyMode ? 'sm:justify-center' : 'sm:justify-start',
+                    'sm:justify-center',
                   )}
                 >
                   <div className="inline-flex items-center rounded-xl bg-slate-950/25 p-1 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
