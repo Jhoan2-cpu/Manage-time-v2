@@ -279,13 +279,13 @@ export function DailyLogPanel({
         'z-40 overflow-hidden xl:relative xl:shrink-0',
         'fixed inset-x-0 bottom-0 top-16 max-h-none xl:static xl:inset-auto xl:bottom-auto xl:max-h-none',
         'transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-        isOpen ? 'pointer-events-auto xl:w-[420px]' : 'pointer-events-none xl:w-0',
+        isOpen ? 'pointer-events-auto xl:w-[456px]' : 'pointer-events-none xl:w-0',
       )}
     >
       <div
         className={classNames(
           'flex h-full flex-col border border-slate-800 bg-[#050d1d]/95 shadow-[0_24px_60px_rgba(1,8,22,0.55)] backdrop-blur will-change-transform',
-          'rounded-none xl:h-full xl:w-[420px] xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:border-slate-800 xl:bg-[#050d1d] xl:shadow-none xl:backdrop-blur-0',
+          'rounded-none xl:h-full xl:w-[456px] xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:border-slate-800 xl:bg-[#050d1d] xl:shadow-none xl:backdrop-blur-0',
           'transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
           isOpen ? 'translate-x-0 translate-y-0 xl:translate-x-0' : '-translate-x-full translate-y-0 xl:translate-x-0 xl:translate-y-0',
         )}
@@ -311,8 +311,8 @@ export function DailyLogPanel({
         >
           <table className="w-full table-fixed border-separate border-spacing-y-1 text-xs select-none">
             <colgroup>
-              <col className="w-[120px]" />
-              <col className="w-[88px]" />
+              <col className="w-[138px]" />
+              <col className="w-[104px]" />
               <col />
             </colgroup>
             <thead>
