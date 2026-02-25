@@ -450,7 +450,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
 
       {
         isFocusOnlyMode ? (
-          <section className="focus-only-overlay-enter app-scroll relative h-[100svh] overflow-x-hidden overflow-y-auto sm:overflow-y-hidden">
+          <section className="focus-only-overlay-enter app-scroll relative h-[100svh] overflow-x-hidden overflow-y-auto sm:overflow-y-hidden [@media(max-height:840px)]:overflow-y-auto">
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
               <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
               <div
@@ -479,7 +479,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
               <span className="hidden font-medium sm:inline">{copy.exitFocusOnlyShort}</span>
             </button>
 
-            <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-4 sm:px-8 sm:py-8">
+            <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-4 sm:px-8 sm:py-8 [@media(max-height:840px)]:items-start">
               <TimerPanel
                 activeTask={activeTask}
                 canUseTimerMode={Boolean(activeTaskTargetSeconds)}
@@ -527,7 +527,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
               />
 
               <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-visible sm:overflow-y-auto">
-                <div className="relative flex min-h-[calc(100svh-4rem)] flex-col sm:h-full sm:min-h-full pb-8">
+                <div className="relative flex min-h-[calc(100svh-4rem)] flex-col pb-8 sm:h-full sm:min-h-full [@media(max-height:840px)]:h-auto">
                   <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
                     <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
                     <div
@@ -540,7 +540,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
                     <div className="absolute inset-0 shadow-[inset_0_1px_0_rgba(148,163,184,0.02)]" />
                   </div>
 
-                  <div className="relative z-10 mx-auto flex min-h-full w-full flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] pt-4 sm:h-full sm:flex-1 sm:pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:px-6 md:pb-0">
+                  <div className="relative z-10 mx-auto flex min-h-full w-full flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] pt-4 sm:h-full sm:flex-1 sm:pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:px-6 md:pb-0 [@media(max-height:840px)]:h-auto [@media(max-height:840px)]:pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
                     <TaskCarousel
                       accentColorTag={activeWorkspaceAccentColor}
                       isActiveTaskTimerComplete={isTimerComplete}
