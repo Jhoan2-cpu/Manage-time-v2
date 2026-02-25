@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowRotateRight, faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../i18n'
-import { taskColorMap, taskIconMap } from '../constants/taskOptions'
+import { taskIconMap } from '../constants/taskOptions'
 import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
 
@@ -137,7 +137,6 @@ export function TimerPanel({
   isTimerComplete = false,
 }: TimerPanelProps) {
   const { locale } = useI18n()
-  const activeTaskColor = activeTask ? taskColorMap[activeTask.colorTag] : null
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
   const accents = activeTask ? timerAccentStyles[activeTask.colorTag] : timerAccentStyles.blue
   const copy =
@@ -184,9 +183,8 @@ export function TimerPanel({
             <div className=" flex max-w-full items-center gap-3 sm:gap-4">
               <span
                 className={classNames(
-                  'grid h-12 w-12 shrink-0 place-items-center rounded-2xl border text-lg',
-                  activeTaskColor?.iconShellClassName ?? 'border-slate-700 bg-slate-800 text-slate-300',
-                  accents.glowClassName,
+                  'inline-flex h-7 w-7 shrink-0 items-center justify-center text-xl sm:h-8 sm:w-8 sm:text-2xl',
+                  activeTask ? accents.totalValueClassName : 'text-slate-300',
                 )}
               >
                 {activeTaskIcon ? <FontAwesomeIcon icon={activeTaskIcon.icon} /> : <FontAwesomeIcon icon={faLayerGroup} />}
