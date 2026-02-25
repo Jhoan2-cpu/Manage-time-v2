@@ -228,7 +228,7 @@ function FeaturePill({ icon, title, subtitle }: FeaturePillProps) {
   return (
     <div className="rounded-2xl border border-slate-800/80 bg-slate-950/25 p-2.5 sm:p-3">
       <div className="flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg border border-slate-700/70 bg-slate-900/40 text-[13px] text-slate-300">
+        <span className="grid h-8 w-8 place-items-center rounded-lg  bg-slate-900/40 text-[13px] text-slate-300">
           <FontAwesomeIcon icon={icon} />
         </span>
         <div className="min-w-0">

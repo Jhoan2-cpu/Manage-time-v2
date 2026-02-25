@@ -1,6 +1,6 @@
 import { FormEvent, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft, faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket } from '@fortawesome/free-solid-svg-icons'
+import { faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
 import { useI18n } from '../../../i18n'
 
@@ -8,10 +8,10 @@ type LoginPageProps = {
   onLogin: (payload: { email: string; password: string }) => void
   onLoginWithGoogle?: () => void
   onOpenRegister?: () => void
-  onGoBack?: () => void
+  onClose?: () => void
 }
 
-export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack }: LoginPageProps) {
+export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onClose }: LoginPageProps) {
   const { t } = useI18n()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -89,11 +89,11 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onGoBack
                   <button
                     className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800/60 hover:text-slate-100"
                     data-sfx-type="off"
-                    onClick={onGoBack}
+                    onClick={onClose}
                     type="button"
                   >
-                    <FontAwesomeIcon className="text-xs" icon={faArrowLeft} />
-                    {t('common.actions.back')}
+                    <FontAwesomeIcon className="text-xs" icon={faXmark} />
+                    {t('common.actions.close')}
                   </button>
                 </div>
               </div>

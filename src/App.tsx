@@ -150,12 +150,7 @@ function App() {
   }
 
   const route = resolveRoute(currentPath)
-  const handleGoBack = () => {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      window.history.back()
-      return
-    }
-
+  const handleCloseAuthForm = () => {
     navigateTo('/')
     setCurrentPath('/')
   }
@@ -164,7 +159,7 @@ function App() {
     if (route === 'register') {
       return (
         <RegisterPage
-          onGoBack={handleGoBack}
+          onClose={handleCloseAuthForm}
           onOpenLogin={() => {
             navigateTo('/login')
             setCurrentPath('/login')
@@ -177,7 +172,7 @@ function App() {
     if (route === 'login') {
       return (
         <LoginPage
-          onGoBack={handleGoBack}
+          onClose={handleCloseAuthForm}
           onLogin={handleLogin}
           onLoginWithGoogle={handleGoogleAuth}
           onOpenRegister={() => {
