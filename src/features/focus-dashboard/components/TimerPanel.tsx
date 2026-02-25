@@ -179,22 +179,24 @@ export function TimerPanel({
             isFocusOnlyMode ? 'h-full justify-center py-4 sm:py-6' : 'sm:h-full sm:pb-0',
           )}
         >
-          <div className="flex justify-center">
-            <div className="flex max-w-full items-start gap-3 sm:gap-4">
+          <div className="flex w-full justify-center">
+            <div className="flex w-full max-w-[min(100%,58rem)] items-start justify-center gap-3 sm:gap-4">
               <span
                 className={classNames(
-                  'inline-flex h-7 w-7 shrink-0 items-center justify-center pt-0.5 text-xl sm:h-8 sm:w-8 sm:pt-1 sm:text-2xl',
+                  'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center text-xl sm:mt-1.5 sm:h-8 sm:w-8 sm:text-2xl',
                   activeTask ? accents.totalValueClassName : 'text-slate-300',
                 )}
               >
                 {activeTaskIcon ? <FontAwesomeIcon icon={activeTaskIcon.icon} /> : <FontAwesomeIcon icon={faLayerGroup} />}
               </span>
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h2
                   className={classNames(
-                    'overflow-hidden break-words text-center text-2xl font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] sm:text-4xl',
-                    isFocusOnlyMode ? 'sm:text-center' : 'sm:text-left',
+                    'w-full overflow-hidden break-words text-center font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]',
+                    isFocusOnlyMode
+                      ? 'text-[clamp(1.7rem,8vw,2.4rem)] sm:text-center sm:text-4xl'
+                      : 'text-2xl sm:text-left sm:text-4xl',
                   )}
                 >
                   {taskTitle}
@@ -249,8 +251,10 @@ export function TimerPanel({
           >
             <p
               className={classNames(
-                'relative select-none font-bold leading-none tracking-tight text-slate-100 tabular-nums',
-                isFocusOnlyMode ? 'text-[clamp(96px,14vw,260px)]' : 'text-[clamp(80px,12vw,220px)]',
+                'relative w-full max-w-full overflow-hidden text-center select-none font-bold leading-none tracking-tight text-slate-100 tabular-nums',
+                isFocusOnlyMode
+                  ? 'text-[clamp(58px,22vw,112px)] sm:text-[clamp(96px,14vw,260px)]'
+                  : 'text-[clamp(60px,18vw,96px)] sm:text-[clamp(80px,12vw,220px)]',
                 accents.timeGlowClassName,
               )}
             >
