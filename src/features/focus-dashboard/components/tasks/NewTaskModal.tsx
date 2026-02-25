@@ -631,7 +631,7 @@ export function NewTaskModal({
             </section>
           </div>
 
-          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 bg-[#081226]/90 px-6 py-4 sm:flex-nowrap sm:py-5">
+          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-700/70 bg-[#081226]/65 px-6 py-4 shadow-[0_-10px_24px_rgba(2,8,20,0.22)] backdrop-blur-md sm:flex-nowrap sm:py-5">
             <div>
               {isEditing && editingTask && onRequestDeleteTask ? (
                 <button

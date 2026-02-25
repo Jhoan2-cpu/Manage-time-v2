@@ -143,23 +143,23 @@ export function TimerPanel({
   const copy =
     locale === 'es'
       ? {
-          noTaskSelected: 'Sin tarea seleccionada',
-          stopwatch: 'Cronometro',
-          timer: 'Temporizador',
-          totalTaskTime: 'Tiempo total de tarea:',
-          restartTimer: 'Reiniciar temporizador',
-          pauseFocus: 'Pausar enfoque',
-          startFocus: 'Iniciar enfoque',
-        }
+        noTaskSelected: 'Sin tarea seleccionada',
+        stopwatch: 'Cronometro',
+        timer: 'Temporizador',
+        totalTaskTime: 'Tiempo total de tarea:',
+        restartTimer: 'Reiniciar temporizador',
+        pauseFocus: 'Pausar enfoque',
+        startFocus: 'Iniciar enfoque',
+      }
       : {
-          noTaskSelected: 'No Task Selected',
-          stopwatch: 'Stopwatch',
-          timer: 'Timer',
-          totalTaskTime: 'Total Task Time:',
-          restartTimer: 'Restart timer',
-          pauseFocus: 'Pause focus',
-          startFocus: 'Start focus',
-        }
+        noTaskSelected: 'No Task Selected',
+        stopwatch: 'Stopwatch',
+        timer: 'Timer',
+        totalTaskTime: 'Total Task Time:',
+        restartTimer: 'Restart timer',
+        pauseFocus: 'Pause focus',
+        startFocus: 'Start focus',
+      }
   const taskTitle = activeTask?.title ?? copy.noTaskSelected
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
   const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
@@ -168,11 +168,16 @@ export function TimerPanel({
 
   return (
     <>
-      <div className="mb-2 flex min-h-0 flex-1 justify-center">
+      <div
+        className={classNames(
+          'mb-2 flex min-h-0 sm:mb-0',
+          isFocusOnlyMode ? 'flex-1 justify-center' : 'justify-start sm:flex-1 sm:justify-center',
+        )}
+      >
         <div
           className={classNames(
-            'flex h-full w-full flex-col px-4 py-2 sm:px-8 sm:py-3',
-            isFocusOnlyMode && 'justify-center py-4 sm:py-6',
+            'flex w-full flex-col px-4 py-2 sm:px-8 sm:py-3',
+            isFocusOnlyMode ? 'h-full justify-center py-4 sm:py-6' : 'sm:h-full sm:pb-0',
           )}
         >
           <div className="flex justify-center">
@@ -258,7 +263,7 @@ export function TimerPanel({
           <div
             className={classNames(
               'mx-auto w-full max-w-[460px] border-t',
-              isFocusOnlyMode ? 'mt-1 pt-4 sm:mt-2' : 'mt-0.5 pt-3',
+              isFocusOnlyMode ? 'mt-1 pt-4 sm:mt-2' : 'mt-0.5 pt-3 sm:mt-auto sm:pt-4',
               accents.dividerClassName,
             )}
           >
