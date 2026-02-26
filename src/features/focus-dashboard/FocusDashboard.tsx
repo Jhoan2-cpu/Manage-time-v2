@@ -25,8 +25,10 @@ import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState
 import { useTaskManagementState } from './hooks/useTaskManagementState'
 import {
   createTask as createTaskApi,
+  createTimeEntry,
   deleteTask as deleteTaskApi,
   focusSessionCommand,
+  getAppBootstrap,
   getActiveFocusSession,
   getFocusSessionConflictFromApiError,
   getTasks as getTasksApi,
@@ -34,6 +36,7 @@ import {
   updatePreferences,
   updateTask as updateTaskApi,
   type AppBootstrapData,
+  type AppBootstrapInclude,
   type CreateTaskPayload,
   type FocusSessionStateEnvelope,
   type TaskApiItem,
@@ -46,6 +49,7 @@ import {
   adaptBootstrapTasksToUi,
   adaptTaskItemToUi,
 } from './bootstrapAdapter'
+import { buildUntrackedCreateTimeEntryPayloadFromSession } from './historyApiAdapter'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { classNames } from './utils/classNames'
 import { formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
@@ -78,6 +82,13 @@ const fallbackDashboardStats = {
   focusTime: '0m 00s',
   totalTracked: '0m 00s',
 }
+
+const FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES: AppBootstrapInclude[] = [
+  'tasks',
+  'daily_log',
+  'dashboard_stats',
+  'active_focus_session',
+]
 
 export function FocusDashboard({
   userName,
@@ -138,6 +149,8 @@ export function FocusDashboard({
     [bootstrapData],
   )
   const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(bootstrapInitialDailyLogEntries)
+  const [dashboardStatsState, setDashboardStatsState] = useState(bootstrapDashboardStats)
+  const [settingsHistoryReloadKey, setSettingsHistoryReloadKey] = useState(0)
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<Task | null>(null)
   const {
     isProfileModalOpen,
@@ -198,6 +211,14 @@ export function FocusDashboard({
   useEffect(() => {
     latestPreferencesRef.current = bootstrapData?.preferences ?? null
   }, [bootstrapData?.preferences])
+
+  useEffect(() => {
+    setDailyLogEntries(bootstrapInitialDailyLogEntries)
+  }, [bootstrapInitialDailyLogEntries])
+
+  useEffect(() => {
+    setDashboardStatsState(bootstrapDashboardStats)
+  }, [bootstrapDashboardStats])
   const {
     taskList,
     setTaskList,
@@ -594,6 +615,79 @@ export function FocusDashboard({
     })
   }
 
+  const refreshBootstrapDerivedDataFromServer = async () => {
+    const refreshedBootstrap = await getAppBootstrap({ include: FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES })
+    if (!refreshedBootstrap) {
+      onSignOut?.()
+      return false
+    }
+
+    setDailyLogEntries(
+      adaptBootstrapDailyLogToUiEntries(refreshedBootstrap, {
+        manualAdjustmentLabel: copy.manualAdjustment,
+        timeZone: refreshedBootstrap.preferences?.time_zone_name ?? effectiveTimeZone,
+        untrackedLabel: copy.untrackedTime,
+      }),
+    )
+    setDashboardStatsState(adaptBootstrapDashboardStatsToUi(refreshedBootstrap.dashboard_stats))
+
+    applyAuthoritativeFocusSnapshot(refreshedBootstrap.server_now_utc, refreshedBootstrap.active_focus_session)
+    alignActiveTaskState(refreshedBootstrap.active_focus_session?.task_id ?? null)
+
+    setTaskList((currentTasks) => {
+      const currentById = new Map(currentTasks.map((task) => [task.id, task] as const))
+      const preferredActiveTaskId =
+        refreshedBootstrap.active_focus_session?.task_id ??
+        currentTasks.find((task) => task.state === 'active')?.id ??
+        currentTasks[0]?.id ??
+        null
+
+      const nextTasks = refreshedBootstrap.tasks.map((serverTask) => {
+        const existingTask = currentById.get(serverTask.id)
+        const state =
+          serverTask.id === preferredActiveTaskId
+            ? 'active'
+            : existingTask?.state === 'done'
+              ? 'done'
+              : 'scheduled'
+
+        const adapted = adaptTaskItemToUi(serverTask, { state })
+        if (!existingTask) {
+          return adapted
+        }
+
+        return {
+          ...adapted,
+          state,
+          details: existingTask.details,
+          statusText: existingTask.statusText,
+          duration: existingTask.duration,
+        } satisfies Task
+      })
+
+      if (preferredActiveTaskId && nextTasks.every((task) => task.id !== preferredActiveTaskId) && nextTasks[0]) {
+        nextTasks[0] = { ...nextTasks[0], state: 'active' }
+      }
+
+      return nextTasks
+    })
+
+    setSettingsHistoryReloadKey((current) => current + 1)
+    return true
+  }
+
+  const handleCreatedTimeEntryInvalidation = async (createdTimeEntryId?: string | null) => {
+    if (typeof createdTimeEntryId !== 'string' || !createdTimeEntryId.trim()) {
+      return
+    }
+
+    try {
+      await refreshBootstrapDerivedDataFromServer()
+    } catch (error) {
+      console.error('Failed to refresh bootstrap-derived data after time entry creation', { createdTimeEntryId }, error)
+    }
+  }
+
   const syncActiveFocusSession = async () => {
     if (isFocusSessionSyncInFlightRef.current) {
       return
@@ -804,13 +898,18 @@ export function FocusDashboard({
           }
 
           applyFocusSessionEnvelope(response)
+          void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
 
           const completedSeconds =
             response.data.stopped_session_summary?.elapsed_seconds_final ??
             Math.min(elapsedBeforeStop, activeTaskTargetSeconds)
           setSessionElapsedSeconds(Math.max(0, completedSeconds))
           setIsFocusRunning(false)
-          commitCurrentFocusSession(completedSeconds)
+          if (!response.data.created_time_entry_id) {
+            commitCurrentFocusSession(completedSeconds)
+          } else {
+            setActiveFocusSessionMeta(null)
+          }
           triggerTimerEndAlarm()
         } catch (error) {
           const handled = await handleFocusSessionApiError(error)
@@ -882,29 +981,55 @@ export function FocusDashboard({
       },
     )
   }
-  const handleFinishUntrackedSession = () => {
-    setActiveUntrackedSession((currentSession) => {
-      if (!currentSession) {
-        return null
+  const handleFinishUntrackedSession = async () => {
+    const currentSession = activeUntrackedSession
+    if (!currentSession) {
+      return
+    }
+
+    const endedAtMs = Date.now()
+    const elapsedSeconds = Math.max(0, Math.floor((endedAtMs - currentSession.startedAtMs) / 1000))
+    setActiveUntrackedSession(null)
+
+    if (elapsedSeconds <= 0) {
+      return
+    }
+
+    const nextEntry: LogEntry = {
+      id: `log-untracked-${crypto.randomUUID()}`,
+      date: currentSession.dateKey,
+      start: currentSession.startLabel,
+      duration: formatLogDurationFromSeconds(elapsedSeconds),
+      activity: copy.untrackedTime,
+      tone: 'faded',
+    }
+
+    setDailyLogEntries((currentEntries) => sortLogEntriesByTime([...currentEntries, nextEntry]))
+
+    try {
+      const payload = buildUntrackedCreateTimeEntryPayloadFromSession({
+        startedAtMs: currentSession.startedAtMs,
+        endedAtMs,
+      })
+      if (!payload) {
+        return
       }
 
-      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - currentSession.startedAtMs) / 1000))
-      if (elapsedSeconds <= 0) {
-        return null
+      const created = await createTimeEntry(payload)
+      if (!created) {
+        onSignOut?.()
+        return
       }
 
-      const nextEntry: LogEntry = {
-        id: `log-untracked-${crypto.randomUUID()}`,
-        date: currentSession.dateKey,
-        start: currentSession.startLabel,
-        duration: formatLogDurationFromSeconds(elapsedSeconds),
-        activity: copy.untrackedTime,
-        tone: 'faded',
+      await handleCreatedTimeEntryInvalidation(created.id)
+    } catch (error) {
+      if (error instanceof ApiHttpError && error.status === 401) {
+        onSignOut?.()
+        return
       }
 
-      setDailyLogEntries((currentEntries) => sortLogEntriesByTime([...currentEntries, nextEntry]))
-      return null
-    })
+      console.error('Failed to persist untracked time entry', error)
+    }
   }
   const commitCurrentFocusSession = (elapsedSecondsOverride?: number) => {
     const elapsedSeconds =
@@ -1008,11 +1133,14 @@ export function FocusDashboard({
         return
       }
 
-      if (elapsedBeforeSwitch > 0) {
+      if (elapsedBeforeSwitch > 0 && !response.data.created_time_entry_id) {
         runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(elapsedBeforeSwitch))
+      } else if (response.data.created_time_entry_id) {
+        setActiveFocusSessionMeta(null)
       }
 
       applyFocusSessionEnvelope(response)
+      void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
       setSessionElapsedSeconds(0)
       setTimerMode(nextMode)
       runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
@@ -1268,7 +1396,7 @@ export function FocusDashboard({
                 entries={sidebarLogEntries}
                 isOpen={isDailyLogOpen}
                 tasks={localizedTaskList}
-                totalTracked={bootstrapDashboardStats.totalTracked}
+                totalTracked={dashboardStatsState.totalTracked}
               />
 
               <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-visible sm:overflow-y-auto">
@@ -1395,11 +1523,13 @@ export function FocusDashboard({
         <SettingsModal
         autoDetectTimeZone={autoDetectTimeZone}
         backgroundMusicVolume={backgroundMusicVolume}
-        dashboardStats={bootstrapDashboardStats}
+        dashboardStats={dashboardStatsState}
         effectiveTimeZone={effectiveTimeZone}
         entries={localizedDailyLogEntries}
         historyEntries={localizedHistoryEntries}
+        historyReloadKey={settingsHistoryReloadKey}
         isOpen={isSettingsModalOpen}
+        onAuthExpired={onSignOut}
         onBackgroundMusicVolumeChange={handleBackgroundMusicVolumeChangePersist}
         onClose={handleCloseSettings}
         onLocaleChange={handleLocaleChangePersist}
@@ -1550,9 +1680,14 @@ function parseStartLabelToMinutes(label: string) {
   return hour24 * 60 + minutes
 }
 
-function runNonBlockingFocusSideEffect(action: () => void) {
+function runNonBlockingFocusSideEffect(action: () => void | Promise<void>) {
   try {
-    action()
+    const result = action()
+    if (result && typeof (result as Promise<void>).catch === 'function') {
+      void (result as Promise<void>).catch(() => {
+        // Async side effects should also not block timer controls.
+      })
+    }
   } catch {
     // Audio/log side effects should not block timer controls.
   }

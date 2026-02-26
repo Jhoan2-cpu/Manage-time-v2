@@ -21,7 +21,8 @@ import {
   DAY_TOTAL_SECONDS,
   formatIsoDateShort,
 } from './settings/historyUtils'
-import { useSettingsHistoryState, type SettingsHistoryDateRangeFilter } from './settings/useSettingsHistoryState'
+import { useSettingsHistoryApiState } from './settings/useSettingsHistoryApiState'
+import type { SettingsHistoryDateRangeFilter } from './settings/useSettingsHistoryState'
 
 type SettingsModalProps = {
   isOpen: boolean
@@ -43,6 +44,8 @@ type SettingsModalProps = {
   timeZoneOptions: string[]
   onToggleAutoDetectTimeZone: (nextValue: boolean) => void
   onTimeZoneChange: (nextValue: string) => void
+  onAuthExpired?: () => void
+  historyReloadKey?: number
 }
 
 const SETTINGS_HISTORY_CLOSE_ANIMATION_MS = 280
@@ -67,6 +70,8 @@ export function SettingsModal({
   timeZoneOptions,
   onToggleAutoDetectTimeZone,
   onTimeZoneChange,
+  onAuthExpired,
+  historyReloadKey,
 }: SettingsModalProps) {
   const { locale } = useI18n()
   const [isRendered, setIsRendered] = useState(isOpen)
@@ -184,6 +189,8 @@ export function SettingsModal({
   const {
     currentDayLabel,
     history,
+    overviewDashboardStats,
+    dailyLogSessionsCount,
     searchQuery,
     setSearchQuery,
     selectedTaskFilter,
@@ -195,16 +202,20 @@ export function SettingsModal({
     goToNextHistoryPage,
     selectedHistoryDaySummary,
     selectedHistoryDayStats,
+    selectedHistoryDayLoading,
     openHistoryDayDetails,
     closeHistoryDayDetails,
-  } = useSettingsHistoryState({
-    tasks,
-    entries,
-    historyEntries,
+  } = useSettingsHistoryApiState({
+    isOpen,
     effectiveTimeZone,
     locale,
-    otherActivityLabel: copy.otherActivity,
+    onAuthExpired,
+    reloadKey: historyReloadKey,
   })
+
+  const resolvedOverviewDashboardStats = overviewDashboardStats ?? dashboardStats
+  const resolvedDailyLogSessionsCount =
+    dailyLogSessionsCount > 0 || overviewDashboardStats ? dailyLogSessionsCount : entries.length
 
   if (!isRendered) {
     return null
@@ -271,8 +282,8 @@ export function SettingsModal({
 
               <HistoryOverviewPanel
                 currentDayLabel={currentDayLabel}
-                dailyLogSessionsCount={entries.length}
-                dashboardStats={dashboardStats}
+                dailyLogSessionsCount={resolvedDailyLogSessionsCount}
+                dashboardStats={resolvedOverviewDashboardStats}
                 history={history}
               />
 
@@ -501,6 +512,8 @@ export function SettingsModal({
                   daySummary={selectedHistoryDaySummary}
                   onBack={closeHistoryDayDetails}
                 />
+              ) : selectedHistoryDayLoading ? (
+                <div className="pointer-events-none fixed inset-x-0 bottom-0 top-16 z-[109] bg-[#040a16]/55 backdrop-blur-[2px]" />
               ) : null}
             </section>
           </div>

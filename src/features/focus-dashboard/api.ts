@@ -151,6 +151,7 @@ export type FocusSessionStateEnvelope = {
     server_now_utc: string
     active_focus_session: ActiveFocusSession | null
     stopped_session_summary?: StoppedFocusSessionSummary | null
+    created_time_entry_id?: string
   }
 }
 
@@ -198,6 +199,92 @@ export type StopFocusSessionPayload = {
 
 export type HeartbeatFocusSessionPayload = {
   expected_version: number
+}
+
+export type HistoryTaskRow = {
+  task_id: string | null
+  title: string | null
+  color_tag: string | null
+  icon_tag: string | null
+  tracked_seconds: number
+  sessions_count: number
+}
+
+export type HistoryOverview = {
+  date_local: string
+  server_now_utc: string
+  tracked_seconds: number
+  untracked_seconds: number
+  tracked_sessions_count: number
+  avg_session_seconds: number
+  top_task: HistoryTaskRow | null
+  time_by_task: HistoryTaskRow[]
+}
+
+export type HistoryMatchedTask = {
+  task_id: string
+  title: string
+  color_tag: string | null
+  icon_tag: string | null
+}
+
+export type HistoryDayRow = {
+  date_local: string
+  tracked_seconds: number
+  untracked_seconds: number
+  tracked_sessions_count: number
+  task_types_count: number
+  matched_tasks: HistoryMatchedTask[]
+}
+
+export type HistoryDaysResponse = {
+  data: HistoryDayRow[]
+  meta: {
+    page: number
+    per_page: number
+    total: number
+    last_page: number
+  }
+}
+
+export type HistoryDailyLogEntry = AppBootstrapDailyLogEntry
+
+export type HistoryDayDetail = {
+  date_local: string
+  server_now_utc: string
+  tracked_seconds: number
+  untracked_seconds: number
+  tracked_sessions_count: number
+  entries: HistoryDailyLogEntry[]
+}
+
+export type CreateTimeEntryPayload = {
+  entry_type: 'manual_adjustment' | 'untracked'
+  task_id: string | null
+  started_at_utc: string
+  ended_at_utc: string
+  notes?: string | null
+}
+
+export type TimeEntryCreated = {
+  id: string
+  entry_type: 'manual_adjustment' | 'untracked' | 'focus'
+  task_id: string | null
+  duration_seconds: number
+  started_at_utc: string | null
+  ended_at_utc: string | null
+}
+
+type HistoryOverviewEnvelope = {
+  data: HistoryOverview
+}
+
+type HistoryDayDetailEnvelope = {
+  data: HistoryDayDetail
+}
+
+type TimeEntryCreatedEnvelope = {
+  data: TimeEntryCreated
 }
 
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
@@ -371,6 +458,83 @@ export async function focusSessionCommand(
   }
 
   return parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
+}
+
+export async function createTimeEntry(payload: CreateTimeEntryPayload) {
+  await ensureCsrfCookie()
+  const response = await apiFetch('/api/v1/time-entries', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<TimeEntryCreatedEnvelope>(response, 'Time entry create failed')
+  return json.data
+}
+
+export async function getHistoryOverview(date?: string) {
+  const search = new URLSearchParams()
+  if (typeof date === 'string' && date.trim()) {
+    search.set('date', date.trim())
+  }
+
+  const query = search.toString()
+  const response = await apiFetch(`/api/v1/history/overview${query ? `?${query}` : ''}`, { method: 'GET' })
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<HistoryOverviewEnvelope>(response, 'History overview lookup failed')
+  return json.data
+}
+
+export type GetHistoryDaysParams = {
+  q?: string
+  task_id?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+  per_page?: number
+}
+
+export async function getHistoryDays(params: GetHistoryDaysParams = {}) {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) {
+      continue
+    }
+
+    const normalized = `${value}`.trim()
+    if (!normalized) {
+      continue
+    }
+
+    search.set(key, normalized)
+  }
+
+  const query = search.toString()
+  const path = `/api/v1/history/days${query ? `?${query}` : ''}`
+  const response = await apiFetch(path, { method: 'GET' })
+  if (response.status === 401) {
+    return null
+  }
+
+  return parseJsonResponse<HistoryDaysResponse>(response, 'History days lookup failed')
+}
+
+export async function getHistoryDayDetail(dateLocal: string, sort: 'asc' | 'desc' = 'asc') {
+  const search = new URLSearchParams({ sort })
+  const response = await apiFetch(`/api/v1/history/days/${encodeURIComponent(dateLocal)}?${search.toString()}`, {
+    method: 'GET',
+  })
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<HistoryDayDetailEnvelope>(response, 'History day detail lookup failed')
+  return json.data
 }
 
 export function getFocusSessionConflictFromApiError(error: unknown) {
