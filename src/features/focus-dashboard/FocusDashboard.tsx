@@ -216,11 +216,6 @@ export function FocusDashboard({
     scheduledPrefixLabel: copy.scheduledPrefix,
   })
 
-  const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(
-    effectiveTimeZone,
-    lastServerNowUtc ?? bootstrapData?.server_now_utc ?? null,
-  )
-
   const flushQueuedPreferencesPatch = async () => {
     if (isPreferencesPatchInFlightRef.current) {
       return
@@ -503,6 +498,10 @@ export function FocusDashboard({
     initialAuthoritativeFocusSession: bootstrapData?.active_focus_session ?? null,
     initialServerNowUtc: bootstrapData?.server_now_utc ?? null,
   })
+  const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(
+    effectiveTimeZone,
+    lastServerNowUtc ?? bootstrapData?.server_now_utc ?? null,
+  )
 
   const alignActiveTaskState = (nextActiveTaskId: string | null) => {
     if (!nextActiveTaskId) {
