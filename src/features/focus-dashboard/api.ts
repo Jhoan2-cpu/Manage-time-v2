@@ -1,4 +1,4 @@
-import { ApiHttpError, apiFetch, parseJsonResponse } from '../../lib/api/http'
+import { ApiHttpError, apiFetch, ensureCsrfCookie, parseJsonResponse } from '../../lib/api/http'
 import type { AppLocale } from '../../i18n/messages'
 
 export type AppBootstrapInclude =
@@ -102,6 +102,13 @@ type GetAppBootstrapOptions = {
   include?: AppBootstrapInclude[]
 }
 
+export type UserPreferences = AppBootstrapPreferences
+export type UpdatePreferencesPayload = Partial<UserPreferences>
+
+type PreferencesEnvelope = {
+  data: UserPreferences
+}
+
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
   try {
     const response = await requestBootstrap(options.include)
@@ -129,6 +136,31 @@ export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
 
     throw error
   }
+}
+
+export async function getPreferences() {
+  const response = await apiFetch('/api/v1/preferences', { method: 'GET' })
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<PreferencesEnvelope>(response, 'Preferences lookup failed')
+  return json.data
+}
+
+export async function updatePreferences(payload: UpdatePreferencesPayload) {
+  await ensureCsrfCookie()
+  const response = await apiFetch('/api/v1/preferences', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<PreferencesEnvelope>(response, 'Preferences update failed')
+  return json.data
 }
 
 async function requestBootstrap(include?: AppBootstrapInclude[]) {

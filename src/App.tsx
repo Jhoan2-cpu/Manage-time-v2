@@ -3,7 +3,12 @@ import { useI18n } from './i18n'
 import { LoginPage } from './features/auth/components/LoginPage'
 import { RegisterPage } from './features/auth/components/RegisterPage'
 import { FocusDashboard } from './features/focus-dashboard/FocusDashboard'
-import { getAppBootstrap, type AppBootstrapData, type AppBootstrapInclude } from './features/focus-dashboard/api'
+import {
+  getAppBootstrap,
+  type AppBootstrapData,
+  type AppBootstrapInclude,
+  type UserPreferences,
+} from './features/focus-dashboard/api'
 import { HomePage } from './features/home/components/HomePage'
 import { getApiErrorFirstMessage } from './lib/api/http'
 import { stopFocusAudioPlayback } from './lib/audio/uiSfx'
@@ -298,6 +303,38 @@ function App() {
     navigateTo('/login')
     setCurrentPath('/login')
   }
+  const handlePreferencesUpdated = (preferences: UserPreferences) => {
+    setAppBootstrapData((current) => {
+      if (!current) {
+        return current
+      }
+
+      return {
+        ...current,
+        preferences,
+        user: {
+          ...current.user,
+          locale: preferences.locale ?? current.user.locale,
+        },
+      }
+    })
+
+    setSessionUser((current) => {
+      if (!current) {
+        return current
+      }
+
+      const nextLocale = preferences.locale === 'en' ? 'en' : 'es'
+      return {
+        ...current,
+        locale: nextLocale,
+      }
+    })
+
+    if (preferences.locale && preferences.locale !== locale) {
+      setLocale(preferences.locale)
+    }
+  }
 
   const route = resolveRoute(currentPath)
   const hasReadyAppBootstrap =
@@ -432,6 +469,7 @@ function App() {
     <FocusDashboard
       bootstrapData={appBootstrapData}
       key={`dashboard-${sessionUser.id}`}
+      onPreferencesUpdated={handlePreferencesUpdated}
       onSignOut={handleSignOut}
       userEmail={userForDashboard.email}
       userName={userForDashboard.displayName}

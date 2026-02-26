@@ -104,6 +104,11 @@ export function useFocusDashboardShellState({ onSignOut, initialPreferences }: U
     const nextVolume = setBackgroundMusicVolume(initialPreferences.background_music_volume_percent)
     setUiInteractionSfxEnabledState(nextUiSfx)
     setBackgroundMusicVolumeState(nextVolume)
+    setRequireTaskSwitchConfirmation(initialPreferences.confirm_task_switch_enabled)
+    setAutoDetectTimeZone(initialPreferences.time_zone_auto_detect)
+    if (typeof initialPreferences.time_zone_name === 'string' && initialPreferences.time_zone_name.trim()) {
+      setSelectedTimeZone(initialPreferences.time_zone_name.trim())
+    }
   }, [initialPreferences])
 
   useEffect(() => {

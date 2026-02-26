@@ -5,6 +5,7 @@ import { useI18n } from '../../../../i18n'
 import { SettingToggle } from './SettingToggle'
 
 type SettingsPreferencesPanelProps = {
+  onLocaleChange: (nextValue: 'es' | 'en') => void
   uiInteractionSfxEnabled: boolean
   backgroundMusicVolume: number
   requireTaskSwitchConfirmation: boolean
@@ -20,6 +21,7 @@ type SettingsPreferencesPanelProps = {
 }
 
 export function SettingsPreferencesPanel({
+  onLocaleChange,
   uiInteractionSfxEnabled,
   backgroundMusicVolume,
   requireTaskSwitchConfirmation,
@@ -33,7 +35,7 @@ export function SettingsPreferencesPanel({
   onToggleAutoDetectTimeZone,
   onTimeZoneChange,
 }: SettingsPreferencesPanelProps) {
-  const { locale, setLocale, t } = useI18n()
+  const { locale, t } = useI18n()
   const volumePercent = Math.round(Math.max(0, Math.min(1, backgroundMusicVolume)) * 100)
   const [isTimeZonePickerOpen, setIsTimeZonePickerOpen] = useState(false)
   const [timeZoneSearch, setTimeZoneSearch] = useState('')
@@ -125,7 +127,7 @@ export function SettingsPreferencesPanel({
                       : 'bg-slate-900/45 text-slate-300 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)] hover:bg-slate-800/70'
                   }`}
                   key={option.code}
-                  onClick={() => setLocale(option.code)}
+                  onClick={() => onLocaleChange(option.code)}
                   type="button"
                 >
                   <span>{option.label}</span>

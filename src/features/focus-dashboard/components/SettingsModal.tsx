@@ -30,6 +30,7 @@ type SettingsModalProps = {
   entries: LogEntry[]
   historyEntries: LogEntry[]
   dashboardStats: DashboardStats
+  onLocaleChange: (nextValue: 'es' | 'en') => void
   uiInteractionSfxEnabled: boolean
   backgroundMusicVolume: number
   requireTaskSwitchConfirmation: boolean
@@ -53,6 +54,7 @@ export function SettingsModal({
   entries,
   historyEntries,
   dashboardStats,
+  onLocaleChange,
   uiInteractionSfxEnabled,
   backgroundMusicVolume,
   requireTaskSwitchConfirmation,
@@ -249,6 +251,7 @@ export function SettingsModal({
               autoDetectTimeZone={autoDetectTimeZone}
               backgroundMusicVolume={backgroundMusicVolume}
               effectiveTimeZone={effectiveTimeZone}
+              onLocaleChange={onLocaleChange}
               onBackgroundMusicVolumeChange={onBackgroundMusicVolumeChange}
               onTimeZoneChange={onTimeZoneChange}
               onToggleAutoDetectTimeZone={onToggleAutoDetectTimeZone}

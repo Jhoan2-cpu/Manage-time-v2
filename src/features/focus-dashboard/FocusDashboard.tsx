@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faBellSlash,
@@ -23,7 +23,7 @@ import { useCurrentTime } from './hooks/useCurrentTime'
 import { useFocusSessionController } from './hooks/useFocusSessionController'
 import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState'
 import { useTaskManagementState } from './hooks/useTaskManagementState'
-import type { AppBootstrapData } from './api'
+import { updatePreferences, type AppBootstrapData, type UpdatePreferencesPayload, type UserPreferences } from './api'
 import {
   adaptBootstrapDashboardStatsToUi,
   adaptBootstrapDailyLogToUiEntries,
@@ -52,6 +52,7 @@ type FocusDashboardProps = {
   userEmail?: string
   onSignOut?: () => void
   bootstrapData?: AppBootstrapData
+  onPreferencesUpdated?: (preferences: UserPreferences) => void
 }
 
 const fallbackDashboardStats = {
@@ -60,8 +61,14 @@ const fallbackDashboardStats = {
   totalTracked: '0m 00s',
 }
 
-export function FocusDashboard({ userName, userEmail, onSignOut, bootstrapData }: FocusDashboardProps = {}) {
-  const { locale } = useI18n()
+export function FocusDashboard({
+  userName,
+  userEmail,
+  onSignOut,
+  bootstrapData,
+  onPreferencesUpdated,
+}: FocusDashboardProps = {}) {
+  const { locale, setLocale } = useI18n()
   const copy =
     locale === 'es'
       ? {
@@ -151,6 +158,25 @@ export function FocusDashboard({ userName, userEmail, onSignOut, bootstrapData }
     onSignOut,
   })
   const [workspaceGlowPulseKey, setWorkspaceGlowPulseKey] = useState(0)
+  const latestPreferencesRef = useRef<UserPreferences | null>(bootstrapData?.preferences ?? null)
+  const pendingPreferencesPatchRef = useRef<UpdatePreferencesPayload>({})
+  const preferencesPatchTimerRef = useRef<number | null>(null)
+  const isPreferencesPatchInFlightRef = useRef(false)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (preferencesPatchTimerRef.current !== null) {
+        window.clearTimeout(preferencesPatchTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    latestPreferencesRef.current = bootstrapData?.preferences ?? null
+  }, [bootstrapData?.preferences])
   const {
     taskList,
     setTaskList,
@@ -174,6 +200,108 @@ export function FocusDashboard({ userName, userEmail, onSignOut, bootstrapData }
     effectiveTimeZone,
     bootstrapData?.server_now_utc ?? null,
   )
+
+  const flushQueuedPreferencesPatch = async () => {
+    if (isPreferencesPatchInFlightRef.current) {
+      return
+    }
+
+    const queuedPatch = pendingPreferencesPatchRef.current
+    if (!queuedPatch || Object.keys(queuedPatch).length === 0) {
+      return
+    }
+
+    pendingPreferencesPatchRef.current = {}
+    isPreferencesPatchInFlightRef.current = true
+
+    try {
+      const updated = await updatePreferences(queuedPatch)
+      if (!updated) {
+        onSignOut?.()
+        return
+      }
+
+      latestPreferencesRef.current = updated
+      onPreferencesUpdated?.(updated)
+      setLocale(updated.locale === 'en' ? 'en' : 'es')
+    } catch (error) {
+      console.error('Failed to persist preferences patch', queuedPatch, error)
+    } finally {
+      isPreferencesPatchInFlightRef.current = false
+
+      if (!isMountedRef.current) {
+        return
+      }
+
+      if (Object.keys(pendingPreferencesPatchRef.current).length > 0) {
+        if (preferencesPatchTimerRef.current !== null) {
+          window.clearTimeout(preferencesPatchTimerRef.current)
+        }
+
+        preferencesPatchTimerRef.current = window.setTimeout(() => {
+          void flushQueuedPreferencesPatch()
+        }, 50)
+      }
+    }
+  }
+
+  const queuePreferencesPatch = (partial: UpdatePreferencesPayload, debounceMs = 220) => {
+    const entries = Object.entries(partial).filter(([, value]) => value !== undefined)
+    if (entries.length === 0) {
+      return
+    }
+
+    pendingPreferencesPatchRef.current = {
+      ...pendingPreferencesPatchRef.current,
+      ...Object.fromEntries(entries),
+    }
+
+    if (preferencesPatchTimerRef.current !== null) {
+      window.clearTimeout(preferencesPatchTimerRef.current)
+    }
+
+    preferencesPatchTimerRef.current = window.setTimeout(() => {
+      void flushQueuedPreferencesPatch()
+    }, debounceMs)
+  }
+
+  const handleToggleBackgroundMusicPersist = () => {
+    const nextValue = !isBackgroundMusicPlaying
+    handleToggleBackgroundMusic()
+    queuePreferencesPatch({ background_music_enabled: nextValue }, 150)
+  }
+
+  const handleLocaleChangePersist = (nextLocale: 'es' | 'en') => {
+    setLocale(nextLocale)
+    queuePreferencesPatch({ locale: nextLocale }, 150)
+  }
+
+  const handleToggleUiInteractionSfxPersist = (nextValue: boolean) => {
+    handleToggleUiInteractionSfx(nextValue)
+    queuePreferencesPatch({ ui_sounds_enabled: nextValue }, 150)
+  }
+
+  const handleBackgroundMusicVolumeChangePersist = (nextValue: number) => {
+    handleBackgroundMusicVolumeChange(nextValue)
+    const volumePercent = Math.max(0, Math.min(100, Math.round(nextValue * 100)))
+    queuePreferencesPatch({ background_music_volume_percent: volumePercent }, 280)
+  }
+
+  const handleToggleTaskSwitchConfirmationPersist = (nextValue: boolean) => {
+    setRequireTaskSwitchConfirmation(nextValue)
+    queuePreferencesPatch({ confirm_task_switch_enabled: nextValue }, 150)
+  }
+
+  const handleToggleAutoDetectTimeZonePersist = (nextValue: boolean) => {
+    handleToggleAutoDetectTimeZone(nextValue)
+    queuePreferencesPatch({ time_zone_auto_detect: nextValue }, 150)
+  }
+
+  const handleTimeZoneChangePersist = (nextValue: string) => {
+    handleTimeZoneChange(nextValue)
+    queuePreferencesPatch({ time_zone_name: nextValue }, 150)
+  }
+
   const localizedDailyLogEntries = useMemo(
     () => localizeStaticLogActivities(dailyLogEntries, copy.untrackedTime),
     [copy.untrackedTime, dailyLogEntries],
@@ -498,7 +626,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut, bootstrapData }
             onOpenProfile={handleOpenProfile}
             onSignOut={handleRequestSignOut}
             onOpenSettings={handleOpenSettings}
-            onToggleBackgroundMusic={handleToggleBackgroundMusic}
+            onToggleBackgroundMusic={handleToggleBackgroundMusicPersist}
             timeLabel={timeLabel}
             timeZoneName={timeZoneName}
             utcOffsetLabel={utcOffsetLabel}
@@ -715,12 +843,13 @@ export function FocusDashboard({ userName, userEmail, onSignOut, bootstrapData }
         entries={localizedDailyLogEntries}
         historyEntries={localizedHistoryEntries}
         isOpen={isSettingsModalOpen}
-        onBackgroundMusicVolumeChange={handleBackgroundMusicVolumeChange}
+        onBackgroundMusicVolumeChange={handleBackgroundMusicVolumeChangePersist}
         onClose={handleCloseSettings}
-        onTimeZoneChange={handleTimeZoneChange}
-        onToggleAutoDetectTimeZone={handleToggleAutoDetectTimeZone}
-        onToggleTaskSwitchConfirmation={setRequireTaskSwitchConfirmation}
-        onToggleUiInteractionSfx={handleToggleUiInteractionSfx}
+        onLocaleChange={handleLocaleChangePersist}
+        onTimeZoneChange={handleTimeZoneChangePersist}
+        onToggleAutoDetectTimeZone={handleToggleAutoDetectTimeZonePersist}
+        onToggleTaskSwitchConfirmation={handleToggleTaskSwitchConfirmationPersist}
+        onToggleUiInteractionSfx={handleToggleUiInteractionSfxPersist}
         requireTaskSwitchConfirmation={requireTaskSwitchConfirmation}
         selectedTimeZone={selectedTimeZone}
         tasks={localizedTaskList}
