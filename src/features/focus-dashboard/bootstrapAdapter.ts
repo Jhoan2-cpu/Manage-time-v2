@@ -1,6 +1,6 @@
 import { getCurrentIntlLocaleTag } from '../../i18n'
 import type { AppBootstrapDashboardStats, AppBootstrapData, AppBootstrapDailyLogEntry, AppBootstrapTaskItem } from './api'
-import type { DashboardStats, LogEntry, LogTone, Task, TaskColorKey, TaskIconKey } from './types'
+import type { DashboardStats, LogEntry, LogTone, Task, TaskColorKey, TaskIconKey, TaskState } from './types'
 import { formatSecondsCompact, formatSecondsHms, toIsoDateStringInTimeZone } from './utils/time'
 
 type AdaptBootstrapTasksOptions = {
@@ -39,23 +39,26 @@ export function adaptBootstrapTasksToUi(
 
   return bootstrap.tasks.map((task, index) => {
     const isActive = task.id === preferredActiveTaskId || (preferredActiveTaskId === null && index === 0)
-
-    return {
-      id: task.id,
-      title: typeof task.title === 'string' && task.title.trim() ? task.title.trim() : 'Untitled task',
-      details: '',
-      statusText: '',
-      duration: formatSecondsHms(normalizeNonNegativeInt(task.focus_time_total_seconds)),
-      state: isActive ? 'active' : 'scheduled',
-      colorTag: normalizeTaskColorTag(task.color_tag),
-      iconTag: normalizeTaskIconTag(task.icon_tag),
-      targetDurationMinutes:
-        typeof task.target_duration_seconds === 'number' && Number.isFinite(task.target_duration_seconds)
-          ? Math.max(0, task.target_duration_seconds) / 60
-          : null,
-      alarmTime: typeof task.alarm_time_local === 'string' && task.alarm_time_local.trim() ? task.alarm_time_local.trim() : null,
-    }
+    return adaptTaskItemToUi(task, { state: isActive ? 'active' : 'scheduled' })
   })
+}
+
+export function adaptTaskItemToUi(task: AppBootstrapTaskItem, options: { state?: TaskState } = {}): Task {
+  return {
+    id: task.id,
+    title: typeof task.title === 'string' && task.title.trim() ? task.title.trim() : 'Untitled task',
+    details: '',
+    statusText: '',
+    duration: formatSecondsHms(normalizeNonNegativeInt(task.focus_time_total_seconds)),
+    state: options.state ?? 'scheduled',
+    colorTag: normalizeTaskColorTag(task.color_tag),
+    iconTag: normalizeTaskIconTag(task.icon_tag),
+    targetDurationMinutes:
+      typeof task.target_duration_seconds === 'number' && Number.isFinite(task.target_duration_seconds)
+        ? Math.max(0, task.target_duration_seconds) / 60
+        : null,
+    alarmTime: typeof task.alarm_time_local === 'string' && task.alarm_time_local.trim() ? task.alarm_time_local.trim() : null,
+  }
 }
 
 export function adaptBootstrapDailyLogToUiEntries(

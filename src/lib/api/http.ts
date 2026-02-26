@@ -19,11 +19,15 @@ export class ApiHttpError extends Error {
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}) {
+  const xsrfToken = getCookieValue('XSRF-TOKEN')
+  const shouldAttachXsrfHeader = Boolean(xsrfToken) && !hasHeader(init.headers, 'X-XSRF-TOKEN')
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(shouldAttachXsrfHeader ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrfToken!) } : {}),
       ...init.headers,
     },
     ...init,
@@ -83,3 +87,34 @@ async function readJsonBody(response: Response): Promise<ApiErrorBody | null> {
   }
 }
 
+function getCookieValue(name: string) {
+  if (typeof document === 'undefined') {
+    return null
+  }
+
+  const encodedName = `${encodeURIComponent(name)}=`
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  for (const cookie of cookies) {
+    if (cookie.startsWith(encodedName)) {
+      return cookie.slice(encodedName.length)
+    }
+  }
+
+  return null
+}
+
+function hasHeader(headers: RequestInit['headers'], targetName: string) {
+  if (!headers) {
+    return false
+  }
+
+  if (headers instanceof Headers) {
+    return headers.has(targetName)
+  }
+
+  if (Array.isArray(headers)) {
+    return headers.some(([name]) => name.toLowerCase() === targetName.toLowerCase())
+  }
+
+  return Object.keys(headers).some((name) => name.toLowerCase() === targetName.toLowerCase())
+}

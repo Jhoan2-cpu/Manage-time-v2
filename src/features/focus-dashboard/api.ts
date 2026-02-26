@@ -109,6 +109,28 @@ type PreferencesEnvelope = {
   data: UserPreferences
 }
 
+export type TaskApiItem = AppBootstrapTaskItem
+export type TaskApiColorTag = AppBootstrapTaskItem['color_tag']
+export type TaskApiIconTag = AppBootstrapTaskItem['icon_tag']
+
+export type CreateTaskPayload = {
+  title: string
+  color_tag: TaskApiColorTag
+  icon_tag: TaskApiIconTag
+  target_duration_seconds: number | null
+  alarm_time_local: string | null
+}
+
+export type UpdateTaskPayload = Partial<CreateTaskPayload>
+
+type TasksListEnvelope = {
+  data: TaskApiItem[]
+}
+
+type TaskEnvelope = {
+  data: TaskApiItem
+}
+
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
   try {
     const response = await requestBootstrap(options.include)
@@ -160,6 +182,82 @@ export async function updatePreferences(payload: UpdatePreferencesPayload) {
   }
 
   const json = await parseJsonResponse<PreferencesEnvelope>(response, 'Preferences update failed')
+  return json.data
+}
+
+export async function getTasks() {
+  const response = await apiFetch('/api/v1/tasks', { method: 'GET' })
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<TasksListEnvelope>(response, 'Tasks lookup failed')
+  return json.data
+}
+
+export async function createTask(payload: CreateTaskPayload) {
+  await ensureCsrfCookie()
+  const response = await apiFetch('/api/v1/tasks', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<TaskEnvelope>(response, 'Task create failed')
+  return json.data
+}
+
+export async function updateTask(taskId: string, payload: UpdateTaskPayload) {
+  await ensureCsrfCookie()
+  const response = await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<TaskEnvelope>(response, 'Task update failed')
+  return json.data
+}
+
+export async function deleteTask(taskId: string) {
+  await ensureCsrfCookie()
+  const response = await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'DELETE',
+  })
+
+  if (response.status === 401) {
+    return null
+  }
+
+  if (response.status === 204) {
+    return 'deleted' as const
+  }
+
+  if (!response.ok) {
+    await parseJsonResponse<unknown>(response, 'Task delete failed')
+  }
+
+  return 'deleted' as const
+}
+
+export async function reorderTasks(taskIdsInOrder: string[]) {
+  await ensureCsrfCookie()
+  const response = await apiFetch('/api/v1/tasks/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ordered_task_ids: taskIdsInOrder }),
+  })
+
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<TasksListEnvelope>(response, 'Task reorder failed')
   return json.data
 }
 

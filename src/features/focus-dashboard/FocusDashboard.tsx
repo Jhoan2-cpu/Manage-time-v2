@@ -14,7 +14,7 @@ import { ProfileModal } from './components/ProfileModal'
 import { SignOutConfirmModal } from './components/SignOutConfirmModal'
 import { SettingsModal } from './components/SettingsModal'
 import { DeleteTaskConfirmModal } from './components/tasks/DeleteTaskConfirmModal'
-import { NewTaskModal } from './components/tasks/NewTaskModal'
+import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskModal'
 import { SwitchTaskConfirmModal } from './components/tasks/SwitchTaskConfirmModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
@@ -23,16 +23,28 @@ import { useCurrentTime } from './hooks/useCurrentTime'
 import { useFocusSessionController } from './hooks/useFocusSessionController'
 import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState'
 import { useTaskManagementState } from './hooks/useTaskManagementState'
-import { updatePreferences, type AppBootstrapData, type UpdatePreferencesPayload, type UserPreferences } from './api'
+import {
+  createTask as createTaskApi,
+  deleteTask as deleteTaskApi,
+  updatePreferences,
+  updateTask as updateTaskApi,
+  type AppBootstrapData,
+  type CreateTaskPayload,
+  type TaskApiItem,
+  type UpdatePreferencesPayload,
+  type UserPreferences,
+} from './api'
 import {
   adaptBootstrapDashboardStatsToUi,
   adaptBootstrapDailyLogToUiEntries,
   adaptBootstrapTasksToUi,
+  adaptTaskItemToUi,
 } from './bootstrapAdapter'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { classNames } from './utils/classNames'
 import { formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
 import { useI18n } from '../../i18n'
+import { ApiHttpError } from '../../lib/api/http'
 import {
   stopTimerEndAlarm,
   triggerTimerEndAlarm,
@@ -185,7 +197,6 @@ export function FocusDashboard({
     taskPendingDelete,
     handleAddTask,
     handleCloseNewTaskModal,
-    handleCreateTask,
     handleEditTask,
     handleRequestDeleteTask,
     handleRequestDeleteFromTaskModal,
@@ -300,6 +311,111 @@ export function FocusDashboard({
   const handleTimeZoneChangePersist = (nextValue: string) => {
     handleTimeZoneChange(nextValue)
     queuePreferencesPatch({ time_zone_name: nextValue }, 150)
+  }
+
+  const mergeServerTaskIntoUiTask = (serverTask: TaskApiItem, existingTask: Task) => {
+    const adapted = adaptTaskItemToUi(serverTask, { state: existingTask.state })
+    return {
+      ...adapted,
+      state: existingTask.state,
+      details: existingTask.details,
+      statusText: existingTask.statusText,
+      // Keep the local duration label to avoid regressing UI when local session/runtime has newer values than M4 backend.
+      duration: existingTask.duration,
+    } satisfies Task
+  }
+
+  const buildTasksApiPayloadFromModalPayload = (payload: NewTaskPayload): CreateTaskPayload => {
+    const totalSeconds =
+      typeof payload.targetDurationMinutes === 'number' && Number.isFinite(payload.targetDurationMinutes)
+        ? Math.max(0, Math.round(payload.targetDurationMinutes * 60))
+        : 0
+
+    return {
+      title: payload.title.trim(),
+      color_tag: payload.colorTag,
+      icon_tag: payload.iconTag,
+      target_duration_seconds: totalSeconds > 0 ? Math.min(totalSeconds, 24 * 60 * 60) : null,
+      alarm_time_local: payload.alarmTime?.trim() ? payload.alarmTime.trim() : null,
+    }
+  }
+
+  const applyTaskRemovalFromUi = (deletedTaskId: string) => {
+    const deletingActiveTask = activeTask?.id === deletedTaskId
+
+    setTaskList((currentTasks) => {
+      const remainingTasks = currentTasks.filter((task) => task.id !== deletedTaskId)
+
+      if (remainingTasks.length === 0) {
+        return remainingTasks
+      }
+
+      const hasActiveTask = remainingTasks.some((task) => task.state === 'active')
+      if (hasActiveTask) {
+        return remainingTasks
+      }
+
+      const [firstTask, ...rest] = remainingTasks
+      return [{ ...firstTask, state: 'active' }, ...rest]
+    })
+
+    if (deletingActiveTask) {
+      const remainingTasks = taskList.filter((task) => task.id !== deletedTaskId)
+      const nextActiveTask = remainingTasks.find((task) => task.state === 'active') ?? remainingTasks[0] ?? null
+      setIsFocusRunning(false)
+      setSessionElapsedSeconds(0)
+      setActiveFocusSessionMeta(null)
+      setTimerMode(nextActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch')
+    }
+
+    cleanupTaskUiStateAfterDelete(deletedTaskId)
+    setTaskPendingSwitchConfirm((current) => (current?.id === deletedTaskId ? null : current))
+  }
+
+  const handleCreateTaskPersist = async (payload: NewTaskPayload) => {
+    const apiPayload = buildTasksApiPayloadFromModalPayload(payload)
+    const editingTaskId = editingTask?.id ?? null
+
+    try {
+      if (editingTaskId) {
+        const updatedTask = await updateTaskApi(editingTaskId, apiPayload)
+        if (!updatedTask) {
+          onSignOut?.()
+          return
+        }
+
+        setTaskList((currentTasks) =>
+          currentTasks.map((task) => (task.id === editingTaskId ? mergeServerTaskIntoUiTask(updatedTask, task) : task)),
+        )
+        return
+      }
+
+      const createdTask = await createTaskApi(apiPayload)
+      if (!createdTask) {
+        onSignOut?.()
+        return
+      }
+
+      setTaskList((currentTasks) => {
+        const nextState = currentTasks.length === 0 ? 'active' : 'scheduled'
+        const uiTask = adaptTaskItemToUi(createdTask, { state: nextState })
+        return [...currentTasks, uiTask]
+      })
+    } catch (error) {
+      if (error instanceof ApiHttpError) {
+        if (error.status === 401) {
+          onSignOut?.()
+          return
+        }
+
+        if (error.status === 404 && editingTaskId) {
+          applyTaskRemovalFromUi(editingTaskId)
+          return
+        }
+      }
+
+      console.error('Failed to persist task mutation', { editingTaskId, apiPayload }, error)
+    }
   }
 
   const localizedDailyLogEntries = useMemo(
@@ -426,39 +542,36 @@ export function FocusDashboard({
     }
   }, [activeTaskTargetSeconds, isFocusRunning, sessionElapsedSeconds, timerMode])
 
-  const handleConfirmDeleteTask = () => {
+  const handleConfirmDeleteTask = async () => {
     if (!taskPendingDelete) {
       return
     }
-    const deletingActiveTask = activeTask?.id === taskPendingDelete.id
 
-    setTaskList((currentTasks) => {
-      const remainingTasks = currentTasks.filter((task) => task.id !== taskPendingDelete.id)
+    const deletingTaskId = taskPendingDelete.id
 
-      if (remainingTasks.length === 0) {
-        return remainingTasks
+    try {
+      const result = await deleteTaskApi(deletingTaskId)
+      if (!result) {
+        onSignOut?.()
+        return
       }
 
-      const hasActiveTask = remainingTasks.some((task) => task.state === 'active')
-      if (hasActiveTask) {
-        return remainingTasks
+      applyTaskRemovalFromUi(deletingTaskId)
+    } catch (error) {
+      if (error instanceof ApiHttpError) {
+        if (error.status === 401) {
+          onSignOut?.()
+          return
+        }
+
+        if (error.status === 404) {
+          applyTaskRemovalFromUi(deletingTaskId)
+          return
+        }
       }
 
-      const [firstTask, ...rest] = remainingTasks
-      return [{ ...firstTask, state: 'active' }, ...rest]
-    })
-
-    if (deletingActiveTask) {
-      const remainingTasks = taskList.filter((task) => task.id !== taskPendingDelete.id)
-      const nextActiveTask = remainingTasks.find((task) => task.state === 'active') ?? remainingTasks[0] ?? null
-      setIsFocusRunning(false)
-      setSessionElapsedSeconds(0)
-      setActiveFocusSessionMeta(null)
-      setTimerMode(nextActiveTask?.targetDurationMinutes ? 'timer' : 'stopwatch')
+      console.error('Failed to delete task', { taskId: deletingTaskId }, error)
     }
-
-    cleanupTaskUiStateAfterDelete(taskPendingDelete.id)
-    setTaskPendingSwitchConfirm((current) => (current?.id === taskPendingDelete.id ? null : current))
   }
   const startFocusSessionMeta = (task: Task) => {
     const now = new Date()
@@ -813,7 +926,7 @@ export function FocusDashboard({
         editingTask={editingTask}
         isOpen={isNewTaskModalOpen}
         onClose={handleCloseNewTaskModal}
-        onCreateTask={handleCreateTask}
+        onCreateTask={handleCreateTaskPersist}
         onRequestDeleteTask={handleRequestDeleteFromTaskModal}
       />
       <DeleteTaskConfirmModal
