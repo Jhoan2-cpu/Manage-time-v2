@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { ActiveFocusSession } from '../api'
 import type { FocusTimerMode, Task } from '../types'
 import { formatSecondsHms } from '../utils/time'
 
@@ -18,22 +19,54 @@ type UseFocusSessionControllerParams = {
   activeTask: Task | null
   initialTimerMode: FocusTimerMode
   loggedSecondsByTaskId: Record<string, number>
+  initialAuthoritativeFocusSession?: ActiveFocusSession | null
+  initialServerNowUtc?: string | null
 }
 
 export function useFocusSessionController({
   activeTask,
   initialTimerMode,
   loggedSecondsByTaskId,
+  initialAuthoritativeFocusSession = null,
+  initialServerNowUtc = null,
 }: UseFocusSessionControllerParams) {
-  const [isFocusRunning, setIsFocusRunning] = useState(false)
-  const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0)
-  const [timerMode, setTimerMode] = useState<FocusTimerMode>(initialTimerMode)
+  const [isFocusRunningLocal, setIsFocusRunning] = useState(false)
+  const [sessionElapsedSecondsLocal, setSessionElapsedSeconds] = useState(0)
+  const [timerModeLocal, setTimerMode] = useState<FocusTimerMode>(initialTimerMode)
   const [activeUntrackedSession, setActiveUntrackedSession] = useState<ActiveUntrackedSession>(null)
   const [activeFocusSessionMeta, setActiveFocusSessionMeta] = useState<ActiveFocusSessionMeta>(null)
+  const [authoritativeFocusSession, setAuthoritativeFocusSession] = useState<ActiveFocusSession | null>(
+    initialAuthoritativeFocusSession,
+  )
+  const [serverClockOffsetMs, setServerClockOffsetMs] = useState(() => getServerOffsetMs(initialServerNowUtc))
+  const [lastServerNowUtc, setLastServerNowUtc] = useState<string | null>(initialServerNowUtc ?? null)
+  const [serverTickKey, setServerTickKey] = useState(0)
 
-  const activeTaskHasLiveSession = Boolean(activeTask && activeFocusSessionMeta?.taskId === activeTask.id)
-  const activeTaskTargetSeconds =
+  const timerMode = authoritativeFocusSession?.timer_mode ?? timerModeLocal
+  const isFocusRunning = authoritativeFocusSession
+    ? authoritativeFocusSession.session_state === 'running'
+    : isFocusRunningLocal
+  const sessionElapsedSeconds = useMemo(
+    () => computeDisplayElapsedSeconds(authoritativeFocusSession, serverClockOffsetMs, serverTickKey, sessionElapsedSecondsLocal),
+    [authoritativeFocusSession, serverClockOffsetMs, serverTickKey, sessionElapsedSecondsLocal],
+  )
+
+  const activeTaskHasLiveSession = Boolean(
+    activeTask &&
+    (authoritativeFocusSession
+      ? authoritativeFocusSession.task_id === activeTask.id
+      : activeFocusSessionMeta?.taskId === activeTask.id),
+  )
+
+  const localActiveTaskTargetSeconds =
     (activeTask?.targetDurationMinutes ?? 0) > 0 ? Math.round((activeTask?.targetDurationMinutes ?? 0) * 60) : null
+  const activeTaskTargetSeconds =
+    authoritativeFocusSession &&
+    activeTask &&
+    authoritativeFocusSession.task_id === activeTask.id &&
+    authoritativeFocusSession.timer_mode === 'timer'
+      ? normalizePositiveSeconds(authoritativeFocusSession.target_seconds)
+      : localActiveTaskTargetSeconds
 
   const timerProgressPercent =
     timerMode === 'timer' && activeTaskTargetSeconds
@@ -59,7 +92,7 @@ export function useFocusSessionController({
   )
 
   useEffect(() => {
-    if (!isFocusRunning) {
+    if (authoritativeFocusSession || !isFocusRunningLocal) {
       return
     }
 
@@ -70,18 +103,53 @@ export function useFocusSessionController({
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [isFocusRunning])
+  }, [authoritativeFocusSession, isFocusRunningLocal])
 
   useEffect(() => {
-    if (timerMode === 'timer' && !activeTaskTargetSeconds) {
+    if (authoritativeFocusSession) {
+      return
+    }
+
+    if (timerModeLocal === 'timer' && !activeTaskTargetSeconds) {
       setTimerMode('stopwatch')
       return
     }
 
-    if (timerMode === 'timer' && activeTaskTargetSeconds) {
+    if (timerModeLocal === 'timer' && activeTaskTargetSeconds) {
       setSessionElapsedSeconds((currentSeconds) => Math.min(currentSeconds, activeTaskTargetSeconds))
     }
-  }, [activeTaskTargetSeconds, timerMode])
+  }, [activeTaskTargetSeconds, authoritativeFocusSession, timerModeLocal])
+
+  useEffect(() => {
+    if (authoritativeFocusSession?.session_state !== 'running') {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setServerTickKey((current) => current + 1)
+    }, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [authoritativeFocusSession?.id, authoritativeFocusSession?.last_resumed_at_utc, authoritativeFocusSession?.session_state])
+
+  const applyAuthoritativeFocusSnapshot = (serverNowUtc: string | null | undefined, nextSession: ActiveFocusSession | null) => {
+    const normalizedServerNowUtc = typeof serverNowUtc === 'string' && serverNowUtc.trim() ? serverNowUtc : null
+    if (normalizedServerNowUtc) {
+      setLastServerNowUtc(normalizedServerNowUtc)
+      setServerClockOffsetMs(getServerOffsetMs(normalizedServerNowUtc))
+    }
+
+    setAuthoritativeFocusSession(nextSession)
+    setServerTickKey((current) => current + 1)
+
+    if (nextSession) {
+      setTimerMode(nextSession.timer_mode)
+      setIsFocusRunning(nextSession.session_state === 'running')
+      setSessionElapsedSeconds(Math.max(0, nextSession.elapsed_seconds_total))
+    }
+  }
 
   return {
     isFocusRunning,
@@ -94,6 +162,10 @@ export function useFocusSessionController({
     setActiveUntrackedSession,
     activeFocusSessionMeta,
     setActiveFocusSessionMeta,
+    authoritativeFocusSession,
+    applyAuthoritativeFocusSnapshot,
+    serverClockOffsetMs,
+    lastServerNowUtc,
     activeTaskHasLiveSession,
     activeTaskTargetSeconds,
     timerProgressPercent,
@@ -101,4 +173,51 @@ export function useFocusSessionController({
     isTimerComplete,
     activeTaskTotalTimeLabel,
   }
+}
+
+function normalizePositiveSeconds(value: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null
+  }
+
+  return Math.round(value)
+}
+
+function getServerOffsetMs(serverNowUtc: string | null | undefined) {
+  if (typeof serverNowUtc !== 'string' || !serverNowUtc.trim()) {
+    return 0
+  }
+
+  const parsed = Date.parse(serverNowUtc)
+  if (!Number.isFinite(parsed)) {
+    return 0
+  }
+
+  return parsed - Date.now()
+}
+
+function computeDisplayElapsedSeconds(
+  authoritativeFocusSession: ActiveFocusSession | null,
+  serverClockOffsetMs: number,
+  _serverTickKey: number,
+  localFallbackElapsedSeconds: number,
+) {
+  if (!authoritativeFocusSession) {
+    return Math.max(0, localFallbackElapsedSeconds)
+  }
+
+  const base = Math.max(0, authoritativeFocusSession.elapsed_seconds_total)
+
+  if (authoritativeFocusSession.session_state !== 'running' || !authoritativeFocusSession.last_resumed_at_utc) {
+    return base
+  }
+
+  const resumedAtMs = Date.parse(authoritativeFocusSession.last_resumed_at_utc)
+  if (!Number.isFinite(resumedAtMs)) {
+    return base
+  }
+
+  const currentServerMs = Date.now() + serverClockOffsetMs
+  const deltaSeconds = Math.max(0, Math.floor((currentServerMs - resumedAtMs) / 1000))
+  return base + deltaSeconds
 }

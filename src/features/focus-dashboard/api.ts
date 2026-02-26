@@ -83,6 +83,9 @@ export type AppBootstrapActiveFocusSession = {
   version: number
 }
 
+export type FocusTimerModeApi = AppBootstrapActiveFocusSession['timer_mode']
+export type FocusSessionStateApi = AppBootstrapActiveFocusSession['session_state']
+
 export type AppBootstrapData = {
   server_now_utc: string
   user: AppBootstrapUser
@@ -129,6 +132,72 @@ type TasksListEnvelope = {
 
 type TaskEnvelope = {
   data: TaskApiItem
+}
+
+export type ActiveFocusSession = AppBootstrapActiveFocusSession
+
+export type FocusStoppedReason = 'user_stop' | 'timer_complete' | 'task_switch'
+
+export type StoppedFocusSessionSummary = {
+  task_id: string | null
+  timer_mode: FocusTimerModeApi | null
+  elapsed_seconds_final: number
+  target_seconds: number | null
+  stopped_reason: FocusStoppedReason | null
+}
+
+export type FocusSessionStateEnvelope = {
+  data: {
+    server_now_utc: string
+    active_focus_session: ActiveFocusSession | null
+    stopped_session_summary?: StoppedFocusSessionSummary | null
+  }
+}
+
+export type FocusSessionConflictCode =
+  | 'ACTIVE_SESSION_EXISTS'
+  | 'NO_ACTIVE_SESSION'
+  | 'VERSION_MISMATCH'
+  | 'SESSION_NOT_RUNNING'
+  | 'SESSION_NOT_PAUSED'
+
+export type FocusSessionConflictEnvelope = {
+  message: string
+  code: FocusSessionConflictCode
+  data: {
+    server_now_utc: string
+    active_focus_session: ActiveFocusSession | null
+  }
+}
+
+export type StartFocusSessionPayload = {
+  task_id: string
+  timer_mode: FocusTimerModeApi
+  target_seconds?: number | null
+}
+
+export type PauseFocusSessionPayload = {
+  expected_version: number
+}
+
+export type ResumeFocusSessionPayload = {
+  expected_version: number
+}
+
+export type SwitchTaskFocusSessionPayload = {
+  expected_version: number
+  task_id: string
+  timer_mode?: FocusTimerModeApi
+  target_seconds?: number | null
+}
+
+export type StopFocusSessionPayload = {
+  expected_version: number
+  stopped_reason?: FocusStoppedReason
+}
+
+export type HeartbeatFocusSessionPayload = {
+  expected_version: number
 }
 
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
@@ -261,6 +330,83 @@ export async function reorderTasks(taskIdsInOrder: string[]) {
   return json.data
 }
 
+export async function getActiveFocusSession() {
+  const response = await apiFetch('/api/v1/focus-sessions/active', { method: 'GET' })
+  if (response.status === 401) {
+    return null
+  }
+
+  return parseJsonResponse<FocusSessionStateEnvelope>(response, 'Active focus session lookup failed')
+}
+
+export async function startFocusSession(payload: StartFocusSessionPayload) {
+  await ensureCsrfCookie()
+  const response = await apiFetch('/api/v1/focus-sessions/start', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.status === 401) {
+    return null
+  }
+
+  return parseJsonResponse<FocusSessionStateEnvelope>(response, 'Focus session start failed')
+}
+
+export async function focusSessionCommand(
+  endpoint: 'pause' | 'resume' | 'switch-task' | 'stop' | 'heartbeat',
+  payload:
+    | PauseFocusSessionPayload
+    | ResumeFocusSessionPayload
+    | SwitchTaskFocusSessionPayload
+    | StopFocusSessionPayload
+    | HeartbeatFocusSessionPayload,
+) {
+  await ensureCsrfCookie()
+  const response = await apiFetch(`/api/v1/focus-sessions/${endpoint}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (response.status === 401) {
+    return null
+  }
+
+  return parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
+}
+
+export function getFocusSessionConflictFromApiError(error: unknown) {
+  if (!(error instanceof ApiHttpError) || error.status !== 409) {
+    return null
+  }
+
+  const body = error.body as Partial<FocusSessionConflictEnvelope> | null
+  if (!body || typeof body !== 'object') {
+    return null
+  }
+
+  if (!isFocusSessionConflictCode(body.code)) {
+    return null
+  }
+
+  const data = body.data
+  if (!data || typeof data !== 'object') {
+    return null
+  }
+
+  return {
+    message: typeof body.message === 'string' && body.message.trim() ? body.message : 'Focus session conflict.',
+    code: body.code,
+    data: {
+      server_now_utc:
+        typeof (data as { server_now_utc?: unknown }).server_now_utc === 'string'
+          ? ((data as { server_now_utc: string }).server_now_utc)
+          : '',
+      active_focus_session:
+        ((data as { active_focus_session?: unknown }).active_focus_session as ActiveFocusSession | null | undefined) ??
+        null,
+    },
+  } satisfies FocusSessionConflictEnvelope
+}
+
 async function requestBootstrap(include?: AppBootstrapInclude[]) {
   const includeQuery =
     Array.isArray(include) && include.length > 0
@@ -268,4 +414,14 @@ async function requestBootstrap(include?: AppBootstrapInclude[]) {
       : ''
 
   return apiFetch(`/api/v1/app/bootstrap${includeQuery}`, { method: 'GET' })
+}
+
+function isFocusSessionConflictCode(value: unknown): value is FocusSessionConflictCode {
+  return (
+    value === 'ACTIVE_SESSION_EXISTS' ||
+    value === 'NO_ACTIVE_SESSION' ||
+    value === 'VERSION_MISMATCH' ||
+    value === 'SESSION_NOT_RUNNING' ||
+    value === 'SESSION_NOT_PAUSED'
+  )
 }
