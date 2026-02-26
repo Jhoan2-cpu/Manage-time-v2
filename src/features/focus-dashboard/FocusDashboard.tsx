@@ -18,11 +18,17 @@ import { NewTaskModal } from './components/tasks/NewTaskModal'
 import { SwitchTaskConfirmModal } from './components/tasks/SwitchTaskConfirmModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
-import { dashboardStats, historyLogEntries, logEntries as initialLogEntries, tasks } from './data/mockData'
+import { historyLogEntries, logEntries as initialLogEntries, tasks } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
 import { useFocusSessionController } from './hooks/useFocusSessionController'
 import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState'
 import { useTaskManagementState } from './hooks/useTaskManagementState'
+import type { AppBootstrapData } from './api'
+import {
+  adaptBootstrapDashboardStatsToUi,
+  adaptBootstrapDailyLogToUiEntries,
+  adaptBootstrapTasksToUi,
+} from './bootstrapAdapter'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
 import { classNames } from './utils/classNames'
 import { formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
@@ -45,11 +51,68 @@ type FocusDashboardProps = {
   userName?: string
   userEmail?: string
   onSignOut?: () => void
+  bootstrapData?: AppBootstrapData
 }
 
-export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboardProps = {}) {
+const fallbackDashboardStats = {
+  sessions: 0,
+  focusTime: '0m 00s',
+  totalTracked: '0m 00s',
+}
+
+export function FocusDashboard({ userName, userEmail, onSignOut, bootstrapData }: FocusDashboardProps = {}) {
   const { locale } = useI18n()
-  const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(initialLogEntries)
+  const copy =
+    locale === 'es'
+      ? {
+          exitFocusOnlyMode: 'Salir del modo solo enfoque',
+          exitFocusOnlyShort: 'Salir de Solo enfoque',
+          silenceTimerAlarm: 'Silenciar alarma del temporizador',
+          silenceAlarmShort: 'Silenciar alarma',
+          closeDailyLogOverlay: 'Cerrar overlay del registro diario',
+          closeDailyLog: 'Cerrar registro diario',
+          openDailyLog: 'Abrir registro diario',
+          untrackedTime: 'Tiempo no registrado',
+          manualAdjustment: 'Ajuste manual',
+          scheduledPrefix: 'Programado',
+        }
+      : {
+          exitFocusOnlyMode: 'Exit Focus Only mode',
+          exitFocusOnlyShort: 'Exit Focus Only',
+          silenceTimerAlarm: 'Silence timer alarm',
+          silenceAlarmShort: 'Silence Alarm',
+          closeDailyLogOverlay: 'Close Daily Log overlay',
+          closeDailyLog: 'Close Daily Log',
+          openDailyLog: 'Open Daily Log',
+          untrackedTime: 'Untracked Time',
+          manualAdjustment: 'Manual adjustment',
+          scheduledPrefix: 'Scheduled',
+        }
+  const bootstrapInitialTasks = useMemo(
+    () =>
+      bootstrapData
+        ? adaptBootstrapTasksToUi(bootstrapData, {
+            activeFocusSessionTaskId: bootstrapData.active_focus_session?.task_id ?? null,
+          })
+        : tasks,
+    [bootstrapData],
+  )
+  const bootstrapInitialDailyLogEntries = useMemo(
+    () =>
+      bootstrapData
+        ? adaptBootstrapDailyLogToUiEntries(bootstrapData, {
+            manualAdjustmentLabel: copy.manualAdjustment,
+            timeZone: bootstrapData.preferences?.time_zone_name,
+            untrackedLabel: copy.untrackedTime,
+          })
+        : initialLogEntries,
+    [bootstrapData, copy.manualAdjustment, copy.untrackedTime],
+  )
+  const bootstrapDashboardStats = useMemo(
+    () => (bootstrapData ? adaptBootstrapDashboardStatsToUi(bootstrapData.dashboard_stats) : fallbackDashboardStats),
+    [bootstrapData],
+  )
+  const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(bootstrapInitialDailyLogEntries)
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<Task | null>(null)
   const {
     isProfileModalOpen,
@@ -83,32 +146,11 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     handleToggleDailyLog,
     handleEnterFocusOnlyMode,
     handleExitFocusOnlyMode,
-  } = useFocusDashboardShellState({ onSignOut })
+  } = useFocusDashboardShellState({
+    initialPreferences: bootstrapData?.preferences ?? null,
+    onSignOut,
+  })
   const [workspaceGlowPulseKey, setWorkspaceGlowPulseKey] = useState(0)
-  const copy =
-    locale === 'es'
-      ? {
-        exitFocusOnlyMode: 'Salir del modo solo enfoque',
-        exitFocusOnlyShort: 'Salir de Solo enfoque',
-        silenceTimerAlarm: 'Silenciar alarma del temporizador',
-        silenceAlarmShort: 'Silenciar alarma',
-        closeDailyLogOverlay: 'Cerrar overlay del registro diario',
-        closeDailyLog: 'Cerrar registro diario',
-        openDailyLog: 'Abrir registro diario',
-        untrackedTime: 'Tiempo no registrado',
-        scheduledPrefix: 'Programado',
-      }
-      : {
-        exitFocusOnlyMode: 'Exit Focus Only mode',
-        exitFocusOnlyShort: 'Exit Focus Only',
-        silenceTimerAlarm: 'Silence timer alarm',
-        silenceAlarmShort: 'Silence Alarm',
-        closeDailyLogOverlay: 'Close Daily Log overlay',
-        closeDailyLog: 'Close Daily Log',
-        openDailyLog: 'Open Daily Log',
-        untrackedTime: 'Untracked Time',
-        scheduledPrefix: 'Scheduled',
-      }
   const {
     taskList,
     setTaskList,
@@ -124,18 +166,25 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     handleCloseDeleteTaskModal,
     cleanupTaskUiStateAfterDelete,
   } = useTaskManagementState({
-    initialTasks: tasks,
+    initialTasks: bootstrapInitialTasks,
     scheduledPrefixLabel: copy.scheduledPrefix,
   })
 
-  const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(effectiveTimeZone)
+  const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(
+    effectiveTimeZone,
+    bootstrapData?.server_now_utc ?? null,
+  )
   const localizedDailyLogEntries = useMemo(
     () => localizeStaticLogActivities(dailyLogEntries, copy.untrackedTime),
     [copy.untrackedTime, dailyLogEntries],
   )
   const localizedHistoryEntries = useMemo(
-    () => localizeStaticLogActivities(historyLogEntries, copy.untrackedTime),
-    [copy.untrackedTime],
+    () =>
+      localizeStaticLogActivities(
+        bootstrapData ? dailyLogEntries : historyLogEntries,
+        copy.untrackedTime,
+      ),
+    [bootstrapData, copy.untrackedTime, dailyLogEntries],
   )
   const sessionCountByTaskId = useMemo(() => {
     return dailyLogEntries.reduce<Record<string, number>>((acc, entry) => {
@@ -161,8 +210,19 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
     return taskList.find((task) => task.state === 'active') ?? taskList[0] ?? null
   }, [taskList])
   const initialTimerMode = useMemo<FocusTimerMode>(
-    () => (((tasks.find((task) => task.state === 'active') ?? tasks[0] ?? null)?.targetDurationMinutes ? 'timer' : 'stopwatch')),
-    [],
+    () => {
+      const preferredTask =
+        bootstrapInitialTasks.find((task) => task.state === 'active') ??
+        bootstrapInitialTasks[0] ??
+        null
+
+      if (bootstrapData?.active_focus_session?.timer_mode) {
+        return bootstrapData.active_focus_session.timer_mode
+      }
+
+      return preferredTask?.targetDurationMinutes ? 'timer' : 'stopwatch'
+    },
+    [bootstrapData, bootstrapInitialTasks],
   )
   const {
     isFocusRunning,
@@ -523,7 +583,7 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
                 entries={sidebarLogEntries}
                 isOpen={isDailyLogOpen}
                 tasks={localizedTaskList}
-                totalTracked={dashboardStats.totalTracked}
+                totalTracked={bootstrapDashboardStats.totalTracked}
               />
 
               <section className="app-scroll relative isolate flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-visible sm:overflow-y-auto">
@@ -647,10 +707,10 @@ export function FocusDashboard({ userName, userEmail, onSignOut }: FocusDashboar
         onClose={handleCloseSignOutConfirm}
         onConfirm={handleConfirmSignOut}
       />
-      <SettingsModal
+        <SettingsModal
         autoDetectTimeZone={autoDetectTimeZone}
         backgroundMusicVolume={backgroundMusicVolume}
-        dashboardStats={dashboardStats}
+        dashboardStats={bootstrapDashboardStats}
         effectiveTimeZone={effectiveTimeZone}
         entries={localizedDailyLogEntries}
         historyEntries={localizedHistoryEntries}

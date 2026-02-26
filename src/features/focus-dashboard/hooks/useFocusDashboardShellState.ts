@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getBrowserTimeZone, getSupportedTimeZones } from '../utils/time'
+import type { AppBootstrapPreferences } from '../api'
 import {
   getBackgroundMusicVolume,
   getUiInteractionSfxEnabled,
@@ -15,18 +16,37 @@ const AUTO_TIME_ZONE_STORAGE_KEY = 'velor.settings.timezone.auto'
 
 type UseFocusDashboardShellStateParams = {
   onSignOut?: () => void
+  initialPreferences?: AppBootstrapPreferences | null
 }
 
-export function useFocusDashboardShellState({ onSignOut }: UseFocusDashboardShellStateParams) {
+export function useFocusDashboardShellState({ onSignOut, initialPreferences }: UseFocusDashboardShellStateParams) {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false)
   const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false)
   const [isTimerAlarmPlaying, setIsTimerAlarmPlaying] = useState(false)
-  const [uiInteractionSfxEnabled, setUiInteractionSfxEnabledState] = useState(() => getUiInteractionSfxEnabled())
-  const [backgroundMusicVolume, setBackgroundMusicVolumeState] = useState(() => getBackgroundMusicVolume())
-  const [requireTaskSwitchConfirmation, setRequireTaskSwitchConfirmation] = useState(true)
+   const [uiInteractionSfxEnabled, setUiInteractionSfxEnabledState] = useState(() => {
+     if (typeof initialPreferences?.ui_sounds_enabled === 'boolean') {
+       return initialPreferences.ui_sounds_enabled
+     }
+
+     return getUiInteractionSfxEnabled()
+   })
+   const [backgroundMusicVolume, setBackgroundMusicVolumeState] = useState(() => {
+     if (typeof initialPreferences?.background_music_volume_percent === 'number' && Number.isFinite(initialPreferences.background_music_volume_percent)) {
+       return Math.max(0, Math.min(100, Math.round(initialPreferences.background_music_volume_percent)))
+     }
+
+     return getBackgroundMusicVolume()
+   })
+   const [requireTaskSwitchConfirmation, setRequireTaskSwitchConfirmation] = useState(
+     initialPreferences?.confirm_task_switch_enabled ?? true,
+   )
   const [selectedTimeZone, setSelectedTimeZone] = useState(() => {
+    if (typeof initialPreferences?.time_zone_name === 'string' && initialPreferences.time_zone_name.trim()) {
+      return initialPreferences.time_zone_name.trim()
+    }
+
     if (typeof window === 'undefined') {
       return 'UTC'
     }
@@ -35,6 +55,10 @@ export function useFocusDashboardShellState({ onSignOut }: UseFocusDashboardShel
     return stored || getBrowserTimeZone()
   })
   const [autoDetectTimeZone, setAutoDetectTimeZone] = useState(() => {
+    if (typeof initialPreferences?.time_zone_auto_detect === 'boolean') {
+      return initialPreferences.time_zone_auto_detect
+    }
+
     if (typeof window === 'undefined') {
       return true
     }
@@ -70,6 +94,17 @@ export function useFocusDashboardShellState({ onSignOut }: UseFocusDashboardShel
   useEffect(() => {
     return subscribeTimerRingtoneState(setIsTimerAlarmPlaying)
   }, [])
+
+  useEffect(() => {
+    if (!initialPreferences) {
+      return
+    }
+
+    const nextUiSfx = setUiInteractionSfxEnabled(initialPreferences.ui_sounds_enabled)
+    const nextVolume = setBackgroundMusicVolume(initialPreferences.background_music_volume_percent)
+    setUiInteractionSfxEnabledState(nextUiSfx)
+    setBackgroundMusicVolumeState(nextVolume)
+  }, [initialPreferences])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
