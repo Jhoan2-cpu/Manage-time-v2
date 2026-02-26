@@ -21,6 +21,7 @@ import { TaskCarousel } from './components/tasks/TaskCarousel'
 import { historyLogEntries, logEntries as initialLogEntries, tasks } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
 import { useFocusSessionController } from './hooks/useFocusSessionController'
+import { useFocusRealtimeChannel, type FocusRealtimeEvent } from './hooks/useFocusRealtimeChannel'
 import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState'
 import { useTaskManagementState } from './hooks/useTaskManagementState'
 import {
@@ -197,6 +198,7 @@ export function FocusDashboard({
   const isFocusCommandInFlightRef = useRef(false)
   const isFocusSessionSyncInFlightRef = useRef(false)
   const timerCompleteStopRequestKeyRef = useRef<string | null>(null)
+  const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     isMountedRef.current = true
@@ -681,6 +683,12 @@ export function FocusDashboard({
       return
     }
 
+    const normalizedId = createdTimeEntryId.trim()
+    if (lastHandledCreatedTimeEntryIdRef.current === normalizedId) {
+      return
+    }
+    lastHandledCreatedTimeEntryIdRef.current = normalizedId
+
     try {
       await refreshBootstrapDerivedDataFromServer()
     } catch (error) {
@@ -708,6 +716,60 @@ export function FocusDashboard({
       isFocusSessionSyncInFlightRef.current = false
     }
   }
+
+  const applyRealtimeFocusEvent = (event: FocusRealtimeEvent) => {
+    if (!event || !event.data) {
+      return
+    }
+
+    const expectedUserId = bootstrapData?.user.id
+    if (expectedUserId && event.meta?.user_id && `${event.meta.user_id}` !== `${expectedUserId}`) {
+      return
+    }
+
+    const incomingVersion = event.data.active_focus_session?.version ?? null
+    const localVersion = activeFocusSession?.version ?? null
+
+    if (
+      event.type === 'focus_session.updated' &&
+      incomingVersion !== null &&
+      localVersion !== null &&
+      incomingVersion < localVersion
+    ) {
+      return
+    }
+
+    applyFocusSessionEnvelope({
+      data: {
+        server_now_utc: event.data.server_now_utc ?? '',
+        active_focus_session: event.data.active_focus_session ?? null,
+        stopped_session_summary: event.data.stopped_session_summary ?? null,
+        created_time_entry_id: event.data.created_time_entry_id ?? null,
+      },
+    })
+
+    if (event.type === 'focus_session.stopped') {
+      const finalElapsed = event.data.stopped_session_summary?.elapsed_seconds_final
+      if (typeof finalElapsed === 'number' && Number.isFinite(finalElapsed)) {
+        setSessionElapsedSeconds(Math.max(0, Math.round(finalElapsed)))
+      }
+      setIsFocusRunning(false)
+      setActiveFocusSessionMeta(null)
+    }
+
+    if (event.data.created_time_entry_id) {
+      void handleCreatedTimeEntryInvalidation(event.data.created_time_entry_id)
+    }
+  }
+
+  useFocusRealtimeChannel({
+    userId: bootstrapData?.user.id ?? null,
+    enabled: true,
+    onEvent: applyRealtimeFocusEvent,
+    onReconnectSync: () => {
+      void syncActiveFocusSession()
+    },
+  })
 
   const getPreferredTimerModeForTask = (task: Task): FocusTimerMode =>
     task.targetDurationMinutes && task.targetDurationMinutes > 0 ? 'timer' : 'stopwatch'
