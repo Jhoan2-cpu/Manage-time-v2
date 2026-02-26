@@ -3,24 +3,26 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
 import { useI18n } from '../../../i18n'
+import { getApiErrorFirstMessage } from '../../../lib/api/http'
 
 type LoginPageProps = {
-  onLogin: (payload: { email: string; password: string }) => void
+  onLogin: (payload: { email: string; password: string }) => void | Promise<void>
   onLoginWithGoogle?: () => void
   onOpenRegister?: () => void
   onClose?: () => void
 }
 
 export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onClose }: LoginPageProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const isSubmitDisabled = !email.trim() || !password
+  const isSubmitDisabled = isSubmitting || !email.trim() || !password
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const normalizedEmail = email.trim().toLowerCase()
@@ -35,7 +37,16 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onClose 
     }
 
     setErrorMessage(null)
-    onLogin({ email: normalizedEmail, password })
+    setIsSubmitting(true)
+    try {
+      await onLogin({ email: normalizedEmail, password })
+    } catch (error) {
+      setErrorMessage(
+        getApiErrorFirstMessage(error, locale === 'es' ? 'No se pudo iniciar sesión.' : 'Unable to sign in.'),
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -145,6 +156,7 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onClose 
                 <button
                   className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-4 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800/60"
                   data-sfx-type="off"
+                  disabled={isSubmitting}
                   onClick={onLoginWithGoogle}
                   type="button"
                 >
@@ -164,7 +176,7 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onClose 
                   type="submit"
                 >
                   <FontAwesomeIcon icon={faRightToBracket} />
-                  <span>{t('auth.login.enterVelor')}</span>
+                  <span>{isSubmitting ? (locale === 'es' ? 'Ingresando...' : 'Signing in...') : t('auth.login.enterVelor')}</span>
                 </button>
 
                 <p className="mt-4 text-center text-xs text-slate-500">

@@ -5,49 +5,71 @@ import { RegisterPage } from './features/auth/components/RegisterPage'
 import { FocusDashboard } from './features/focus-dashboard/FocusDashboard'
 import { HomePage } from './features/home/components/HomePage'
 import { stopFocusAudioPlayback } from './lib/audio/uiSfx'
+import {
+  loginAuth,
+  loginWithGoogleRedirect,
+  logoutAuth,
+  meAuth,
+  registerAuth,
+  type AuthApiUser,
+} from './features/auth/api'
+import type { AppLocale } from './i18n/messages'
 
 type AppSessionUser = {
+  id: string
   displayName: string
   email: string
+  locale: AppLocale
 }
 
-const SESSION_STORAGE_KEY = 'velor.session.user'
 type AppRoute = 'home' | 'login' | 'register' | 'app'
+type AuthStatus = 'loading' | 'guest' | 'authenticated'
 
 function App() {
-  const { locale } = useI18n()
+  const { locale, setLocale } = useI18n()
   const [sessionUser, setSessionUser] = useState<AppSessionUser | null>(null)
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('loading')
   const [currentPath, setCurrentPath] = useState(() => getBrowserPath())
   const fallbackDisplayName = locale === 'es' ? 'Usuario Velor' : 'Velor User'
-  const googleUserDisplayName = locale === 'es' ? 'Usuario de Google' : 'Google User'
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
+    let didCancel = false
+    const fallbackDisplayNameAtBoot = locale === 'es' ? 'Usuario Velor' : 'Velor User'
+
+    const bootstrapAuthSession = async () => {
+      setAuthStatus('loading')
+
+      try {
+        const user = await meAuth()
+        if (didCancel) {
+          return
+        }
+
+        if (!user) {
+          setSessionUser(null)
+          setAuthStatus('guest')
+          return
+        }
+
+        const nextUser = mapAuthApiUserToSessionUser(user, fallbackDisplayNameAtBoot)
+        setSessionUser(nextUser)
+        setLocale(nextUser.locale)
+        setAuthStatus('authenticated')
+      } catch {
+        if (didCancel) {
+          return
+        }
+        setSessionUser(null)
+        setAuthStatus('guest')
+      }
     }
 
-    try {
-      const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
-      if (!raw) {
-        return
-      }
+    void bootstrapAuthSession()
 
-      const parsed = JSON.parse(raw) as Partial<AppSessionUser>
-      if (typeof parsed.email !== 'string' || !parsed.email.trim()) {
-        return
-      }
-
-      setSessionUser({
-        email: parsed.email.trim().toLowerCase(),
-        displayName:
-          typeof parsed.displayName === 'string' && parsed.displayName.trim()
-            ? parsed.displayName.trim()
-            : deriveDisplayNameFromEmail(parsed.email, fallbackDisplayName),
-      })
-    } catch {
-      window.localStorage.removeItem(SESSION_STORAGE_KEY)
+    return () => {
+      didCancel = true
     }
-  }, [fallbackDisplayName])
+  }, [setLocale])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -65,15 +87,19 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (authStatus === 'loading') {
+      return
+    }
+
     const route = resolveRoute(currentPath)
 
-    if (route === 'app' && !sessionUser) {
+    if (route === 'app' && authStatus !== 'authenticated') {
       navigateTo('/login', true)
       setCurrentPath('/login')
       return
     }
 
-    if ((route === 'login' || route === 'register') && sessionUser) {
+    if ((route === 'login' || route === 'register') && authStatus === 'authenticated') {
       navigateTo('/app', true)
       setCurrentPath('/app')
       return
@@ -83,70 +109,71 @@ function App() {
       navigateTo('/', true)
       setCurrentPath('/')
     }
-  }, [currentPath, sessionUser])
+  }, [authStatus, currentPath])
 
   const userForDashboard = useMemo(() => {
     return (
       sessionUser ?? {
+        id: 'demo-user',
         displayName: 'Anton Rivera',
         email: 'anton@velor.app',
+        locale,
       }
     )
-  }, [sessionUser])
+  }, [locale, sessionUser])
 
-  const handleLogin = ({ email }: { email: string; password: string }) => {
-    const nextUser = {
-      email,
-      displayName: deriveDisplayNameFromEmail(email, fallbackDisplayName),
-    }
-
+  const handleLogin = async ({ email, password }: { email: string; password: string }) => {
+    const result = await loginAuth({ email, password })
+    const nextUser = mapAuthApiUserToSessionUser(result.data.user, fallbackDisplayName)
     setSessionUser(nextUser)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser))
+    if (nextUser.locale !== locale) {
+      setLocale(nextUser.locale)
     }
+    setAuthStatus('authenticated')
     navigateTo('/app')
     setCurrentPath('/app')
   }
-  const handleRegister = ({
+  const handleRegister = async ({
     displayName,
     email,
+    password,
+    passwordConfirmation,
   }: {
     displayName: string
     email: string
     password: string
+    passwordConfirmation: string
   }) => {
-    const nextUser = {
+    const result = await registerAuth({
+      display_name: displayName.trim(),
       email,
-      displayName: displayName.trim() || deriveDisplayNameFromEmail(email, fallbackDisplayName),
-    }
+      password,
+      password_confirmation: passwordConfirmation,
+      locale,
+    })
 
+    const nextUser = mapAuthApiUserToSessionUser(result.data.user, fallbackDisplayName)
     setSessionUser(nextUser)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser))
+    if (nextUser.locale !== locale) {
+      setLocale(nextUser.locale)
     }
+    setAuthStatus('authenticated')
     navigateTo('/app')
     setCurrentPath('/app')
   }
   const handleGoogleAuth = () => {
-    const nextUser = {
-      email: 'google.user@velor.app',
-      displayName: googleUserDisplayName,
-    }
-
-    setSessionUser(nextUser)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser))
-    }
-    navigateTo('/app')
-    setCurrentPath('/app')
+    loginWithGoogleRedirect('login')
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     stopFocusAudioPlayback()
-    setSessionUser(null)
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(SESSION_STORAGE_KEY)
+    try {
+      await logoutAuth()
+    } catch {
+      // If the backend session already expired, clear local auth state anyway.
     }
+    setSessionUser(null)
+    setAuthStatus('guest')
     navigateTo('/login')
     setCurrentPath('/login')
   }
@@ -157,7 +184,17 @@ function App() {
     setCurrentPath('/')
   }
 
-  if (!sessionUser) {
+  if (authStatus === 'loading') {
+    return (
+      <div className="grid min-h-[100svh] place-items-center bg-[#040b17] text-slate-200">
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm">
+          {locale === 'es' ? 'Cargando sesión...' : 'Loading session...'}
+        </div>
+      </div>
+    )
+  }
+
+  if (authStatus !== 'authenticated' || !sessionUser) {
     if (route === 'register') {
       return (
         <RegisterPage
@@ -167,7 +204,7 @@ function App() {
             setCurrentPath('/login')
           }}
           onRegister={handleRegister}
-          onRegisterWithGoogle={handleGoogleAuth}
+          onRegisterWithGoogle={() => loginWithGoogleRedirect('register')}
         />
       )
     }
@@ -240,6 +277,20 @@ function deriveDisplayNameFromEmail(email: string, fallback = 'Velor User') {
     .join(' ')
 
   return formatted || fallback
+}
+
+function mapAuthApiUserToSessionUser(user: AuthApiUser, fallbackDisplayName: string): AppSessionUser {
+  const normalizedEmail = typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''
+
+  return {
+    id: user.id,
+    email: normalizedEmail,
+    displayName:
+      typeof user.display_name === 'string' && user.display_name.trim()
+        ? user.display_name.trim()
+        : deriveDisplayNameFromEmail(normalizedEmail, fallbackDisplayName),
+    locale: user.locale === 'en' ? 'en' : 'es',
+  }
 }
 
 function getBrowserPath() {

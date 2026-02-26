@@ -11,16 +11,22 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
 import { useI18n } from '../../../i18n'
+import { getApiErrorFirstMessage } from '../../../lib/api/http'
 
 type RegisterPageProps = {
-  onRegister: (payload: { displayName: string; email: string; password: string }) => void
+  onRegister: (payload: {
+    displayName: string
+    email: string
+    password: string
+    passwordConfirmation: string
+  }) => void | Promise<void>
   onRegisterWithGoogle?: () => void
   onOpenLogin?: () => void
   onClose?: () => void
 }
 
 export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, onClose }: RegisterPageProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -28,10 +34,11 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const isSubmitDisabled = !displayName.trim() || !email.trim() || !password || !confirmPassword
+  const isSubmitDisabled = isSubmitting || !displayName.trim() || !email.trim() || !password || !confirmPassword
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const normalizedEmail = email.trim().toLowerCase()
@@ -58,7 +65,21 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
     }
 
     setErrorMessage(null)
-    onRegister({ displayName: normalizedName, email: normalizedEmail, password })
+    setIsSubmitting(true)
+    try {
+      await onRegister({
+        displayName: normalizedName,
+        email: normalizedEmail,
+        password,
+        passwordConfirmation: confirmPassword,
+      })
+    } catch (error) {
+      setErrorMessage(
+        getApiErrorFirstMessage(error, locale === 'es' ? 'No se pudo crear la cuenta.' : 'Unable to create account.'),
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -185,6 +206,7 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                 <button
                   className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-4 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800/60"
                   data-sfx-type="off"
+                  disabled={isSubmitting}
                   onClick={onRegisterWithGoogle}
                   type="button"
                 >
@@ -204,7 +226,9 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                   type="submit"
                 >
                   <FontAwesomeIcon icon={faRightToBracket} />
-                  <span>{t('auth.register.createAccount')}</span>
+                  <span>
+                    {isSubmitting ? (locale === 'es' ? 'Creando cuenta...' : 'Creating account...') : t('auth.register.createAccount')}
+                  </span>
                 </button>
 
                 <p className="mt-3 text-center text-xs text-slate-500">
