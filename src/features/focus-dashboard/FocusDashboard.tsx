@@ -78,6 +78,11 @@ type FocusDashboardProps = {
   onPreferencesUpdated?: (preferences: UserPreferences) => void
 }
 
+type PendingTaskSwitchConfirm = {
+  task: Task
+  preferredMode?: FocusTimerMode
+} | null
+
 const fallbackDashboardStats = {
   sessions: 0,
   focusTime: '0m 00s',
@@ -102,35 +107,35 @@ export function FocusDashboard({
   const copy =
     locale === 'es'
       ? {
-          exitFocusOnlyMode: 'Salir del modo solo enfoque',
-          exitFocusOnlyShort: 'Salir de Solo enfoque',
-          silenceTimerAlarm: 'Silenciar alarma del temporizador',
-          silenceAlarmShort: 'Silenciar alarma',
-          closeDailyLogOverlay: 'Cerrar overlay del registro diario',
-          closeDailyLog: 'Cerrar registro diario',
-          openDailyLog: 'Abrir registro diario',
-          untrackedTime: 'Tiempo no registrado',
-          manualAdjustment: 'Ajuste manual',
-          scheduledPrefix: 'Programado',
-        }
+        exitFocusOnlyMode: 'Salir del modo solo enfoque',
+        exitFocusOnlyShort: 'Salir de Solo enfoque',
+        silenceTimerAlarm: 'Silenciar alarma del temporizador',
+        silenceAlarmShort: 'Silenciar alarma',
+        closeDailyLogOverlay: 'Cerrar overlay del registro diario',
+        closeDailyLog: 'Cerrar registro diario',
+        openDailyLog: 'Abrir registro diario',
+        untrackedTime: 'Tiempo no registrado',
+        manualAdjustment: 'Ajuste manual',
+        scheduledPrefix: 'Programado',
+      }
       : {
-          exitFocusOnlyMode: 'Exit Focus Only mode',
-          exitFocusOnlyShort: 'Exit Focus Only',
-          silenceTimerAlarm: 'Silence timer alarm',
-          silenceAlarmShort: 'Silence Alarm',
-          closeDailyLogOverlay: 'Close Daily Log overlay',
-          closeDailyLog: 'Close Daily Log',
-          openDailyLog: 'Open Daily Log',
-          untrackedTime: 'Untracked Time',
-          manualAdjustment: 'Manual adjustment',
-          scheduledPrefix: 'Scheduled',
-        }
+        exitFocusOnlyMode: 'Exit Focus Only mode',
+        exitFocusOnlyShort: 'Exit Focus Only',
+        silenceTimerAlarm: 'Silence timer alarm',
+        silenceAlarmShort: 'Silence Alarm',
+        closeDailyLogOverlay: 'Close Daily Log overlay',
+        closeDailyLog: 'Close Daily Log',
+        openDailyLog: 'Open Daily Log',
+        untrackedTime: 'Untracked Time',
+        manualAdjustment: 'Manual adjustment',
+        scheduledPrefix: 'Scheduled',
+      }
   const bootstrapInitialTasks = useMemo(
     () =>
       bootstrapData
         ? adaptBootstrapTasksToUi(bootstrapData, {
-            activeFocusSessionTaskId: bootstrapData.active_focus_session?.task_id ?? null,
-          })
+          activeFocusSessionTaskId: bootstrapData.active_focus_session?.task_id ?? null,
+        })
         : tasks,
     [bootstrapData],
   )
@@ -138,10 +143,10 @@ export function FocusDashboard({
     () =>
       bootstrapData
         ? adaptBootstrapDailyLogToUiEntries(bootstrapData, {
-            manualAdjustmentLabel: copy.manualAdjustment,
-            timeZone: bootstrapData.preferences?.time_zone_name,
-            untrackedLabel: copy.untrackedTime,
-          })
+          manualAdjustmentLabel: copy.manualAdjustment,
+          timeZone: bootstrapData.preferences?.time_zone_name,
+          untrackedLabel: copy.untrackedTime,
+        })
         : initialLogEntries,
     [bootstrapData, copy.manualAdjustment, copy.untrackedTime],
   )
@@ -152,7 +157,7 @@ export function FocusDashboard({
   const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(bootstrapInitialDailyLogEntries)
   const [dashboardStatsState, setDashboardStatsState] = useState(bootstrapDashboardStats)
   const [settingsHistoryReloadKey, setSettingsHistoryReloadKey] = useState(0)
-  const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<Task | null>(null)
+  const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<PendingTaskSwitchConfirm>(null)
   const {
     isProfileModalOpen,
     isSettingsModalOpen,
@@ -396,7 +401,7 @@ export function FocusDashboard({
     }
 
     cleanupTaskUiStateAfterDelete(deletedTaskId)
-    setTaskPendingSwitchConfirm((current) => (current?.id === deletedTaskId ? null : current))
+    setTaskPendingSwitchConfirm((current) => (current?.task.id === deletedTaskId ? null : current))
   }
 
   const handleCreateTaskPersist = async (payload: NewTaskPayload) => {
@@ -510,7 +515,6 @@ export function FocusDashboard({
     applyAuthoritativeFocusSnapshot,
     lastServerNowUtc,
     activeTaskTargetSeconds,
-    timerProgressPercent,
     timerDisplayLabel,
     isTimerComplete,
     activeTaskTotalTimeLabel,
@@ -941,48 +945,48 @@ export function FocusDashboard({
 
       const elapsedBeforeStop = sessionElapsedSeconds
 
-      ;(async () => {
-        if (isFocusCommandInFlightRef.current) {
-          return
-        }
-
-        timerCompleteStopRequestKeyRef.current = requestKey
-        isFocusCommandInFlightRef.current = true
-        try {
-          const response = await focusSessionCommand('stop', {
-            expected_version: activeFocusSession.version,
-            stopped_reason: 'timer_complete',
-          })
-
-          if (!response) {
-            onSignOut?.()
+        ; (async () => {
+          if (isFocusCommandInFlightRef.current) {
             return
           }
 
-          applyFocusSessionEnvelope(response)
-          void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
+          timerCompleteStopRequestKeyRef.current = requestKey
+          isFocusCommandInFlightRef.current = true
+          try {
+            const response = await focusSessionCommand('stop', {
+              expected_version: activeFocusSession.version,
+              stopped_reason: 'timer_complete',
+            })
 
-          const completedSeconds =
-            response.data.stopped_session_summary?.elapsed_seconds_final ??
-            Math.min(elapsedBeforeStop, activeTaskTargetSeconds)
-          setSessionElapsedSeconds(Math.max(0, completedSeconds))
-          setIsFocusRunning(false)
-          if (!response.data.created_time_entry_id) {
-            commitCurrentFocusSession(completedSeconds)
-          } else {
-            setActiveFocusSessionMeta(null)
+            if (!response) {
+              onSignOut?.()
+              return
+            }
+
+            applyFocusSessionEnvelope(response)
+            void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
+
+            const completedSeconds =
+              response.data.stopped_session_summary?.elapsed_seconds_final ??
+              Math.min(elapsedBeforeStop, activeTaskTargetSeconds)
+            setSessionElapsedSeconds(Math.max(0, completedSeconds))
+            setIsFocusRunning(false)
+            if (!response.data.created_time_entry_id) {
+              commitCurrentFocusSession(completedSeconds)
+            } else {
+              setActiveFocusSessionMeta(null)
+            }
+            triggerTimerEndAlarm()
+          } catch (error) {
+            const handled = await handleFocusSessionApiError(error)
+            if (!handled.handled) {
+              console.error('Failed to stop focus session after timer completion', error)
+            }
+            timerCompleteStopRequestKeyRef.current = null
+          } finally {
+            isFocusCommandInFlightRef.current = false
           }
-          triggerTimerEndAlarm()
-        } catch (error) {
-          const handled = await handleFocusSessionApiError(error)
-          if (!handled.handled) {
-            console.error('Failed to stop focus session after timer completion', error)
-          }
-          timerCompleteStopRequestKeyRef.current = null
-        } finally {
-          isFocusCommandInFlightRef.current = false
-        }
-      })()
+        })()
     }
   }, [
     activeFocusSession,
@@ -1122,7 +1126,17 @@ export function FocusDashboard({
     )
     setActiveFocusSessionMeta(null)
   }
-  const activateTaskAndStartNewCount = async (selectedTask: Task) => {
+  const resolveTimerModeForTask = (task: Task, requestedMode?: FocusTimerMode): FocusTimerMode => {
+    const fallbackMode = getPreferredTimerModeForTask(task)
+    const candidateMode = requestedMode ?? fallbackMode
+
+    if (candidateMode === 'timer' && !getTargetSecondsForStart(task, 'timer')) {
+      return 'stopwatch'
+    }
+
+    return candidateMode
+  }
+  const activateTaskAndStartNewCount = async (selectedTask: Task, requestedMode?: FocusTimerMode) => {
     if (isFocusCommandInFlightRef.current) {
       return
     }
@@ -1130,7 +1144,7 @@ export function FocusDashboard({
     runNonBlockingFocusSideEffect(stopTimerEndAlarm)
     runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
 
-    const nextMode = getPreferredTimerModeForTask(selectedTask)
+    const nextMode = resolveTimerModeForTask(selectedTask, requestedMode)
     const nextTargetSeconds = getTargetSecondsForStart(selectedTask, nextMode)
     const elapsedBeforeSwitch = activeFocusSession ? sessionElapsedSeconds : 0
 
@@ -1216,7 +1230,7 @@ export function FocusDashboard({
       isFocusCommandInFlightRef.current = false
     }
   }
-  const handleStartFocus = async () => {
+  const handleToggleFocus = async (requestedStartMode?: FocusTimerMode) => {
     if (!activeTask) {
       return
     }
@@ -1298,8 +1312,10 @@ export function FocusDashboard({
       setSessionElapsedSeconds(0)
     }
 
-    const nextMode = timerMode === 'timer' && activeTaskTargetSeconds ? 'timer' : 'stopwatch'
+    const requestedMode = requestedStartMode ?? timerMode
+    const nextMode = resolveTimerModeForTask(activeTask, requestedMode)
     const nextTargetSeconds = getTargetSecondsForStart(activeTask, nextMode)
+    setTimerMode(nextMode)
 
     isFocusCommandInFlightRef.current = true
     try {
@@ -1326,30 +1342,74 @@ export function FocusDashboard({
       isFocusCommandInFlightRef.current = false
     }
   }
-  const handleChangeTimerMode = (nextMode: FocusTimerMode) => {
-    if (activeFocusSession) {
-      return
-    }
-
-    if (nextMode === 'timer' && !activeTaskTargetSeconds) {
-      return
-    }
-
+  const handleStopFocus = async () => {
     runNonBlockingFocusSideEffect(stopTimerEndAlarm)
-    setTimerMode(nextMode)
+
+    if (isFocusCommandInFlightRef.current) {
+      return
+    }
+
+    if (!activeFocusSession) {
+      setSessionElapsedSeconds(0)
+      setIsFocusRunning(false)
+      runNonBlockingFocusSideEffect(handleStartUntrackedSession)
+      return
+    }
+
+    const elapsedBeforeStop = sessionElapsedSeconds
+
+    isFocusCommandInFlightRef.current = true
+    try {
+      const response = await focusSessionCommand('stop', {
+        expected_version: activeFocusSession.version,
+        stopped_reason: 'user_stop',
+      })
+
+      if (!response) {
+        onSignOut?.()
+        return
+      }
+
+      const stoppedElapsed =
+        response.data.stopped_session_summary?.elapsed_seconds_final ??
+        Math.max(0, Math.round(elapsedBeforeStop))
+
+      applyFocusSessionEnvelope(response)
+      void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
+      setSessionElapsedSeconds(0)
+      setIsFocusRunning(false)
+
+      if (stoppedElapsed > 0 && !response.data.created_time_entry_id) {
+        runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(stoppedElapsed))
+      } else {
+        setActiveFocusSessionMeta(null)
+      }
+
+      runNonBlockingFocusSideEffect(handleStartUntrackedSession)
+    } catch (error) {
+      const handled = await handleFocusSessionApiError(error)
+      if (!handled.handled) {
+        console.error('Failed to stop focus session', error)
+      }
+    } finally {
+      isFocusCommandInFlightRef.current = false
+    }
   }
-  const handlePlayTask = async (selectedTask: Task) => {
+  const handlePlayTask = async (selectedTask: Task, preferredMode?: FocusTimerMode) => {
     if (activeTask && selectedTask.id === activeTask.id) {
-      await handleStartFocus()
+      await handleToggleFocus(preferredMode)
       return
     }
 
     if (requireTaskSwitchConfirmation && isFocusRunning && activeTask && selectedTask.id !== activeTask.id) {
-      setTaskPendingSwitchConfirm(selectedTask)
+      setTaskPendingSwitchConfirm({
+        task: selectedTask,
+        preferredMode,
+      })
       return
     }
 
-    await activateTaskAndStartNewCount(selectedTask)
+    await activateTaskAndStartNewCount(selectedTask, preferredMode)
   }
   const handleCloseSwitchTaskConfirm = () => {
     setTaskPendingSwitchConfirm(null)
@@ -1359,7 +1419,7 @@ export function FocusDashboard({
       return
     }
 
-    await activateTaskAndStartNewCount(taskPendingSwitchConfirm)
+    await activateTaskAndStartNewCount(taskPendingSwitchConfirm.task, taskPendingSwitchConfirm.preferredMode)
     setTaskPendingSwitchConfirm(null)
   }
   return (
@@ -1417,15 +1477,13 @@ export function FocusDashboard({
             <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-4 sm:px-8 sm:py-8 [@media(max-height:840px)]:items-start">
               <TimerPanel
                 activeTask={activeTask}
-                canUseTimerMode={Boolean(activeTaskTargetSeconds)}
+                canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
+                hasActiveSession={Boolean(activeFocusSession)}
                 isFocusOnlyMode
                 isRunning={isFocusRunning}
-                isTimerComplete={isTimerComplete}
-                mode={timerMode}
-                onChangeMode={handleChangeTimerMode}
-                onStartFocus={handleStartFocus}
+                onStopFocus={handleStopFocus}
+                onToggleFocus={handleToggleFocus}
                 timeLabel={timerDisplayLabel}
-                timerProgressPercent={timerProgressPercent}
                 totalTaskTimeLabel={activeTaskTotalTimeLabel}
               />
             </div>
@@ -1477,10 +1535,9 @@ export function FocusDashboard({
 
                   <div className="relative z-10 mx-auto flex min-h-full w-full flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] pt-4 sm:h-full sm:flex-1 sm:pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:px-6 md:pb-0 [@media(max-height:840px)]:h-auto [@media(max-height:840px)]:pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
                     <TaskCarousel
-                       accentColorTag={activeWorkspaceAccentColor}
-                       effectiveTimeZone={effectiveTimeZone}
-                       isActiveTaskTimerComplete={isTimerComplete}
-                       isFocusRunning={isFocusRunning}
+                      accentColorTag={activeWorkspaceAccentColor}
+                      effectiveTimeZone={effectiveTimeZone}
+                      isFocusRunning={isFocusRunning}
                       onAddTask={handleAddTask}
                       onDeleteTask={handleRequestDeleteTask}
                       onEditTask={handleEditTask}
@@ -1490,14 +1547,12 @@ export function FocusDashboard({
                     />
                     <TimerPanel
                       activeTask={activeTaskDisplay}
-                      canUseTimerMode={Boolean(activeTaskTargetSeconds)}
+                      canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
+                      hasActiveSession={Boolean(activeFocusSession)}
                       isRunning={isFocusRunning}
-                      isTimerComplete={isTimerComplete}
-                      mode={timerMode}
-                      onChangeMode={handleChangeTimerMode}
-                      onStartFocus={handleStartFocus}
+                      onStopFocus={handleStopFocus}
+                      onToggleFocus={handleToggleFocus}
                       timeLabel={timerDisplayLabel}
-                      timerProgressPercent={timerProgressPercent}
                       totalTaskTimeLabel={activeTaskTotalTimeLabel}
                     />
                   </div>
@@ -1572,7 +1627,7 @@ export function FocusDashboard({
       <SwitchTaskConfirmModal
         currentTask={activeTaskDisplay}
         isOpen={taskPendingSwitchConfirm !== null}
-        nextTask={taskPendingSwitchConfirm ? localizeStaticTaskTitle(taskPendingSwitchConfirm, locale) : null}
+        nextTask={taskPendingSwitchConfirm ? localizeStaticTaskTitle(taskPendingSwitchConfirm.task, locale) : null}
         onClose={handleCloseSwitchTaskConfirm}
         onConfirm={handleConfirmSwitchTask}
       />
@@ -1582,7 +1637,7 @@ export function FocusDashboard({
         onClose={handleCloseSignOutConfirm}
         onConfirm={handleConfirmSignOut}
       />
-        <SettingsModal
+      <SettingsModal
         autoDetectTimeZone={autoDetectTimeZone}
         backgroundMusicVolume={backgroundMusicVolume}
         dashboardStats={dashboardStatsState}

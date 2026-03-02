@@ -1,23 +1,21 @@
 import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowRotateRight, faHourglassHalf, faLayerGroup, faPause, faPlay, faStopwatch } from '@fortawesome/free-solid-svg-icons'
+import { faLayerGroup, faPause, faPlay, faStop } from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../i18n'
 import { taskIconMap } from '../constants/taskOptions'
-import type { FocusTimerMode, Task, TaskColorKey } from '../types'
+import type { Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
 
 type TimerPanelProps = {
   timeLabel: string
-  onStartFocus: () => void
-  onChangeMode: (mode: FocusTimerMode) => void
+  onToggleFocus: () => void
+  onStopFocus: () => void
   activeTask: Task | null
   totalTaskTimeLabel: string
-  mode: FocusTimerMode
-  canUseTimerMode: boolean
-  timerProgressPercent: number | null
   isRunning: boolean
+  hasActiveSession: boolean
+  canStopFocus: boolean
   isFocusOnlyMode?: boolean
-  isTimerComplete?: boolean
 }
 
 const timerAccentStyles: Record<
@@ -125,16 +123,14 @@ const timerPlayGlowRgbByColor: Record<TaskColorKey, string> = {
 
 export function TimerPanel({
   timeLabel,
-  onStartFocus,
-  onChangeMode,
+  onToggleFocus,
+  onStopFocus,
   activeTask,
   totalTaskTimeLabel,
-  mode,
-  canUseTimerMode,
-  timerProgressPercent,
   isRunning,
+  hasActiveSession,
+  canStopFocus,
   isFocusOnlyMode = false,
-  isTimerComplete = false,
 }: TimerPanelProps) {
   const { locale } = useI18n()
   const activeTaskIcon = activeTask ? taskIconMap[activeTask.iconTag] : null
@@ -143,27 +139,27 @@ export function TimerPanel({
     locale === 'es'
       ? {
         noTaskSelected: 'Sin tarea seleccionada',
-        stopwatch: 'Cronometro',
-        timer: 'Temporizador',
         totalTaskTime: 'Tiempo total de tarea:',
-        restartTimer: 'Reiniciar temporizador',
+        stopFocus: 'Detener enfoque',
         pauseFocus: 'Pausar enfoque',
+        resumeFocus: 'Reanudar enfoque',
         startFocus: 'Iniciar enfoque',
       }
       : {
         noTaskSelected: 'No Task Selected',
-        stopwatch: 'Stopwatch',
-        timer: 'Timer',
         totalTaskTime: 'Total Task Time:',
-        restartTimer: 'Restart timer',
+        stopFocus: 'Stop focus',
         pauseFocus: 'Pause focus',
+        resumeFocus: 'Resume focus',
         startFocus: 'Start focus',
       }
   const taskTitle = activeTask?.title ?? copy.noTaskSelected
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
   const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
   const playButtonGlowStyle = { '--timer-play-glow-rgb': playGlowRgb } as CSSProperties
-  const showRestartAction = mode === 'timer' && isTimerComplete && !isRunning
+  const toggleFocusAriaLabel = isRunning ? copy.pauseFocus : hasActiveSession ? copy.resumeFocus : copy.startFocus
+  const toggleFocusIcon = isRunning ? faPause : faPlay
+  const canToggleFocus = Boolean(activeTask)
 
   return (
     <>
@@ -186,7 +182,7 @@ export function TimerPanel({
           <div className="flex w-full justify-center">
             <div
               className={classNames(
-                'flex max-w-[min(100%,58rem)] items-start gap-3 sm:gap-4',
+                'flex max-w-[min(100%,58rem)] items-start gap-3 sm:gap-1',
                 isFocusOnlyMode ? 'w-auto justify-center' : 'w-full justify-center',
               )}
             >
@@ -204,57 +200,19 @@ export function TimerPanel({
                   className={classNames(
                     'w-full overflow-hidden break-words text-center font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]',
                     isFocusOnlyMode
-                      ? 'text-[clamp(1.7rem,8vw,2.4rem)] sm:text-center sm:text-4xl'
-                      : 'text-2xl sm:text-center sm:text-4xl',
+                      ? 'text-[clamp(1.36rem,6.6vw,1.8rem)] sm:text-center sm:text-[clamp(1.9rem,5.4vw,2.5rem)] md:text-4xl'
+                      : 'text-[1.55rem] sm:text-center sm:text-[2rem] md:text-4xl',
                   )}
                 >
                   {taskTitle}
                 </h2>
-                <div
-                  className={classNames(
-                    'mt-2 flex flex-wrap items-center justify-center gap-2',
-                    'sm:justify-center',
-                  )}
-                >
-                  <div className="inline-flex items-center rounded-xl bg-slate-950/25 p-1 shadow-[inset_0_0_0_1px_rgba(51,65,85,0.28)]">
-                    <button
-                      className={classNames(
-                        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        mode === 'stopwatch'
-                          ? classNames('text-slate-100', accents.chipClassName)
-                          : 'text-slate-400 hover:text-slate-200',
-                      )}
-                      onClick={() => onChangeMode('stopwatch')}
-                      type="button"
-                    >
-                      <FontAwesomeIcon icon={faStopwatch} />
-                      <span>{copy.stopwatch}</span>
-                    </button>
-                    <button
-                      className={classNames(
-                        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        mode === 'timer'
-                          ? classNames('text-slate-100', accents.chipClassName)
-                          : canUseTimerMode
-                            ? 'text-slate-400 hover:text-slate-200'
-                            : 'cursor-not-allowed text-slate-600',
-                      )}
-                      disabled={!canUseTimerMode}
-                      onClick={() => onChangeMode('timer')}
-                      type="button"
-                    >
-                      <FontAwesomeIcon icon={faHourglassHalf} />
-                      <span>{copy.timer}</span>
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
 
           <div
             className={classNames(
-              'relative mt-2 flex flex-1 flex-col items-center justify-center py-1 sm:py-2',
+              'relative mt-0 flex flex-1 flex-col items-center justify-center py-1 sm:py-2',
               isFocusOnlyMode && 'mt-4 sm:mt-6',
             )}
           >
@@ -262,8 +220,8 @@ export function TimerPanel({
               className={classNames(
                 'relative w-full max-w-full overflow-hidden text-center select-none font-bold leading-none tracking-tight text-slate-100 tabular-nums',
                 isFocusOnlyMode
-                  ? 'text-[clamp(58px,22vw,112px)] sm:text-[clamp(96px,14vw,260px)]'
-                  : 'text-[clamp(60px,18vw,96px)] sm:text-[clamp(80px,12vw,220px)]',
+                  ? 'text-[clamp(48px,18vw,80px)] sm:text-[clamp(62px,9.8vw,120px)] md:text-[clamp(96px,14vw,260px)]'
+                  : 'text-[clamp(49px,15.2vw,74px)] sm:text-[clamp(64px,9.4vw,116px)] md:text-[clamp(80px,12vw,220px)]',
                 accents.timeGlowClassName,
               )}
             >
@@ -287,24 +245,41 @@ export function TimerPanel({
             </p>
           </div>
 
-          <div className={classNames('flex justify-center', isFocusOnlyMode ? 'mt-5' : 'mt-3')}>
+          <div className={classNames('flex items-center justify-center gap-3', isFocusOnlyMode ? 'mt-5' : 'mt-3')}>
             <button
-              aria-label={showRestartAction ? copy.restartTimer : isRunning ? copy.pauseFocus : copy.startFocus}
+              aria-label={copy.stopFocus}
               className={classNames(
                 'grid h-14 w-14 place-items-center rounded-full border transition hover:-translate-y-0.5 active:translate-y-0',
-                !isRunning && !showRestartAction && 'timer-play-paused-blink',
-                accents.playButtonClassName,
+                canStopFocus
+                  ? 'border-slate-600/80 bg-slate-900/45 text-slate-100 shadow-[0_8px_20px_rgba(2,6,23,0.38)] hover:border-slate-500/85 hover:bg-slate-800/55'
+                  : 'cursor-not-allowed border-slate-800/70 bg-slate-900/20 text-slate-600',
               )}
-              onClick={onStartFocus}
-              style={playButtonGlowStyle}
+              disabled={!canStopFocus}
+              onClick={onStopFocus}
+              type="button"
+            >
+              <FontAwesomeIcon className="text-[14px]" icon={faStop} />
+            </button>
+
+            <button
+              aria-label={toggleFocusAriaLabel}
+              className={classNames(
+                'grid h-14 w-14 place-items-center rounded-full border transition hover:-translate-y-0.5 active:translate-y-0',
+                canToggleFocus
+                  ? classNames(!isRunning && !hasActiveSession && 'timer-play-paused-blink', accents.playButtonClassName)
+                  : 'cursor-not-allowed border-slate-800/70 bg-slate-900/20 text-slate-600',
+              )}
+              disabled={!canToggleFocus}
+              onClick={onToggleFocus}
+              style={canToggleFocus ? playButtonGlowStyle : undefined}
               type="button"
             >
               <FontAwesomeIcon
                 className={classNames(
-                  isRunning ? 'text-[18px]' : showRestartAction ? 'text-[17px]' : 'translate-x-[1px] text-xl',
+                  isRunning ? 'text-[18px]' : 'translate-x-[1px] text-xl',
                   accents.playIconClassName,
                 )}
-                icon={isRunning ? faPause : showRestartAction ? faArrowRotateRight : faPlay}
+                icon={toggleFocusIcon}
               />
             </button>
           </div>

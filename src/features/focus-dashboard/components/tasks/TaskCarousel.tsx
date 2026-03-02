@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type WheelEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronLeft, faChevronRight, faLayerGroup, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { faLayerGroup, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../../i18n'
-import type { Task, TaskColorKey } from '../../types'
+import type { FocusTimerMode, Task, TaskColorKey } from '../../types'
 import { classNames } from '../../utils/classNames'
 import { toIsoDateStringInTimeZone } from '../../utils/time'
 import { TaskCard } from './TaskCard'
@@ -11,11 +11,10 @@ type TaskCarouselProps = {
   tasks: Task[]
   sessionCountByTaskId: Record<string, number>
   isFocusRunning?: boolean
-  isActiveTaskTimerComplete?: boolean
   accentColorTag?: TaskColorKey
   effectiveTimeZone?: string
   onAddTask: () => void
-  onPlayTask?: (task: Task) => void
+  onPlayTask?: (task: Task, preferredMode?: FocusTimerMode) => void
   onEditTask?: (task: Task) => void
   onDeleteTask?: (task: Task) => void
 }
@@ -75,7 +74,6 @@ export function TaskCarousel({
   tasks,
   sessionCountByTaskId,
   isFocusRunning = false,
-  isActiveTaskTimerComplete = false,
   accentColorTag = 'blue',
   effectiveTimeZone,
   onAddTask,
@@ -92,25 +90,17 @@ export function TaskCarousel({
   const copy =
     locale === 'es'
       ? {
-          focusQueue: 'Cola de enfoque',
-          taskCarousel: 'Registro de tareas',
-          tasks: 'tareas',
-          addTask: 'Agregar tarea',
-          scrollHorizontally: 'Desliza horizontalmente',
-          scrollLeft: 'Desplazar tareas a la izquierda',
-          scrollRight: 'Desplazar tareas a la derecha',
-          emptyState: 'Aun no hay tareas. Usa el boton Agregar tarea para crear la primera.',
-        }
+        taskCarousel: 'Registro de tareas',
+        tasks: 'tareas',
+        addTask: 'Agregar tarea',
+        emptyState: 'Aun no hay tareas. Usa el boton Agregar tarea para crear la primera.',
+      }
       : {
-          focusQueue: 'Focus Queue',
-          taskCarousel: 'Task Carousel',
-          tasks: 'tasks',
-          addTask: 'Add Task',
-          scrollHorizontally: 'Scroll horizontally',
-          scrollLeft: 'Scroll tasks left',
-          scrollRight: 'Scroll tasks right',
-          emptyState: 'No tasks yet. Use the Add Task button to create your first task.',
-        }
+        taskCarousel: 'Task Carousel',
+        tasks: 'tasks',
+        addTask: 'Add Task',
+        emptyState: 'No tasks yet. Use the Add Task button to create your first task.',
+      }
 
   const updateScrollButtons = useCallback(() => {
     const element = scrollerRef.current
@@ -238,19 +228,6 @@ export function TaskCarousel({
     })
   }, [])
 
-  const handleScrollBy = (direction: 'left' | 'right') => {
-    const element = scrollerRef.current
-    if (!element) {
-      return
-    }
-
-    const step = Math.max(220, Math.floor(element.clientWidth * 0.72))
-    element.scrollBy({
-      left: direction === 'left' ? -step : step,
-      behavior: 'smooth',
-    })
-  }
-
   const handleWheelScroll = (event: WheelEvent<HTMLDivElement>) => {
     const element = scrollerRef.current
     if (!element) {
@@ -280,73 +257,33 @@ export function TaskCarousel({
   }
 
   return (
-    <div className="mb-8">
+    <div className="mb-4 sm:mb-0">
       <section
         className={classNames(
-          'rounded-[24px] bg-transparent p-3 shadow-none sm:p-4',
+          'rounded-[24px] bg-transparent p-3 shadow-none sm:p-3',
         )}
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{copy.focusQueue}</p>
-            <div className="mt-1 flex items-center gap-2">
-              <h2 className="truncate text-sm font-semibold text-slate-100 sm:text-base">{copy.taskCarousel}</h2>
-              <span
-                aria-label={`${tasks.length} ${copy.tasks}`}
-                className="hidden items-center gap-1 rounded-full bg-slate-900/60 px-2 py-0.5 text-[11px] font-medium text-slate-300 [@media(min-width:380px)]:inline-flex"
-                title={`${tasks.length} ${copy.tasks}`}
-              >
-                <FontAwesomeIcon className="text-[10px] text-slate-400" icon={faLayerGroup} />
-                <span className="tabular-nums">{tasks.length}</span>
-                <span>{copy.tasks}</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600/15 px-3 py-2 text-sm font-medium text-blue-100 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)] transition hover:bg-blue-500/20 hover:text-white"
-              onClick={onAddTask}
-              type="button"
+        <div className="mb-1.5 flex items-center justify-start gap-3">
+          <div className="min-w-0 flex items-center gap-2">
+            <h2 className="truncate text-sm font-semibold text-slate-100 sm:text-base">{copy.taskCarousel}</h2>
+            <span
+              aria-label={`${tasks.length} ${copy.tasks}`}
+              className="hidden items-center gap-1 rounded-full bg-slate-900/60 px-2 py-0.5 text-[11px] font-medium text-slate-300 [@media(min-width:380px)]:inline-flex"
+              title={`${tasks.length} ${copy.tasks}`}
             >
-              <FontAwesomeIcon className="text-[12px]" icon={faPlus} />
-              <span className="hidden sm:inline">{copy.addTask}</span>
-            </button>
-
-            <span className="hidden rounded-full bg-slate-900/45 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500 sm:inline-flex">
-              {copy.scrollHorizontally}
+              <FontAwesomeIcon className="text-[10px] text-slate-400" icon={faLayerGroup} />
+              <span className="tabular-nums">{tasks.length}</span>
+              <span>{copy.tasks}</span>
             </span>
-
-            <button
-              aria-label={copy.scrollLeft}
-              className={classNames(
-                'grid h-8 w-8 place-items-center rounded-xl text-sm transition',
-                canScrollLeft
-                  ? 'bg-slate-900/75 text-slate-300 shadow-[inset_0_1px_0_rgba(148,163,184,0.04)] hover:bg-slate-800/90 hover:text-blue-300'
-                  : 'cursor-not-allowed bg-slate-900/20 text-slate-600',
-              )}
-              disabled={!canScrollLeft}
-              onClick={() => handleScrollBy('left')}
-              type="button"
-            >
-              <FontAwesomeIcon icon={faChevronLeft} />
-            </button>
-
-            <button
-              aria-label={copy.scrollRight}
-              className={classNames(
-                'grid h-8 w-8 place-items-center rounded-xl text-sm transition',
-                canScrollRight
-                  ? 'bg-slate-900/75 text-slate-300 shadow-[inset_0_1px_0_rgba(148,163,184,0.04)] hover:bg-slate-800/90 hover:text-blue-300'
-                  : 'cursor-not-allowed bg-slate-900/20 text-slate-600',
-              )}
-              disabled={!canScrollRight}
-              onClick={() => handleScrollBy('right')}
-              type="button"
-            >
-              <FontAwesomeIcon icon={faChevronRight} />
-            </button>
           </div>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-400/35 bg-[#0a1833]/88 px-2.5 py-1.5 text-xs font-semibold text-blue-100 shadow-[0_8px_18px_rgba(2,8,24,0.45),inset_0_0_0_1px_rgba(59,130,246,0.18)] backdrop-blur transition hover:border-blue-300/55 hover:bg-[#112349] hover:text-white"
+            onClick={onAddTask}
+            type="button"
+          >
+            <FontAwesomeIcon className="text-[11px]" icon={faPlus} />
+            <span className="hidden sm:inline">{copy.addTask}</span>
+          </button>
         </div>
 
         <div className="relative">
@@ -364,7 +301,7 @@ export function TaskCarousel({
           />
 
           <div
-            className="task-carousel-scroll relative z-10 -mb-4 -mt-3 overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-8 pt-4 sm:-mb-6 sm:-mt-4 sm:pb-10 sm:pt-5"
+            className="task-carousel-scroll relative z-10 mt-0 overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-1.5 pt-2 sm:pb-2 sm:pt-2.5"
             onWheel={handleWheelScroll}
             ref={scrollerRef}
             style={carouselScrollbarStyleByColor[accentColorTag]}
@@ -389,7 +326,6 @@ export function TaskCarousel({
                       onEditTask={onEditTask}
                       onPlayTask={onPlayTask}
                       sessionCount={sessionCountByTaskId[task.id] ?? 0}
-                      showRestartAction={isActiveTaskTimerComplete}
                       task={task}
                     />
                   </div>
