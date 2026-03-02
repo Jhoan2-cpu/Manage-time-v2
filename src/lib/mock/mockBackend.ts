@@ -78,14 +78,8 @@ const DEFAULT_TIME_ZONE = detectTimeZone()
 const DEFAULT_LOCALE: AppLocale = 'es'
 
 export function isMockBackendEnabled() {
-  const value = `${import.meta.env.VITE_USE_MOCK_BACKEND ?? ''}`.trim().toLowerCase()
-  if (value === '1' || value === 'true' || value === 'on' || value === 'yes') {
-    return true
-  }
-  if (value === '0' || value === 'false' || value === 'off' || value === 'no') {
-    return false
-  }
-  return import.meta.env.DEV
+  // Frontend-only mode for now: keep all data/session behavior client-side.
+  return true
 }
 
 export function mockRegisterAuth(payload: {

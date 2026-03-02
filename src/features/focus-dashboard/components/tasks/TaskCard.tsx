@@ -101,7 +101,7 @@ export function TaskCard({
   return (
     <article
       className={classNames(
-        'flex h-[5.9rem] w-64 shrink-0 cursor-pointer flex-col rounded-[12px] px-2.5 pb-1.5 pt-1.5 transition duration-200',
+        'flex h-[5rem] w-64 shrink-0 cursor-pointer flex-col rounded-[12px] px-2.5 pb-1.5 pt-1.5 transition duration-200',
         'relative overflow-hidden',
         'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-7 before:bg-gradient-to-b before:from-white/12 before:via-white/[0.04] before:to-transparent before:opacity-70',
         'shadow-[0_14px_28px_rgba(1,8,22,0.34),0_4px_12px_rgba(1,8,22,0.16),inset_0_1px_0_rgba(255,255,255,0.04)]',
@@ -140,7 +140,7 @@ export function TaskCard({
         </div>
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-1.5 pt-0.5">
+      <div className="mt-auto mb-0.5 flex items-center justify-between gap-1.5 ">
         <div className="flex min-w-0 items-center">
           <div
             className={classNames(

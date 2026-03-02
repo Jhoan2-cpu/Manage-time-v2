@@ -515,6 +515,7 @@ export function FocusDashboard({
     applyAuthoritativeFocusSnapshot,
     lastServerNowUtc,
     activeTaskTargetSeconds,
+    timerProgressPercent,
     timerDisplayLabel,
     isTimerComplete,
     activeTaskTotalTimeLabel,
@@ -768,7 +769,7 @@ export function FocusDashboard({
 
   useFocusRealtimeChannel({
     userId: bootstrapData?.user.id ?? null,
-    enabled: true,
+    enabled: false,
     onEvent: applyRealtimeFocusEvent,
     onReconnectSync: () => {
       void syncActiveFocusSession()
@@ -1395,6 +1396,18 @@ export function FocusDashboard({
       isFocusCommandInFlightRef.current = false
     }
   }
+  const handleChangeTimerMode = (nextMode: FocusTimerMode) => {
+    if (!activeTask || activeFocusSession) {
+      return
+    }
+
+    if (nextMode === 'timer' && !getTargetSecondsForStart(activeTask, 'timer')) {
+      return
+    }
+
+    runNonBlockingFocusSideEffect(stopTimerEndAlarm)
+    setTimerMode(nextMode)
+  }
   const handlePlayTask = async (selectedTask: Task, preferredMode?: FocusTimerMode) => {
     if (activeTask && selectedTask.id === activeTask.id) {
       await handleToggleFocus(preferredMode)
@@ -1477,13 +1490,17 @@ export function FocusDashboard({
             <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-4 sm:px-8 sm:py-8 [@media(max-height:840px)]:items-start">
               <TimerPanel
                 activeTask={activeTask}
+                canUseTimerMode={Boolean(activeTaskTargetSeconds)}
                 canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
                 hasActiveSession={Boolean(activeFocusSession)}
                 isFocusOnlyMode
                 isRunning={isFocusRunning}
+                mode={timerMode}
+                onChangeMode={handleChangeTimerMode}
                 onStopFocus={handleStopFocus}
                 onToggleFocus={handleToggleFocus}
                 timeLabel={timerDisplayLabel}
+                timerProgressPercent={timerProgressPercent}
                 totalTaskTimeLabel={activeTaskTotalTimeLabel}
               />
             </div>
@@ -1547,12 +1564,16 @@ export function FocusDashboard({
                     />
                     <TimerPanel
                       activeTask={activeTaskDisplay}
+                      canUseTimerMode={Boolean(activeTaskTargetSeconds)}
                       canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
                       hasActiveSession={Boolean(activeFocusSession)}
                       isRunning={isFocusRunning}
+                      mode={timerMode}
+                      onChangeMode={handleChangeTimerMode}
                       onStopFocus={handleStopFocus}
                       onToggleFocus={handleToggleFocus}
                       timeLabel={timerDisplayLabel}
+                      timerProgressPercent={timerProgressPercent}
                       totalTaskTimeLabel={activeTaskTotalTimeLabel}
                     />
                   </div>

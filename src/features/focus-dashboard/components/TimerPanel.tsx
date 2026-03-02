@@ -1,17 +1,28 @@
 import type { CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLayerGroup, faPause, faPlay, faStop } from '@fortawesome/free-solid-svg-icons'
+import {
+  faHourglassHalf,
+  faLayerGroup,
+  faPause,
+  faPlay,
+  faStop,
+  faStopwatch,
+} from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../i18n'
 import { taskIconMap } from '../constants/taskOptions'
-import type { Task, TaskColorKey } from '../types'
+import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
 
 type TimerPanelProps = {
   timeLabel: string
   onToggleFocus: () => void
   onStopFocus: () => void
+  onChangeMode: (mode: FocusTimerMode) => void
   activeTask: Task | null
   totalTaskTimeLabel: string
+  mode: FocusTimerMode
+  canUseTimerMode: boolean
+  timerProgressPercent: number | null
   isRunning: boolean
   hasActiveSession: boolean
   canStopFocus: boolean
@@ -125,8 +136,12 @@ export function TimerPanel({
   timeLabel,
   onToggleFocus,
   onStopFocus,
+  onChangeMode,
   activeTask,
   totalTaskTimeLabel,
+  mode,
+  canUseTimerMode,
+  timerProgressPercent,
   isRunning,
   hasActiveSession,
   canStopFocus,
@@ -144,6 +159,8 @@ export function TimerPanel({
         pauseFocus: 'Pausar enfoque',
         resumeFocus: 'Reanudar enfoque',
         startFocus: 'Iniciar enfoque',
+        stopwatch: 'Cronometro',
+        timer: 'Temporizador',
       }
       : {
         noTaskSelected: 'No Task Selected',
@@ -152,7 +169,10 @@ export function TimerPanel({
         pauseFocus: 'Pause focus',
         resumeFocus: 'Resume focus',
         startFocus: 'Start focus',
+        stopwatch: 'Stopwatch',
+        timer: 'Timer',
       }
+
   const taskTitle = activeTask?.title ?? copy.noTaskSelected
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
   const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
@@ -160,6 +180,15 @@ export function TimerPanel({
   const toggleFocusAriaLabel = isRunning ? copy.pauseFocus : hasActiveSession ? copy.resumeFocus : copy.startFocus
   const toggleFocusIcon = isRunning ? faPause : faPlay
   const canToggleFocus = Boolean(activeTask)
+  const rawProgress = typeof timerProgressPercent === 'number' && Number.isFinite(timerProgressPercent) ? timerProgressPercent : 0
+  const progressPercent = Math.max(0, Math.min(100, rawProgress))
+  const progressDegrees = progressPercent * 3.6
+  const timerRingStyle = {
+    background: `conic-gradient(rgba(${playGlowRgb},0.98) ${progressDegrees}deg, rgba(148,163,184,0.2) ${progressDegrees}deg 360deg)`,
+  } as CSSProperties
+
+  const canSwitchToStopwatch = !hasActiveSession && Boolean(activeTask)
+  const canSwitchToTimer = !hasActiveSession && Boolean(activeTask) && canUseTimerMode
 
   return (
     <>
@@ -179,54 +208,132 @@ export function TimerPanel({
               : 'sm:h-full sm:pb-0',
           )}
         >
-          <div className="flex w-full justify-center">
-            <div
-              className={classNames(
-                'flex max-w-[min(100%,58rem)] items-start gap-3 sm:gap-1',
-                isFocusOnlyMode ? 'w-auto justify-center' : 'w-full justify-center',
-              )}
-            >
-              <span
-                className={classNames(
-                  'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center text-xl sm:mt-1.5 sm:h-8 sm:w-8 sm:text-2xl',
-                  activeTask ? accents.totalValueClassName : 'text-slate-300',
-                )}
-              >
-                {activeTaskIcon ? <FontAwesomeIcon icon={activeTaskIcon.icon} /> : <FontAwesomeIcon icon={faLayerGroup} />}
-              </span>
-
-              <div className="min-w-0">
-                <h2
-                  className={classNames(
-                    'w-full overflow-hidden break-words text-center font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]',
-                    isFocusOnlyMode
-                      ? 'text-[clamp(1.36rem,6.6vw,1.8rem)] sm:text-center sm:text-[clamp(1.9rem,5.4vw,2.5rem)] md:text-4xl'
-                      : 'text-[1.55rem] sm:text-center sm:text-[2rem] md:text-4xl',
-                  )}
-                >
-                  {taskTitle}
-                </h2>
-              </div>
-            </div>
-          </div>
-
           <div
             className={classNames(
               'relative mt-0 flex flex-1 flex-col items-center justify-center py-1 sm:py-2',
               isFocusOnlyMode && 'mt-4 sm:mt-6',
             )}
           >
-            <p
-              className={classNames(
-                'relative w-full max-w-full overflow-hidden text-center select-none font-bold leading-none tracking-tight text-slate-100 tabular-nums',
-                isFocusOnlyMode
-                  ? 'text-[clamp(48px,18vw,80px)] sm:text-[clamp(62px,9.8vw,120px)] md:text-[clamp(96px,14vw,260px)]'
-                  : 'text-[clamp(49px,15.2vw,74px)] sm:text-[clamp(64px,9.4vw,116px)] md:text-[clamp(80px,12vw,220px)]',
-                accents.timeGlowClassName,
-              )}
-            >
-              {stopwatchLabel}
-            </p>
+            <div className="relative w-full max-w-[min(100%,62rem)] min-h-[13.1rem] sm:min-h-[16.4rem] [perspective:1400px]">
+              <div
+                className={classNames(
+                  'absolute inset-0 flex flex-col items-center justify-start pt-1 sm:pt-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform-style:preserve-3d]',
+                  mode === 'stopwatch'
+                    ? 'opacity-100 [transform:translateX(0%)_rotateY(0deg)]'
+                    : 'pointer-events-none opacity-0 [transform:translateX(-18%)_rotateY(34deg)]',
+                )}
+              >
+                <div
+                  className={classNames(
+                    'flex max-w-[min(100%,58rem)] items-start gap-2.5 sm:gap-4',
+                    isFocusOnlyMode ? 'w-auto justify-center' : 'w-full justify-center',
+                  )}
+                >
+                  <span
+                    className={classNames(
+                      'mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center text-lg sm:mt-1.5 sm:h-8 sm:w-8 sm:text-2xl',
+                      activeTask ? accents.totalValueClassName : 'text-slate-300',
+                    )}
+                  >
+                    {activeTaskIcon ? <FontAwesomeIcon icon={activeTaskIcon.icon} /> : <FontAwesomeIcon icon={faLayerGroup} />}
+                  </span>
+
+                  <div className="min-w-0">
+                    <h2
+                      className={classNames(
+                        'w-full overflow-hidden break-words text-center font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]',
+                        isFocusOnlyMode
+                          ? 'text-[clamp(1.36rem,6.6vw,1.8rem)] sm:text-center sm:text-[clamp(1.9rem,5.4vw,2.5rem)] md:text-4xl'
+                          : 'text-[1.55rem] sm:text-center sm:text-[2rem] md:text-4xl',
+                      )}
+                    >
+                      {taskTitle}
+                    </h2>
+                  </div>
+                </div>
+
+                <p
+                  className={classNames(
+                    'relative mt-1.5 w-full max-w-full overflow-hidden text-center select-none font-bold leading-none tracking-tight text-slate-100 tabular-nums',
+                    isFocusOnlyMode
+                      ? 'text-[clamp(48px,18vw,80px)] sm:text-[clamp(62px,9.8vw,120px)] md:text-[clamp(96px,14vw,260px)]'
+                      : 'text-[clamp(49px,15.2vw,74px)] sm:text-[clamp(64px,9.4vw,116px)] md:text-[clamp(80px,12vw,220px)]',
+                    accents.timeGlowClassName,
+                  )}
+                >
+                  {stopwatchLabel}
+                </p>
+              </div>
+
+              <div
+                className={classNames(
+                  'absolute inset-0 flex items-center justify-start pt-1 sm:pt-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform-style:preserve-3d]',
+                  mode === 'timer'
+                    ? 'opacity-100 [transform:translateX(0%)_rotateY(0deg)]'
+                    : 'pointer-events-none opacity-0 [transform:translateX(18%)_rotateY(-34deg)]',
+                )}
+              >
+                <div className="relative h-[min(72vw,17.6rem)] w-[min(72vw,17.6rem)] sm:h-[17.6rem] sm:w-[17.6rem]">
+                  <div className="absolute inset-0 rounded-full p-[4px] shadow-[0_18px_34px_rgba(2,6,23,0.44)]" style={timerRingStyle}>
+                    <div className="flex h-full w-full flex-col items-center justify-center rounded-full border border-slate-200/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),rgba(2,6,23,0.72)_55%,rgba(2,6,23,0.88))] px-5 text-center">
+                      <p
+                        className={classNames(
+                          'font-mono text-[clamp(40px,11.6vw,68px)] font-semibold leading-none tracking-tight tabular-nums text-slate-100',
+                          accents.timeGlowClassName,
+                        )}
+                      >
+                        {stopwatchLabel}
+                      </p>
+                      <p className="mt-3 line-clamp-2 max-w-[86%] bg-slate-200/8 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
+                        {taskTitle}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pointer-events-none absolute inset-0" style={{ transform: `rotate(${progressDegrees}deg)` }}>
+                    <span className="absolute left-1/2 top-[2px] h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white/40 bg-white/95 shadow-[0_0_10px_rgba(255,255,255,0.7)]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2">
+                <div className="pointer-events-auto flex flex-col gap-1.5">
+                  <button
+                    aria-label={copy.stopwatch}
+                    className={classNames(
+                      'inline-flex h-10 items-center gap-1.5 rounded-r-xl border border-l-0 px-2.5 text-[11px] font-semibold backdrop-blur transition',
+                      mode === 'stopwatch'
+                        ? classNames('text-slate-100', accents.chipClassName, 'border-slate-400/70')
+                        : canSwitchToStopwatch
+                          ? 'border-slate-500/60 bg-slate-900/55 text-slate-100 hover:border-blue-400/55 hover:text-blue-200'
+                          : 'cursor-not-allowed border-slate-700/50 bg-slate-900/35 text-slate-600',
+                    )}
+                    disabled={!canSwitchToStopwatch || mode === 'stopwatch'}
+                    onClick={() => onChangeMode('stopwatch')}
+                    type="button"
+                  >
+                    <FontAwesomeIcon className="text-[11px]" icon={faStopwatch} />
+                    <span className="hidden sm:inline">{copy.stopwatch}</span>
+                  </button>
+                  <button
+                    aria-label={copy.timer}
+                    className={classNames(
+                      'inline-flex h-10 items-center gap-1.5 rounded-r-xl border border-l-0 px-2.5 text-[11px] font-semibold backdrop-blur transition',
+                      mode === 'timer'
+                        ? classNames('text-slate-100', accents.chipClassName, 'border-slate-400/70')
+                        : canSwitchToTimer
+                          ? 'border-slate-500/60 bg-slate-900/55 text-slate-100 hover:border-blue-400/55 hover:text-blue-200'
+                          : 'cursor-not-allowed border-slate-700/50 bg-slate-900/35 text-slate-600',
+                    )}
+                    disabled={!canSwitchToTimer || mode === 'timer'}
+                    onClick={() => onChangeMode('timer')}
+                    type="button"
+                  >
+                    <FontAwesomeIcon className="text-[11px]" icon={faHourglassHalf} />
+                    <span className="hidden sm:inline">{copy.timer}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div

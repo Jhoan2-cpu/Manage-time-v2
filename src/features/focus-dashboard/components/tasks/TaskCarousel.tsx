@@ -260,7 +260,7 @@ export function TaskCarousel({
     <div className="mb-4 sm:mb-0">
       <section
         className={classNames(
-          'rounded-[24px] bg-transparent p-3 shadow-none sm:p-3',
+          'rounded-[24px] bg-transparent px-3 pt-3 pb-1 shadow-none sm:px-3 sm:pt-3 sm:pb-1',
         )}
       >
         <div className="mb-1.5 flex items-center justify-start gap-3">
@@ -301,7 +301,7 @@ export function TaskCarousel({
           />
 
           <div
-            className="task-carousel-scroll relative z-10 mt-0 overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-1.5 pt-2 sm:pb-2 sm:pt-2.5"
+            className="task-carousel-scroll relative z-10 mt-0 overflow-x-auto scroll-smooth rounded-2xl bg-transparent px-1.5 pb-0.5 pt-2 sm:pb-1 sm:pt-2.5"
             onWheel={handleWheelScroll}
             ref={scrollerRef}
             style={carouselScrollbarStyleByColor[accentColorTag]}
