@@ -14,7 +14,7 @@ Regla operativa:
 ## Modulos Cubiertos Hoy
 
 - Auth (register/login/logout/me/google)
-- Tasks (create/update/delete/reorder)
+- Tasks (create/update/delete)
 - Realtime de tasks entre sesiones del mismo usuario (Reverb)
 
 ---
@@ -40,16 +40,14 @@ flowchart LR
         /auth/google/callback"]
         TASKS["Tasks API
         /tasks
-        /tasks/{id}
-        /tasks/reorder"]
+        /tasks/{id}"]
         REVERB["Laravel Reverb
         private channel:
         user.{userId}.tasks"]
         BCAST["Broadcast Events
         .task.created
         .task.updated
-        .task.deleted
-        .tasks.reordered"]
+        .task.deleted"]
     end
 
     subgraph DB["Database"]
@@ -71,7 +69,6 @@ flowchart LR
     FE -->|"POST /api/v1/tasks"| TASKS
     FE -->|"PATCH /api/v1/tasks/{id}"| TASKS
     FE -->|"DELETE /api/v1/tasks/{id}"| TASKS
-    FE -->|"POST /api/v1/tasks/reorder"| TASKS
 
     AUTH --> USERS
     AUTH --> PREFS
@@ -143,7 +140,6 @@ erDiagram
         string icon_tag
         int target_duration_seconds
         string alarm_time_local
-        int sort_order
         int focus_time_total_seconds
         int focus_sessions_count
         timestamp created_at

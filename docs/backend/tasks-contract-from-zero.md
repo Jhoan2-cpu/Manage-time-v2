@@ -19,6 +19,7 @@ Frontend objetivo:
 - No hay workspaces.
 - Toda tarea pertenece a un solo usuario autenticado.
 - Cada request usa cookie session (Sanctum).
+- El orden de tareas lo decide backend en `GET /tasks` (recomendado: `created_at ASC`).
 
 ---
 
@@ -32,7 +33,6 @@ Frontend objetivo:
   "icon_tag": "briefcase",
   "target_duration_seconds": 3600,
   "alarm_time_local": "21:30",
-  "sort_order": 1,
   "focus_time_total_seconds": 0,
   "focus_sessions_count": 0
 }
@@ -70,7 +70,6 @@ si todo esta correcto enviara (`200`):
       "icon_tag": "briefcase",
       "target_duration_seconds": 3600,
       "alarm_time_local": "21:30",
-      "sort_order": 1,
       "focus_time_total_seconds": 0,
       "focus_sessions_count": 0
     }
@@ -113,7 +112,6 @@ si todo esta correcto enviara (`201`):
     "icon_tag": "briefcase",
     "target_duration_seconds": 3600,
     "alarm_time_local": "21:30",
-    "sort_order": 4,
     "focus_time_total_seconds": 0,
     "focus_sessions_count": 0
   }
@@ -160,7 +158,6 @@ si todo esta correcto enviara (`200`):
     "icon_tag": "code",
     "target_duration_seconds": 5400,
     "alarm_time_local": "22:00",
-    "sort_order": 4,
     "focus_time_total_seconds": 0,
     "focus_sessions_count": 0
   }
@@ -207,56 +204,6 @@ sino (`404`):
 
 ---
 
-## 5) Reordenar tareas (opcional pero recomendado)
-
-El frontend enviara al backend:  
-`POST /api/v1/tasks/reorder`
-
-body:
-```json
-{
-  "ordered_task_ids": [
-    "task_3",
-    "task_1",
-    "task_2"
-  ]
-}
-```
-
-si todo esta correcto enviara (`200`):
-```json
-{
-  "data": [
-    {
-      "id": "task_3",
-      "sort_order": 1
-    },
-    {
-      "id": "task_1",
-      "sort_order": 2
-    },
-    {
-      "id": "task_2",
-      "sort_order": 3
-    }
-  ]
-}
-```
-
-sino (`422`):
-```json
-{
-  "message": "The given data was invalid.",
-  "errors": {
-    "ordered_task_ids": [
-      "La lista de orden no es valida."
-    ]
-  }
-}
-```
-
----
-
 ## Realtime con Reverb (sincronizacion entre dispositivos)
 
 Objetivo:
@@ -270,7 +217,6 @@ Eventos:
 - `.task.created`
 - `.task.updated`
 - `.task.deleted`
-- `.tasks.reordered`
 
 payload base recomendado:
 ```json
@@ -289,7 +235,6 @@ payload base recomendado:
       "icon_tag": "code",
       "target_duration_seconds": 5400,
       "alarm_time_local": "22:00",
-      "sort_order": 4,
       "focus_time_total_seconds": 0,
       "focus_sessions_count": 0
     }
