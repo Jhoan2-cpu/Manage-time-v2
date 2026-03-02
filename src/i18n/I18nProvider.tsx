@@ -1,5 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { APP_LOCALE_STORAGE_KEY, DEFAULT_APP_LOCALE, SUPPORTED_APP_LOCALES, messages, type AppLocale } from './messages'
+import {
+  APP_LOCALE_STORAGE_KEY,
+  DEFAULT_APP_LOCALE,
+  SUPPORTED_APP_LOCALES,
+  getBrowserAppLocale,
+  messages,
+  type AppLocale,
+} from './messages'
 
 type TranslationParams = Record<string, string | number>
 
@@ -57,7 +64,7 @@ function getInitialLocale(): AppLocale {
     return stored
   }
 
-  return DEFAULT_APP_LOCALE
+  return getBrowserAppLocale()
 }
 
 function isSupportedLocale(value: string): value is AppLocale {
@@ -89,4 +96,3 @@ function getNestedValue(source: unknown, path: string) {
     return (current as Record<string, unknown>)[segment]
   }, source)
 }
-

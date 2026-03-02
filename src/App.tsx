@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useI18n } from './i18n'
+import { getBrowserAppLocale, useI18n } from './i18n'
 import { LoginPage } from './features/auth/components/LoginPage'
 import { RegisterPage } from './features/auth/components/RegisterPage'
 import { FocusDashboard } from './features/focus-dashboard/FocusDashboard'
@@ -256,18 +256,21 @@ function App() {
     email,
     password,
     passwordConfirmation,
+    timeZoneName,
   }: {
     displayName: string
     email: string
     password: string
     passwordConfirmation: string
+    timeZoneName: string
   }) => {
     const result = await registerAuth({
       display_name: displayName.trim(),
       email,
       password,
       password_confirmation: passwordConfirmation,
-      locale,
+      locale: getBrowserAppLocale(),
+      time_zone_name: timeZoneName.trim() || 'UTC',
     })
 
     const nextUser = mapAuthApiUserToSessionUser(result.data.user, fallbackDisplayName)

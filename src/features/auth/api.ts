@@ -34,6 +34,7 @@ export type RegisterAuthPayload = {
   password: string
   password_confirmation: string
   locale?: AppLocale
+  time_zone_name?: string
 }
 
 export async function registerAuth(payload: RegisterAuthPayload) {
@@ -84,4 +85,3 @@ export function loginWithGoogleRedirect(intent: 'login' | 'register' = 'login') 
 
   window.location.href = `${API_BASE_URL}/api/v1/auth/google/redirect?intent=${intent}`
 }
-

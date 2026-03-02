@@ -1,9 +1,10 @@
-import { FormEvent, useState, type ReactNode } from 'react'
+import { FormEvent, useMemo, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faEnvelope,
   faEye,
   faEyeSlash,
+  faGlobe,
   faLock,
   faRightToBracket,
   faUser,
@@ -12,6 +13,7 @@ import {
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
 import { useI18n } from '../../../i18n'
 import { getApiErrorFirstMessage } from '../../../lib/api/http'
+import { getBrowserTimeZone, getSupportedTimeZones } from '../../focus-dashboard/utils/time'
 
 type RegisterPageProps = {
   onRegister: (payload: {
@@ -19,6 +21,7 @@ type RegisterPageProps = {
     email: string
     password: string
     passwordConfirmation: string
+    timeZoneName: string
   }) => void | Promise<void>
   onRegisterWithGoogle?: () => void
   onOpenLogin?: () => void
@@ -29,6 +32,16 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
   const { locale, t } = useI18n()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
+  const timeZoneOptions = useMemo(() => getSupportedTimeZones(), [])
+  const [timeZoneName, setTimeZoneName] = useState(() => getBrowserTimeZone())
+  const visibleTimeZoneOptions = useMemo(() => {
+    const normalizedCurrentZone = timeZoneName.trim()
+    if (!normalizedCurrentZone || timeZoneOptions.includes(normalizedCurrentZone)) {
+      return timeZoneOptions
+    }
+
+    return [normalizedCurrentZone, ...timeZoneOptions]
+  }, [timeZoneName, timeZoneOptions])
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -36,15 +49,17 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const isSubmitDisabled = isSubmitting || !displayName.trim() || !email.trim() || !password || !confirmPassword
+  const isSubmitDisabled =
+    isSubmitting || !displayName.trim() || !email.trim() || !timeZoneName.trim() || !password || !confirmPassword
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const normalizedEmail = email.trim().toLowerCase()
     const normalizedName = displayName.trim()
+    const normalizedTimeZone = timeZoneName.trim()
 
-    if (!normalizedName || !normalizedEmail || !password || !confirmPassword) {
+    if (!normalizedName || !normalizedEmail || !normalizedTimeZone || !password || !confirmPassword) {
       setErrorMessage(t('auth.register.errors.missingFields'))
       return
     }
@@ -72,6 +87,7 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
         email: normalizedEmail,
         password,
         passwordConfirmation: confirmPassword,
+        timeZoneName: normalizedTimeZone,
       })
     } catch (error) {
       setErrorMessage(
@@ -173,6 +189,24 @@ export function RegisterPage({ onRegister, onRegisterWithGoogle, onOpenLogin, on
                         type="email"
                         value={email}
                       />
+                    </div>
+                  </FieldLabel>
+                  <FieldLabel label={t('settings.timeZone.title')}>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                        <FontAwesomeIcon icon={faGlobe} />
+                      </span>
+                      <select
+                        className="h-10 w-full rounded-xl border border-slate-700/70 bg-slate-950/45 pl-10 pr-3 text-sm text-slate-100 outline-none transition focus:border-emerald-400/45 focus:bg-slate-900/70"
+                        onChange={(event) => setTimeZoneName(event.target.value)}
+                        value={timeZoneName}
+                      >
+                        {visibleTimeZoneOptions.map((timeZone) => (
+                          <option key={timeZone} value={timeZone}>
+                            {timeZone}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </FieldLabel>
 

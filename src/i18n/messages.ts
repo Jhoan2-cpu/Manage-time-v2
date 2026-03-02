@@ -301,6 +301,28 @@ export const DEFAULT_APP_LOCALE: AppLocale = 'es'
 export const APP_LOCALE_STORAGE_KEY = 'velor.settings.language'
 export const SUPPORTED_APP_LOCALES = Object.keys(messages) as AppLocale[]
 
+export function getBrowserAppLocale() {
+  if (typeof navigator === 'undefined') {
+    return DEFAULT_APP_LOCALE
+  }
+
+  const preferredLanguages = [navigator.language, ...(navigator.languages ?? [])]
+    .map((value) => `${value ?? ''}`.trim().toLowerCase())
+    .filter(Boolean)
+
+  for (const languageTag of preferredLanguages) {
+    if (languageTag === 'es' || languageTag.startsWith('es-')) {
+      return 'es' as const
+    }
+
+    if (languageTag === 'en' || languageTag.startsWith('en-')) {
+      return 'en' as const
+    }
+  }
+
+  return DEFAULT_APP_LOCALE
+}
+
 export function toIntlLocaleTag(locale: AppLocale) {
   return locale === 'es' ? 'es-PE' : 'en-US'
 }
@@ -318,6 +340,6 @@ export function getCurrentIntlLocaleTag() {
     if (stored === 'en') return 'en-US'
   }
 
-  return toIntlLocaleTag(DEFAULT_APP_LOCALE)
+  return toIntlLocaleTag(getBrowserAppLocale())
 }
 
