@@ -17,9 +17,9 @@ type AuthUserEnvelope = {
 type RegisterAuthResponse = {
   data: {
     user: AuthApiUser
-    workspace: {
-      id: string
-      name: string
+    preferences?: {
+      locale?: AppLocale
+      time_zone_name?: string
     }
   }
 }

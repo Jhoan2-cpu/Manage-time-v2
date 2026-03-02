@@ -60,8 +60,6 @@ validaciones backend (Laravel):
 
 efectos de negocio obligatorios:
 - crear usuario
-- crear workspace personal
-- crear membresia owner
 - crear `user_preferences` iniciales con `locale` y `time_zone_name`
 - iniciar sesion (cookie auth activa)
 - todo en transaccion DB
@@ -77,10 +75,6 @@ si todo esta correcto enviara (`201`):
       "display_name": "Anton Rivera",
       "email": "anton@velor.app",
       "locale": "es"
-    },
-    "workspace": {
-      "id": "ws_123",
-      "name": "Espacio personal de Velor"
     },
     "preferences": {
       "locale": "es",
@@ -232,6 +226,8 @@ resultado esperado:
   - `time_zone_name` autodetectada y editable por usuario
 
 ### Backend Laravel
+
+- modelo simple por usuario personal (sin multi-workspace)
 
 `.env` minimo:
 ```env
