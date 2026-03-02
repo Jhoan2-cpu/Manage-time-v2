@@ -1,5 +1,23 @@
 import { ApiHttpError, apiFetch, ensureCsrfCookie, parseJsonResponse } from '../../lib/api/http'
 import type { AppLocale } from '../../i18n/messages'
+import {
+  isMockBackendEnabled,
+  mockCreateTask,
+  mockCreateTimeEntry,
+  mockDeleteTask,
+  mockFocusSessionCommand,
+  mockGetActiveFocusSession,
+  mockGetAppBootstrap,
+  mockGetHistoryDayDetail,
+  mockGetHistoryDays,
+  mockGetHistoryOverview,
+  mockGetPreferences,
+  mockGetTasks,
+  mockReorderTasks,
+  mockStartFocusSession,
+  mockUpdatePreferences,
+  mockUpdateTask,
+} from '../../lib/mock/mockBackend'
 
 export type AppBootstrapInclude =
   | 'tasks'
@@ -288,6 +306,11 @@ type TimeEntryCreatedEnvelope = {
 }
 
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
+  if (isMockBackendEnabled()) {
+    const data = mockGetAppBootstrap()
+    return data ? (data as AppBootstrapData) : null
+  }
+
   try {
     const response = await requestBootstrap(options.include)
     if (response.status === 401) {
@@ -317,6 +340,11 @@ export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
 }
 
 export async function getPreferences() {
+  if (isMockBackendEnabled()) {
+    const data = mockGetPreferences()
+    return data ? (data as UserPreferences) : null
+  }
+
   const response = await apiFetch('/api/v1/preferences', { method: 'GET' })
   if (response.status === 401) {
     return null
@@ -327,6 +355,11 @@ export async function getPreferences() {
 }
 
 export async function updatePreferences(payload: UpdatePreferencesPayload) {
+  if (isMockBackendEnabled()) {
+    const data = mockUpdatePreferences(payload)
+    return data ? (data as UserPreferences) : null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/preferences', {
     method: 'PATCH',
@@ -342,6 +375,11 @@ export async function updatePreferences(payload: UpdatePreferencesPayload) {
 }
 
 export async function getTasks() {
+  if (isMockBackendEnabled()) {
+    const data = mockGetTasks()
+    return data ? (data as TaskApiItem[]) : null
+  }
+
   const response = await apiFetch('/api/v1/tasks', { method: 'GET' })
   if (response.status === 401) {
     return null
@@ -352,6 +390,11 @@ export async function getTasks() {
 }
 
 export async function createTask(payload: CreateTaskPayload) {
+  if (isMockBackendEnabled()) {
+    const data = mockCreateTask(payload)
+    return data ? (data as TaskApiItem) : null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/tasks', {
     method: 'POST',
@@ -367,6 +410,11 @@ export async function createTask(payload: CreateTaskPayload) {
 }
 
 export async function updateTask(taskId: string, payload: UpdateTaskPayload) {
+  if (isMockBackendEnabled()) {
+    const data = mockUpdateTask(taskId, payload)
+    return data ? (data as TaskApiItem) : null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`, {
     method: 'PATCH',
@@ -382,6 +430,11 @@ export async function updateTask(taskId: string, payload: UpdateTaskPayload) {
 }
 
 export async function deleteTask(taskId: string) {
+  if (isMockBackendEnabled()) {
+    const result = mockDeleteTask(taskId)
+    return result ?? null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`, {
     method: 'DELETE',
@@ -403,6 +456,11 @@ export async function deleteTask(taskId: string) {
 }
 
 export async function reorderTasks(taskIdsInOrder: string[]) {
+  if (isMockBackendEnabled()) {
+    const data = mockReorderTasks(taskIdsInOrder)
+    return data ? (data as TaskApiItem[]) : null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/tasks/reorder', {
     method: 'POST',
@@ -418,6 +476,11 @@ export async function reorderTasks(taskIdsInOrder: string[]) {
 }
 
 export async function getActiveFocusSession() {
+  if (isMockBackendEnabled()) {
+    const data = mockGetActiveFocusSession()
+    return data ? (data as FocusSessionStateEnvelope) : null
+  }
+
   const response = await apiFetch('/api/v1/focus-sessions/active', { method: 'GET' })
   if (response.status === 401) {
     return null
@@ -427,6 +490,11 @@ export async function getActiveFocusSession() {
 }
 
 export async function startFocusSession(payload: StartFocusSessionPayload) {
+  if (isMockBackendEnabled()) {
+    const data = mockStartFocusSession(payload)
+    return data ? (data as FocusSessionStateEnvelope) : null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/focus-sessions/start', {
     method: 'POST',
@@ -448,6 +516,11 @@ export async function focusSessionCommand(
     | StopFocusSessionPayload
     | HeartbeatFocusSessionPayload,
 ) {
+  if (isMockBackendEnabled()) {
+    const data = mockFocusSessionCommand(endpoint, payload as Record<string, unknown>)
+    return data ? (data as FocusSessionStateEnvelope) : null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch(`/api/v1/focus-sessions/${endpoint}`, {
     method: 'POST',
@@ -461,6 +534,11 @@ export async function focusSessionCommand(
 }
 
 export async function createTimeEntry(payload: CreateTimeEntryPayload) {
+  if (isMockBackendEnabled()) {
+    const data = mockCreateTimeEntry(payload)
+    return data ? (data as TimeEntryCreated) : null
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/time-entries', {
     method: 'POST',
@@ -475,6 +553,11 @@ export async function createTimeEntry(payload: CreateTimeEntryPayload) {
 }
 
 export async function getHistoryOverview(date?: string) {
+  if (isMockBackendEnabled()) {
+    const data = mockGetHistoryOverview(date)
+    return data ? (data as HistoryOverview) : null
+  }
+
   const search = new URLSearchParams()
   if (typeof date === 'string' && date.trim()) {
     search.set('date', date.trim())
@@ -500,6 +583,11 @@ export type GetHistoryDaysParams = {
 }
 
 export async function getHistoryDays(params: GetHistoryDaysParams = {}) {
+  if (isMockBackendEnabled()) {
+    const data = mockGetHistoryDays(params)
+    return data ? (data as HistoryDaysResponse) : null
+  }
+
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null) {
@@ -525,6 +613,11 @@ export async function getHistoryDays(params: GetHistoryDaysParams = {}) {
 }
 
 export async function getHistoryDayDetail(dateLocal: string, sort: 'asc' | 'desc' = 'asc') {
+  if (isMockBackendEnabled()) {
+    const data = mockGetHistoryDayDetail(dateLocal, sort)
+    return data ? (data as HistoryDayDetail) : null
+  }
+
   const search = new URLSearchParams({ sort })
   const response = await apiFetch(`/api/v1/history/days/${encodeURIComponent(dateLocal)}?${search.toString()}`, {
     method: 'GET',

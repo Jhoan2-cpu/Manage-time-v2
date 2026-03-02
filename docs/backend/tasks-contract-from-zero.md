@@ -21,6 +21,12 @@ Frontend objetivo:
 - Cada request usa cookie session (Sanctum).
 - El orden de tareas lo decide backend en `GET /tasks` (recomendado: `created_at ASC`).
 
+## Regla de integracion con contador/sesiones
+
+- `tasks.target_duration_seconds` es la configuracion actual de la tarjeta.
+- Al iniciar una sesion (`POST /api/v1/focus-sessions/start`), backend guarda `target_seconds_snapshot`.
+- Si luego se edita la tarea, no cambia el snapshot historico de sesiones ya iniciadas.
+
 ---
 
 ## Estructura de tarea (contrato)

@@ -1,5 +1,13 @@
 import { API_BASE_URL, apiFetch, ensureCsrfCookie, parseJsonResponse } from '../../lib/api/http'
 import type { AppLocale } from '../../i18n/messages'
+import {
+  isMockBackendEnabled,
+  mockLoginAuth,
+  mockLoginWithGoogle,
+  mockLogoutAuth,
+  mockMeAuth,
+  mockRegisterAuth,
+} from '../../lib/mock/mockBackend'
 
 export type AuthApiUser = {
   id: string
@@ -38,6 +46,10 @@ export type RegisterAuthPayload = {
 }
 
 export async function registerAuth(payload: RegisterAuthPayload) {
+  if (isMockBackendEnabled()) {
+    return mockRegisterAuth(payload)
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/auth/register', {
     method: 'POST',
@@ -48,6 +60,10 @@ export async function registerAuth(payload: RegisterAuthPayload) {
 }
 
 export async function loginAuth(payload: { email: string; password: string }) {
+  if (isMockBackendEnabled()) {
+    return mockLoginAuth(payload)
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/auth/login', {
     method: 'POST',
@@ -58,6 +74,10 @@ export async function loginAuth(payload: { email: string; password: string }) {
 }
 
 export async function meAuth() {
+  if (isMockBackendEnabled()) {
+    return mockMeAuth()
+  }
+
   const response = await apiFetch('/api/v1/auth/me', { method: 'GET' })
   if (response.status === 401) {
     return null
@@ -68,6 +88,10 @@ export async function meAuth() {
 }
 
 export async function logoutAuth() {
+  if (isMockBackendEnabled()) {
+    return mockLogoutAuth()
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/auth/logout', { method: 'POST' })
 
@@ -80,6 +104,15 @@ export async function logoutAuth() {
 
 export function loginWithGoogleRedirect(intent: 'login' | 'register' = 'login') {
   if (typeof window === 'undefined') {
+    return
+  }
+
+  if (isMockBackendEnabled()) {
+    mockLoginWithGoogle(intent)
+    if (window.location.pathname !== '/app') {
+      window.history.pushState(null, '', '/app')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }
     return
   }
 

@@ -21,6 +21,7 @@ import {
   type AuthApiUser,
 } from './features/auth/api'
 import type { AppLocale } from './i18n/messages'
+import { isMockBackendEnabled } from './lib/mock/mockBackend'
 
 type AppSessionUser = {
   id: string
@@ -287,7 +288,20 @@ function App() {
     setCurrentPath('/app')
   }
   const handleGoogleAuth = () => {
+    if (isMockBackendEnabled()) {
+      void handleLogin({ email: 'google-demo@velor.mock', password: 'mock-google' })
+      return
+    }
+
     loginWithGoogleRedirect('login')
+  }
+  const handleGoogleRegisterAuth = () => {
+    if (isMockBackendEnabled()) {
+      void handleLogin({ email: 'google-new@velor.mock', password: 'mock-google' })
+      return
+    }
+
+    loginWithGoogleRedirect('register')
   }
 
   const handleSignOut = async () => {
@@ -371,7 +385,7 @@ function App() {
             setCurrentPath('/login')
           }}
           onRegister={handleRegister}
-          onRegisterWithGoogle={() => loginWithGoogleRedirect('register')}
+          onRegisterWithGoogle={handleGoogleRegisterAuth}
         />
       )
     }
