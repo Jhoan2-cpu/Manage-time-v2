@@ -191,6 +191,7 @@ export function TimerPanel({
   const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
   const [timerDraftParts, setTimerDraftParts] = useState(() => parseHmsLabelToDraftParts(stopwatchLabel))
   const [isTimerFieldsFocused, setIsTimerFieldsFocused] = useState(false)
+  const [hasManualTimerDraftChange, setHasManualTimerDraftChange] = useState(false)
   const timerFieldsRef = useRef<HTMLDivElement>(null)
   const progressAnimationFrameRef = useRef<number | null>(null)
   const progressAnchorRef = useRef({ percent: 0, startedAtMs: 0 })
@@ -227,12 +228,14 @@ export function TimerPanel({
   const canEditTimerTarget =
     mode === 'timer' &&
     !isRunning &&
+    !hasActiveSession &&
     Boolean(activeTask) &&
     typeof onUpdateTimerTargetSeconds === 'function'
 
   useEffect(() => {
     if (!isTimerFieldsFocused) {
       setTimerDraftParts(parseHmsLabelToDraftParts(stopwatchLabel))
+      setHasManualTimerDraftChange(false)
     }
   }, [isTimerFieldsFocused, stopwatchLabel])
 
@@ -279,6 +282,7 @@ export function TimerPanel({
   const cancelTimerEdit = () => {
     setTimerDraftParts(parseHmsLabelToDraftParts(stopwatchLabel))
     setIsTimerFieldsFocused(false)
+    setHasManualTimerDraftChange(false)
   }
 
   const commitTimerEdit = () => {
@@ -296,9 +300,11 @@ export function TimerPanel({
     onUpdateTimerTargetSeconds?.(parsedSeconds)
     setTimerDraftParts(parseHmsLabelToDraftParts(formatSecondsHms(parsedSeconds)))
     setIsTimerFieldsFocused(false)
+    setHasManualTimerDraftChange(false)
   }
 
   const handleTimerFieldChange = (field: keyof TimerDraftParts, value: string) => {
+    setHasManualTimerDraftChange(true)
     setTimerDraftParts((current) => ({
       ...current,
       [field]: value.replace(/[^\d]/g, '').slice(0, 2),
@@ -612,7 +618,7 @@ export function TimerPanel({
               disabled={!canToggleFocus}
               onClick={() => {
                 const shouldUseDraftStartTarget =
-                  mode === 'timer' && (!hasActiveSession || isTimerFieldsFocused)
+                  mode === 'timer' && (isTimerFieldsFocused || hasManualTimerDraftChange)
                 const requestedStartTargetSeconds =
                   shouldUseDraftStartTarget
                     ? parseTimerDraftPartsToSeconds(timerDraftParts) ?? undefined

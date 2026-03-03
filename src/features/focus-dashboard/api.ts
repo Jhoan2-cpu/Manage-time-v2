@@ -193,6 +193,7 @@ export type StartFocusSessionPayload = {
   task_id: string
   timer_mode: FocusTimerModeApi
   target_seconds?: number | null
+  elapsed_seconds_seed?: number
 }
 
 export type PauseFocusSessionPayload = {
@@ -208,6 +209,7 @@ export type SwitchTaskFocusSessionPayload = {
   task_id: string
   timer_mode?: FocusTimerModeApi
   target_seconds?: number | null
+  elapsed_seconds_seed?: number
 }
 
 export type StopFocusSessionPayload = {
@@ -496,9 +498,10 @@ export async function startFocusSession(payload: StartFocusSessionPayload) {
   }
 
   await ensureCsrfCookie()
+  const { elapsed_seconds_seed: _elapsedSeed, ...networkPayload } = payload
   const response = await apiFetch('/api/v1/focus-sessions/start', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(networkPayload),
   })
   if (response.status === 401) {
     return null
@@ -522,9 +525,19 @@ export async function focusSessionCommand(
   }
 
   await ensureCsrfCookie()
+  const networkPayload =
+    endpoint === 'switch-task'
+      ? (() => {
+        const {
+          elapsed_seconds_seed: _elapsedSeed,
+          ...rest
+        } = payload as SwitchTaskFocusSessionPayload
+        return rest
+      })()
+      : payload
   const response = await apiFetch(`/api/v1/focus-sessions/${endpoint}`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(networkPayload),
   })
   if (response.status === 401) {
     return null

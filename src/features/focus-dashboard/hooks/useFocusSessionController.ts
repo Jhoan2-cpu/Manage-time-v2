@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActiveFocusSession } from '../api'
 import type { FocusTimerMode, Task } from '../types'
 import { formatSecondsHms } from '../utils/time'
@@ -38,9 +38,14 @@ export function useFocusSessionController({
   const [authoritativeFocusSession, setAuthoritativeFocusSession] = useState<ActiveFocusSession | null>(
     initialAuthoritativeFocusSession,
   )
+  const [elapsedSnapshotsByTaskId, setElapsedSnapshotsByTaskId] = useState<
+    Record<string, { stopwatch: number; timer: number }>
+  >({})
   const [serverClockOffsetMs, setServerClockOffsetMs] = useState(() => getServerOffsetMs(initialServerNowUtc))
   const [lastServerNowUtc, setLastServerNowUtc] = useState<string | null>(initialServerNowUtc ?? null)
   const [serverTickKey, setServerTickKey] = useState(0)
+  // Keep a stable hook slot for Fast Refresh compatibility when iterating on timer internals.
+  const localElapsedCompatRef = useRef(sessionElapsedSecondsLocal)
 
   const timerMode =
     authoritativeFocusSession?.session_state === 'running' ? authoritativeFocusSession.timer_mode : timerModeLocal
@@ -51,6 +56,19 @@ export function useFocusSessionController({
     () => computeDisplayElapsedSeconds(authoritativeFocusSession, serverClockOffsetMs, serverTickKey, sessionElapsedSecondsLocal),
     [authoritativeFocusSession, serverClockOffsetMs, serverTickKey, sessionElapsedSecondsLocal],
   )
+  const activeTaskElapsedSnapshot =
+    activeTask && elapsedSnapshotsByTaskId[activeTask.id]
+      ? elapsedSnapshotsByTaskId[activeTask.id]
+      : { stopwatch: 0, timer: 0 }
+  const hasAuthoritativeSessionForActiveTask = Boolean(
+    authoritativeFocusSession && activeTask && authoritativeFocusSession.task_id === activeTask.id,
+  )
+  const selectedModeElapsedSeconds =
+    hasAuthoritativeSessionForActiveTask && authoritativeFocusSession?.timer_mode === timerMode
+      ? sessionElapsedSeconds
+      : timerMode === 'timer'
+        ? activeTaskElapsedSnapshot.timer
+        : activeTaskElapsedSnapshot.stopwatch
 
   const activeTaskHasLiveSession = Boolean(
     activeTask &&
@@ -81,17 +99,17 @@ export function useFocusSessionController({
 
   const timerProgressPercent =
     timerMode === 'timer' && activeTaskTargetSeconds
-      ? Math.max(0, Math.min(100, (sessionElapsedSeconds / activeTaskTargetSeconds) * 100))
+      ? Math.max(0, Math.min(100, (selectedModeElapsedSeconds / activeTaskTargetSeconds) * 100))
       : null
 
   const timerDisplaySeconds =
     timerMode === 'timer' && activeTaskTargetSeconds
-      ? Math.max(0, activeTaskTargetSeconds - sessionElapsedSeconds)
-      : sessionElapsedSeconds
+      ? Math.max(0, activeTaskTargetSeconds - selectedModeElapsedSeconds)
+      : selectedModeElapsedSeconds
   const timerDisplayLabel = useMemo(() => formatSecondsHms(timerDisplaySeconds), [timerDisplaySeconds])
 
   const isTimerComplete = Boolean(
-    timerMode === 'timer' && activeTaskTargetSeconds && sessionElapsedSeconds >= activeTaskTargetSeconds,
+    timerMode === 'timer' && activeTaskTargetSeconds && selectedModeElapsedSeconds >= activeTaskTargetSeconds,
   )
 
   const activeTaskTotalTimeLabel = useMemo(
@@ -115,6 +133,58 @@ export function useFocusSessionController({
       window.clearInterval(intervalId)
     }
   }, [authoritativeFocusSession, isFocusRunningLocal])
+
+  useEffect(() => {
+    if (!activeTask || !authoritativeFocusSession || authoritativeFocusSession.task_id !== activeTask.id) {
+      return
+    }
+
+    const nextElapsed = Math.max(0, sessionElapsedSeconds)
+    const mode = authoritativeFocusSession.timer_mode
+
+    setElapsedSnapshotsByTaskId((current) => {
+      const previous = current[activeTask.id] ?? { stopwatch: 0, timer: 0 }
+      const next =
+        mode === 'timer'
+          ? { ...previous, timer: nextElapsed }
+          : { ...previous, stopwatch: nextElapsed }
+
+      if (next.stopwatch === previous.stopwatch && next.timer === previous.timer) {
+        return current
+      }
+
+      return {
+        ...current,
+        [activeTask.id]: next,
+      }
+    })
+  }, [activeTask, authoritativeFocusSession, sessionElapsedSeconds])
+
+  useEffect(() => {
+    if (authoritativeFocusSession || !activeTask || !isFocusRunningLocal) {
+      return
+    }
+
+    const nextElapsed = Math.max(0, sessionElapsedSecondsLocal)
+    localElapsedCompatRef.current = nextElapsed
+    const mode = timerModeLocal
+    setElapsedSnapshotsByTaskId((current) => {
+      const previous = current[activeTask.id] ?? { stopwatch: 0, timer: 0 }
+      const next =
+        mode === 'timer'
+          ? { ...previous, timer: nextElapsed }
+          : { ...previous, stopwatch: nextElapsed }
+
+      if (next.stopwatch === previous.stopwatch && next.timer === previous.timer) {
+        return current
+      }
+
+      return {
+        ...current,
+        [activeTask.id]: next,
+      }
+    })
+  }, [activeTask, authoritativeFocusSession, isFocusRunningLocal, sessionElapsedSecondsLocal, timerModeLocal])
 
   useEffect(() => {
     if (authoritativeFocusSession) {
@@ -162,6 +232,33 @@ export function useFocusSessionController({
     }
   }
 
+  const resetElapsedSnapshotsForTaskModes = (taskId: string, modes: FocusTimerMode[]) => {
+    if (!taskId || modes.length === 0) {
+      return
+    }
+
+    setElapsedSnapshotsByTaskId((current) => {
+      const previous = current[taskId] ?? { stopwatch: 0, timer: 0 }
+      let next = previous
+
+      if (modes.includes('stopwatch') && next.stopwatch !== 0) {
+        next = { ...next, stopwatch: 0 }
+      }
+      if (modes.includes('timer') && next.timer !== 0) {
+        next = { ...next, timer: 0 }
+      }
+
+      if (next === previous) {
+        return current
+      }
+
+      return {
+        ...current,
+        [taskId]: next,
+      }
+    })
+  }
+
   return {
     isFocusRunning,
     setIsFocusRunning,
@@ -179,6 +276,8 @@ export function useFocusSessionController({
     lastServerNowUtc,
     activeTaskHasLiveSession,
     activeTaskTargetSeconds,
+    elapsedSnapshotsByTaskId,
+    resetElapsedSnapshotsForTaskModes,
     timerProgressPercent,
     timerDisplayLabel,
     isTimerComplete,

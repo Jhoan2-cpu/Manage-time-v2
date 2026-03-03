@@ -515,6 +515,8 @@ export function FocusDashboard({
     applyAuthoritativeFocusSnapshot,
     lastServerNowUtc,
     activeTaskTargetSeconds,
+    elapsedSnapshotsByTaskId,
+    resetElapsedSnapshotsForTaskModes,
     timerProgressPercent,
     timerDisplayLabel,
     isTimerComplete,
@@ -529,6 +531,12 @@ export function FocusDashboard({
   const { timeLabel, timeZoneName, utcOffsetLabel } = useCurrentTime(
     effectiveTimeZone,
     lastServerNowUtc ?? bootstrapData?.server_now_utc ?? null,
+  )
+  const isEditingRunningTask = Boolean(
+    editingTask &&
+    activeFocusSession &&
+    activeFocusSession.task_id === editingTask.id &&
+    activeFocusSession.session_state === 'running',
   )
 
   const alignActiveTaskState = (nextActiveTaskId: string | null) => {
@@ -790,6 +798,33 @@ export function FocusDashboard({
         : 0
 
     return totalSeconds > 0 ? Math.min(totalSeconds, 24 * 60 * 60) : null
+  }
+
+  const getElapsedSeedForTaskMode = (task: Task, mode: FocusTimerMode) => {
+    const snapshotByMode = elapsedSnapshotsByTaskId[task.id]
+    const seededFromSnapshot = mode === 'timer' ? snapshotByMode?.timer : snapshotByMode?.stopwatch
+    const seededFromLiveSession =
+      activeFocusSession &&
+      activeFocusSession.task_id === task.id &&
+      activeFocusSession.timer_mode === mode
+        ? sessionElapsedSeconds
+        : null
+
+    const baseValue = seededFromLiveSession ?? seededFromSnapshot ?? 0
+    return Math.max(0, Math.round(baseValue))
+  }
+
+  const resetCountersAfterStop = (taskId: string | null | undefined, sessionMode?: FocusTimerMode | null) => {
+    if (!taskId) {
+      return
+    }
+
+    const modes = new Set<FocusTimerMode>([timerMode])
+    if (sessionMode === 'timer' || sessionMode === 'stopwatch') {
+      modes.add(sessionMode)
+    }
+
+    resetElapsedSnapshotsForTaskModes(taskId, Array.from(modes))
   }
 
   const handleFocusSessionApiError = async (
@@ -1147,6 +1182,10 @@ export function FocusDashboard({
 
     const nextMode = resolveTimerModeForTask(selectedTask, requestedMode)
     const nextTargetSeconds = getTargetSecondsForStart(selectedTask, nextMode)
+    let nextElapsedSeedSeconds = getElapsedSeedForTaskMode(selectedTask, nextMode)
+    if (nextMode === 'timer' && nextTargetSeconds && nextElapsedSeedSeconds >= nextTargetSeconds) {
+      nextElapsedSeedSeconds = 0
+    }
     const elapsedBeforeSwitch = activeFocusSession ? sessionElapsedSeconds : 0
 
     setWorkspaceGlowPulseKey((current) => current + 1)
@@ -1174,6 +1213,7 @@ export function FocusDashboard({
           task_id: selectedTask.id,
           timer_mode: nextMode,
           target_seconds: nextTargetSeconds,
+          elapsed_seconds_seed: nextElapsedSeedSeconds,
         })
 
         if (!response) {
@@ -1203,6 +1243,7 @@ export function FocusDashboard({
         task_id: selectedTask.id,
         timer_mode: nextMode,
         target_seconds: nextTargetSeconds,
+        elapsed_seconds_seed: nextElapsedSeedSeconds,
       })
 
       if (!response) {
@@ -1352,6 +1393,13 @@ export function FocusDashboard({
 
     const requestedMode = requestedStartMode ?? timerMode
     const nextMode = resolveTimerModeForTask(activeTask, requestedMode)
+    let nextElapsedSeedSeconds = getElapsedSeedForTaskMode(activeTask, nextMode)
+    if (nextMode === 'timer' && activeTaskTargetSeconds && willResetCompletedTimer) {
+      nextElapsedSeedSeconds = 0
+    }
+    if (nextMode === 'timer' && activeTaskTargetSeconds && nextElapsedSeedSeconds >= activeTaskTargetSeconds) {
+      nextElapsedSeedSeconds = 0
+    }
     const nextTargetSeconds =
       nextMode === 'timer'
         ? (normalizedRequestedStartTargetSeconds ?? getTargetSecondsForStart(activeTask, 'timer'))
@@ -1364,6 +1412,7 @@ export function FocusDashboard({
         task_id: activeTask.id,
         timer_mode: nextMode,
         target_seconds: nextTargetSeconds,
+        elapsed_seconds_seed: nextElapsedSeedSeconds,
       })
 
       if (!response) {
@@ -1393,11 +1442,14 @@ export function FocusDashboard({
     if (!activeFocusSession) {
       setSessionElapsedSeconds(0)
       setIsFocusRunning(false)
+      resetCountersAfterStop(activeTask?.id, timerMode)
       runNonBlockingFocusSideEffect(handleStartUntrackedSession)
       return
     }
 
     const elapsedBeforeStop = sessionElapsedSeconds
+    const activeSessionTaskId = activeFocusSession.task_id
+    const activeSessionMode = activeFocusSession.timer_mode
 
     isFocusCommandInFlightRef.current = true
     try {
@@ -1419,6 +1471,7 @@ export function FocusDashboard({
       void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
       setSessionElapsedSeconds(0)
       setIsFocusRunning(false)
+      resetCountersAfterStop(activeSessionTaskId, activeSessionMode)
 
       if (stoppedElapsed > 0 && !response.data.created_time_entry_id) {
         runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(stoppedElapsed))
@@ -1520,7 +1573,8 @@ export function FocusDashboard({
   }
   const handlePlayTask = async (selectedTask: Task, preferredMode?: FocusTimerMode) => {
     if (activeTask && selectedTask.id === activeTask.id) {
-      await handleToggleFocus(preferredMode)
+      const nextPreferredMode = timerMode
+      await handleToggleFocus(nextPreferredMode)
       return
     }
 
@@ -1751,6 +1805,7 @@ export function FocusDashboard({
       <NewTaskModal
         editingTask={editingTask}
         isOpen={isNewTaskModalOpen}
+        lockNonAlarmFields={isEditingRunningTask}
         onClose={handleCloseNewTaskModal}
         onCreateTask={handleCreateTaskPersist}
         onRequestDeleteTask={handleRequestDeleteFromTaskModal}

@@ -40,6 +40,7 @@ type ActiveSession = {
   last_resumed_at_utc: string | null
   last_paused_at_utc: string | null
   elapsed_seconds_total: number
+  entry_start_elapsed_seconds: number
   version: number
 }
 
@@ -61,6 +62,7 @@ type Store = {
   entriesByUserId: Map<string, TimeEntry[]>
   activeSessionByUserId: Map<string, ActiveSession | null>
   activeUntrackedStartByUserId: Map<string, string | null>
+  elapsedByUserTaskMode: Map<string, Record<string, { stopwatch: number; timer: number }>>
 }
 
 const store: Store = {
@@ -72,6 +74,7 @@ const store: Store = {
   entriesByUserId: new Map(),
   activeSessionByUserId: new Map(),
   activeUntrackedStartByUserId: new Map(),
+  elapsedByUserTaskMode: new Map(),
 }
 
 const DEFAULT_TIME_ZONE = detectTimeZone()
@@ -320,7 +323,12 @@ export function mockGetActiveFocusSession() {
   }
 }
 
-export function mockStartFocusSession(payload: { task_id: string; timer_mode: 'timer' | 'stopwatch'; target_seconds?: number | null }) {
+export function mockStartFocusSession(payload: {
+  task_id: string
+  timer_mode: 'timer' | 'stopwatch'
+  target_seconds?: number | null
+  elapsed_seconds_seed?: number
+}) {
   const ctx = getContext()
   if (!ctx) {
     return null
@@ -332,18 +340,23 @@ export function mockStartFocusSession(payload: { task_id: string; timer_mode: 't
 
   closeUntracked(ctx.user.id)
   const now = nowIso()
+  const nextMode = payload.timer_mode === 'timer' ? 'timer' : 'stopwatch'
+  const seededElapsedSeconds =
+    normalizeElapsedSeed(payload.elapsed_seconds_seed) ?? getModeElapsed(ctx.user.id, task.id, nextMode)
   const session: ActiveSession = {
     id: id('fs'),
     task_id: task.id,
-    timer_mode: payload.timer_mode === 'timer' ? 'timer' : 'stopwatch',
+    timer_mode: nextMode,
     session_state: 'running',
     target_seconds: normalizeTarget(payload.target_seconds ?? task.target_duration_seconds),
     started_at_utc: now,
     last_resumed_at_utc: now,
     last_paused_at_utc: null,
-    elapsed_seconds_total: 0,
+    elapsed_seconds_total: seededElapsedSeconds,
+    entry_start_elapsed_seconds: seededElapsedSeconds,
     version: 1,
   }
+  setModeElapsed(ctx.user.id, task.id, nextMode, seededElapsedSeconds)
   store.activeSessionByUserId.set(ctx.user.id, session)
   return {
     data: {
@@ -371,6 +384,7 @@ export function mockFocusSessionCommand(
 
   if (endpoint === 'pause' && current && current.session_state === 'running') {
     current.elapsed_seconds_total = computeElapsed(current, now)
+    setModeElapsed(ctx.user.id, current.task_id, current.timer_mode, current.elapsed_seconds_total)
     current.session_state = 'paused'
     current.last_paused_at_utc = nowUtc
     current.version += 1
@@ -396,35 +410,54 @@ export function mockFocusSessionCommand(
     }
 
     const elapsed = computeElapsed(current, now)
+    setModeElapsed(ctx.user.id, current.task_id, current.timer_mode, elapsed)
+    const entryStartElapsed = Math.max(0, Math.floor(current.entry_start_elapsed_seconds ?? 0))
+    const durationForEntry = Math.max(0, elapsed - entryStartElapsed)
     const created = materializeFocusEntry(ctx.user.id, {
       task_id: current.task_id,
       started_at_utc: current.started_at_utc,
       ended_at_utc: nowUtc,
-      duration_seconds: elapsed,
+      duration_seconds: durationForEntry,
     })
+    const requestedTimerMode = payload.timer_mode
+    const resolvedTimerMode =
+      requestedTimerMode === 'timer' || requestedTimerMode === 'stopwatch'
+        ? requestedTimerMode
+        : task.target_duration_seconds
+          ? 'timer'
+          : 'stopwatch'
+    const nextSeedElapsedSeconds =
+      normalizeElapsedSeed(payload.elapsed_seconds_seed as number | null | undefined) ??
+      getModeElapsed(ctx.user.id, task.id, resolvedTimerMode)
+
     const next = {
       id: id('fs'),
       task_id: task.id,
-      timer_mode: payload.timer_mode === 'timer' ? 'timer' : (task.target_duration_seconds ? 'timer' : 'stopwatch'),
+      timer_mode: resolvedTimerMode,
       session_state: 'running',
       target_seconds: normalizeTarget((payload.target_seconds as number | null | undefined) ?? task.target_duration_seconds),
       started_at_utc: nowUtc,
       last_resumed_at_utc: nowUtc,
       last_paused_at_utc: null,
-      elapsed_seconds_total: 0,
+      elapsed_seconds_total: nextSeedElapsedSeconds,
+      entry_start_elapsed_seconds: nextSeedElapsedSeconds,
       version: 1,
     } satisfies ActiveSession
+    setModeElapsed(ctx.user.id, task.id, resolvedTimerMode, nextSeedElapsedSeconds)
     store.activeSessionByUserId.set(ctx.user.id, next)
     return { data: { server_now_utc: nowUtc, active_focus_session: { ...next }, created_time_entry_id: created ?? undefined } }
   }
 
   if (endpoint === 'stop' && current) {
     const elapsed = computeElapsed(current, now)
+    setModeElapsed(ctx.user.id, current.task_id, current.timer_mode, elapsed)
+    const entryStartElapsed = Math.max(0, Math.floor(current.entry_start_elapsed_seconds ?? 0))
+    const durationForEntry = Math.max(0, elapsed - entryStartElapsed)
     const created = materializeFocusEntry(ctx.user.id, {
       task_id: current.task_id,
       started_at_utc: current.started_at_utc,
       ended_at_utc: nowUtc,
-      duration_seconds: elapsed,
+      duration_seconds: durationForEntry,
     })
     store.activeSessionByUserId.set(ctx.user.id, null)
     store.activeUntrackedStartByUserId.set(ctx.user.id, nowUtc)
@@ -616,6 +649,35 @@ function ensureSeed(userId: string, locale: AppLocale, timeZone: string | undefi
   if (!store.activeUntrackedStartByUserId.has(userId)) {
     store.activeUntrackedStartByUserId.set(userId, null)
   }
+  if (!store.elapsedByUserTaskMode.has(userId)) {
+    store.elapsedByUserTaskMode.set(userId, {})
+  }
+}
+
+function getModeElapsed(userId: string, taskId: string, mode: ActiveSession['timer_mode']) {
+  const byTask = store.elapsedByUserTaskMode.get(userId) ?? {}
+  const snapshot = byTask[taskId]
+  if (!snapshot) {
+    return 0
+  }
+  const value = mode === 'timer' ? snapshot.timer : snapshot.stopwatch
+  return Math.max(0, Math.floor(value))
+}
+
+function setModeElapsed(userId: string, taskId: string, mode: ActiveSession['timer_mode'], elapsedSeconds: number) {
+  const byTask = store.elapsedByUserTaskMode.get(userId) ?? {}
+  const previous = byTask[taskId] ?? { stopwatch: 0, timer: 0 }
+  const bounded = Math.max(0, Math.floor(elapsedSeconds))
+  const next = mode === 'timer' ? { ...previous, timer: bounded } : { ...previous, stopwatch: bounded }
+
+  if (next.stopwatch === previous.stopwatch && next.timer === previous.timer) {
+    return
+  }
+
+  store.elapsedByUserTaskMode.set(userId, {
+    ...byTask,
+    [taskId]: next,
+  })
 }
 
 function upsertUser(input: { email: string; display_name: string; locale: AppLocale }) {
@@ -807,6 +869,14 @@ function normalizeIcon(value: string) {
 function normalizeTarget(value: number | null | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
   return clamp(Math.round(value), 1, 24 * 3600)
+}
+
+function normalizeElapsedSeed(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null
+  }
+
+  return Math.max(0, Math.floor(value))
 }
 
 function normalizeAlarm(value: string | null | undefined) {

@@ -22,6 +22,7 @@ type NewTaskModalProps = {
   onCreateTask: (payload: NewTaskPayload) => void
   editingTask?: Task | null
   onRequestDeleteTask?: (task: Task) => void
+  lockNonAlarmFields?: boolean
 }
 
 const defaultColorTag: TaskColorKey = taskColorOptions[0]?.id ?? 'blue'
@@ -72,6 +73,7 @@ export function NewTaskModal({
   onCreateTask,
   editingTask = null,
   onRequestDeleteTask,
+  lockNonAlarmFields = false,
 }: NewTaskModalProps) {
   const { locale } = useI18n()
   const titleId = useId()
@@ -235,6 +237,7 @@ export function NewTaskModal({
         }
 
   const isEditing = editingTask !== null
+  const lockEditableTaskFields = Boolean(lockNonAlarmFields && isEditing && editingTask)
   const canSubmit = title.trim().length > 0
   const modalAccentRgb = modalAccentRgbByColor[colorTag]
   const softAccentBorder = `rgba(${modalAccentRgb},0.18)`
@@ -293,12 +296,18 @@ export function NewTaskModal({
         })
       : null
 
+    const resolvedTitle = lockEditableTaskFields && editingTask ? editingTask.title : title.trim()
+    const resolvedColorTag = lockEditableTaskFields && editingTask ? editingTask.colorTag : colorTag
+    const resolvedIconTag = lockEditableTaskFields && editingTask ? editingTask.iconTag : iconTag
+    const resolvedTargetDurationMinutes =
+      lockEditableTaskFields && editingTask ? editingTask.targetDurationMinutes : normalizedTargetDuration
+
     onCreateTask({
-      title: title.trim(),
+      title: resolvedTitle,
       details: '',
-      colorTag,
-      iconTag,
-      targetDurationMinutes: normalizedTargetDuration,
+      colorTag: resolvedColorTag,
+      iconTag: resolvedIconTag,
+      targetDurationMinutes: resolvedTargetDurationMinutes,
       alarmTime: normalizedAlarmTime,
     })
     onClose()
@@ -360,14 +369,15 @@ export function NewTaskModal({
             </button>
           </header>
 
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
+          <div className="task-modal-scroll min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" htmlFor={titleId}>
                 {copy.taskLabel}
               </label>
               <input
-                autoFocus
-                className={fieldClassName}
+                autoFocus={!lockEditableTaskFields}
+                className={classNames(fieldClassName, lockEditableTaskFields && 'cursor-not-allowed opacity-70')}
+                disabled={lockEditableTaskFields}
                 id={titleId}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder={copy.taskPlaceholder}
@@ -396,6 +406,7 @@ export function NewTaskModal({
                 >
                   <div className="relative flex items-center gap-1">
                     <CompactTimeUnitInput
+                      disabled={lockEditableTaskFields}
                       id={targetDurationHoursId}
                       onChange={setTargetDurationHoursInput}
                       placeholder="00"
@@ -405,6 +416,7 @@ export function NewTaskModal({
                     <TimeUnitSeparator />
                     <CompactTimeUnitInput
                       ariaLabel={copy.timerMinutesAria}
+                      disabled={lockEditableTaskFields}
                       onChange={setTargetDurationMinutesInput}
                       placeholder="00"
                       unitLabel="MM"
@@ -413,6 +425,7 @@ export function NewTaskModal({
                     <TimeUnitSeparator />
                     <CompactTimeUnitInput
                       ariaLabel={copy.timerSecondsAria}
+                      disabled={lockEditableTaskFields}
                       onChange={setTargetDurationSecondsInput}
                       placeholder="00"
                       unitLabel="SS"
@@ -488,11 +501,12 @@ export function NewTaskModal({
                     <button
                       aria-label={copy.chooseIcon.replace('{label}', optionLabel)}
                       className={classNames(
-                        'grid h-10 w-10 place-items-center rounded-full border text-sm transition',
+                        'grid h-10 w-10 place-items-center rounded-full border text-sm transition disabled:cursor-not-allowed disabled:opacity-55',
                         isSelected
                           ? modalIconSelectedClassByColor[colorTag]
                           : 'border-slate-700/80 bg-slate-800/70 text-slate-400 hover:border-slate-600 hover:text-slate-200',
                       )}
+                      disabled={lockEditableTaskFields}
                       key={option.id}
                       onClick={() => setIconTag(option.id)}
                       title={optionLabel}
@@ -516,10 +530,11 @@ export function NewTaskModal({
                     <button
                       aria-label={copy.chooseColor.replace('{label}', optionLabel)}
                         className={classNames(
-                          'relative h-8 w-8 rounded-full ring-1 ring-slate-700/80 transition',
+                          'relative h-8 w-8 rounded-full ring-1 ring-slate-700/80 transition disabled:cursor-not-allowed disabled:opacity-55',
                           option.swatchClassName,
                           isSelected && classNames('ring-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]', option.selectedRingClassName),
                         )}
+                      disabled={lockEditableTaskFields}
                       key={option.id}
                       onClick={(event) => handleColorTagSelect(option.id, event.currentTarget)}
                       ref={(element) => {
@@ -651,14 +666,16 @@ type CompactTimeUnitInputProps = {
   unitLabel: string
   id?: string
   ariaLabel?: string
+  disabled?: boolean
 }
 
-function CompactTimeUnitInput({ value, onChange, placeholder, unitLabel, id, ariaLabel }: CompactTimeUnitInputProps) {
+function CompactTimeUnitInput({ value, onChange, placeholder, unitLabel, id, ariaLabel, disabled = false }: CompactTimeUnitInputProps) {
   return (
     <div className={timeUnitFieldClassName}>
       <input
         aria-label={ariaLabel}
-        className={compactTimeFieldClassName}
+        className={classNames(compactTimeFieldClassName, disabled && 'cursor-not-allowed opacity-70')}
+        disabled={disabled}
         id={id}
         inputMode="numeric"
         maxLength={2}
@@ -682,14 +699,16 @@ type CompactTimeSelectFieldProps = {
   unitLabel: string
   ariaLabel?: string
   children: ReactNode
+  disabled?: boolean
 }
 
-function CompactTimeSelectField({ value, onChange, unitLabel, ariaLabel, children }: CompactTimeSelectFieldProps) {
+function CompactTimeSelectField({ value, onChange, unitLabel, ariaLabel, children, disabled = false }: CompactTimeSelectFieldProps) {
   return (
     <div className="flex flex-col items-center justify-center px-0.5 py-0">
       <select
         aria-label={ariaLabel}
-        className={classNames(compactTimeSelectClassName, 'w-[4.2rem]')}
+        className={classNames(compactTimeSelectClassName, 'w-[4.2rem]', disabled && 'cursor-not-allowed opacity-70')}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >

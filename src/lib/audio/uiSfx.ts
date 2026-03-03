@@ -56,6 +56,10 @@ export function initUiSfx() {
 
   Howler.autoUnlock = true
   Howler.autoSuspend = true
+  const howlerWithHtml5Pool = Howler as typeof Howler & { html5PoolSize?: number }
+  if (typeof howlerWithHtml5Pool.html5PoolSize === 'number' && howlerWithHtml5Pool.html5PoolSize < 24) {
+    howlerWithHtml5Pool.html5PoolSize = 24
+  }
 
   clickHowl = new Howl({
     src: ['/public/sfx/click.mp3', '/sfx/click.mp3', createUiClickWavDataUri()],
