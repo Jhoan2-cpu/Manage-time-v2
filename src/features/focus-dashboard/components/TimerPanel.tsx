@@ -13,6 +13,7 @@ import { taskIconMap } from '../constants/taskOptions'
 import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
 import { formatSecondsHms } from '../utils/time'
+import { FocusOnlyTimerPanel } from './FocusOnlyTimerPanel'
 
 type TimerPanelProps = {
   timeLabel: string
@@ -233,6 +234,22 @@ export function TimerPanel({
     !hasActiveSession &&
     Boolean(activeTask) &&
     typeof onUpdateTimerTargetSeconds === 'function'
+  const timerEditableFieldClassName = classNames(
+    'rounded-xl border border-slate-400/30 bg-[#0a1530]/70 text-center font-mono font-semibold leading-none tracking-tight tabular-nums text-slate-100 outline-none transition',
+    'h-12 w-12 text-[30px] sm:h-14 sm:w-14 sm:text-[34px]',
+  )
+  const timerUnitLabelClassName = classNames(
+    'mt-1.5 font-semibold tracking-[0.22em] text-slate-400',
+    'text-[10px]',
+  )
+  const timerSeparatorClassName = classNames(
+    'font-mono text-slate-300/85',
+    'pt-2 text-2xl sm:pt-2.5 sm:text-[28px]',
+  )
+  const timerTaskTitleClassName = classNames(
+    'line-clamp-2 max-w-[88%] bg-slate-200/8 px-2 py-1 font-medium uppercase tracking-[0.08em] text-slate-300',
+    'mt-3 text-[10px]',
+  )
 
   useEffect(() => {
     if (!isTimerFieldsFocused) {
@@ -348,28 +365,72 @@ export function TimerPanel({
     }
   }
 
+  const handleToggleFocusClick = () => {
+    const shouldUseDraftStartTarget =
+      mode === 'timer' && (isTimerFieldsFocused || hasManualTimerDraftChange)
+    const requestedStartTargetSeconds =
+      shouldUseDraftStartTarget
+        ? parseTimerDraftPartsToSeconds(timerDraftParts) ?? undefined
+        : undefined
+    onToggleFocus(mode, requestedStartTargetSeconds)
+  }
+
+  if (isFocusOnlyMode) {
+    return (
+      <FocusOnlyTimerPanel
+        accentDividerClassName={accents.dividerClassName}
+        accentPlayButtonClassName={accents.playButtonClassName}
+        accentPlayIconClassName={accents.playIconClassName}
+        accentTimeGlowClassName={accents.timeGlowClassName}
+        accentTotalValueClassName={accents.totalValueClassName}
+        activeTaskIcon={activeTaskIcon?.icon ?? null}
+        canEditTimerTarget={canEditTimerTarget}
+        canStopFocus={canStopFocus}
+        canToggleFocus={canToggleFocus}
+        copyStopFocus={copy.stopFocus}
+        copyTotalTaskTime={copy.totalTaskTime}
+        isRunning={isRunning}
+        isTimerCompletionVisual={isTimerCompletionVisual}
+        mode={mode}
+        onStopFocus={onStopFocus}
+        onTimerFieldBlur={handleTimerFieldBlur}
+        onTimerFieldChange={handleTimerFieldChange}
+        onTimerFieldFocus={handleTimerFieldFocus}
+        onTimerFieldKeyDown={handleTimerFieldKeyDown}
+        onToggleFocusClick={handleToggleFocusClick}
+        playButtonGlowStyle={playButtonGlowStyle}
+        renderProgressPercent={renderProgressPercent}
+        stopwatchLabel={stopwatchLabel}
+        taskTitle={taskTitle}
+        timerCompletePulseStyle={timerCompletePulseStyle}
+        timerDraftParts={timerDraftParts}
+        timerFieldsRef={timerFieldsRef}
+        timerMarkerStyle={timerMarkerStyle}
+        timerRingStyle={timerRingStyle}
+        toggleFocusAriaLabel={toggleFocusAriaLabel}
+        toggleFocusIcon={toggleFocusIcon}
+        totalTaskTimeLabel={totalTaskTimeLabel}
+      />
+    )
+  }
+
   return (
     <>
       <div
         className={classNames(
           'mb-2 flex min-h-0 sm:mb-0',
-          isFocusOnlyMode
-            ? 'flex-1 justify-center [@media(max-height:840px)]:justify-start'
-            : 'justify-start sm:flex-1 sm:justify-center',
+          'justify-start sm:flex-1 sm:justify-center',
         )}
       >
         <div
           className={classNames(
             'flex w-full flex-col px-4 py-2 sm:px-8 sm:py-3',
-            isFocusOnlyMode
-              ? 'h-full justify-center py-4 sm:py-6 [@media(max-height:840px)]:h-auto [@media(max-height:840px)]:justify-start'
-              : 'sm:h-full sm:pb-0',
+            'sm:h-full sm:pb-0',
           )}
         >
           <div
             className={classNames(
               'relative mt-0 flex flex-1 flex-col items-center justify-center py-1 sm:py-2',
-              isFocusOnlyMode && 'mt-4 sm:mt-6',
             )}
           >
             <div className="relative w-full max-w-[min(100%,62rem)] min-h-[13.1rem] sm:min-h-[16.4rem] [perspective:1400px]">
@@ -384,7 +445,7 @@ export function TimerPanel({
                 <div
                   className={classNames(
                     'flex max-w-[min(100%,58rem)] items-start gap-2.5 sm:gap-4',
-                    isFocusOnlyMode ? 'w-auto justify-center' : 'w-full justify-center',
+                    'w-full justify-center',
                   )}
                 >
                   <span
@@ -400,9 +461,7 @@ export function TimerPanel({
                     <h2
                       className={classNames(
                         'w-full overflow-hidden break-words text-center font-semibold leading-tight tracking-tight text-slate-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]',
-                        isFocusOnlyMode
-                          ? 'text-[clamp(1.36rem,6.6vw,1.8rem)] sm:text-center sm:text-[clamp(1.9rem,5.4vw,2.5rem)] md:text-4xl'
-                          : 'text-[1.55rem] sm:text-center sm:text-[2rem] md:text-4xl',
+                        'text-[1.55rem] sm:text-center sm:text-[2rem] md:text-4xl',
                       )}
                     >
                       {taskTitle}
@@ -412,10 +471,8 @@ export function TimerPanel({
 
                 <p
                   className={classNames(
-                    'relative mt-1.5 w-full max-w-full overflow-hidden text-center select-none font-bold leading-none tracking-tight text-slate-100 tabular-nums',
-                    isFocusOnlyMode
-                      ? 'text-[clamp(48px,18vw,80px)] sm:text-[clamp(62px,9.8vw,120px)] md:text-[clamp(96px,14vw,260px)]'
-                      : 'text-[clamp(49px,15.2vw,74px)] sm:text-[clamp(64px,9.4vw,116px)] md:text-[clamp(80px,12vw,220px)]',
+                    'relative mt-1.5 w-full max-w-full pb-1 text-center select-none font-bold leading-[0.92] tracking-tight text-slate-100 tabular-nums sm:pb-1.5',
+                    'text-[clamp(49px,15.2vw,74px)] sm:text-[clamp(64px,9.4vw,116px)] md:text-[clamp(80px,12vw,220px)]',
                     accents.timeGlowClassName,
                   )}
                 >
@@ -431,7 +488,12 @@ export function TimerPanel({
                     : 'pointer-events-none opacity-0 [transform:translateX(18%)_rotateY(-34deg)]',
                 )}
               >
-                <div className="relative h-[min(72vw,17.6rem)] w-[min(72vw,17.6rem)] sm:h-[17.6rem] sm:w-[17.6rem]">
+                <div
+                  className={classNames(
+                    'relative',
+                    'h-[min(72vw,17.6rem)] w-[min(72vw,17.6rem)] sm:h-[17.6rem] sm:w-[17.6rem]',
+                  )}
+                >
                   <div
                     className={classNames('absolute inset-0 rounded-full p-[4px]', isTimerCompletionVisual && 'timer-complete-ring-breathe')}
                     style={isTimerCompletionVisual ? { ...timerRingStyle, ...timerCompletePulseStyle } : timerRingStyle}
@@ -456,7 +518,7 @@ export function TimerPanel({
                             <input
                               aria-label="HH"
                               className={classNames(
-                                'h-12 w-12 rounded-xl border border-slate-400/30 bg-[#0a1530]/70 text-center font-mono text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-100 outline-none transition sm:h-14 sm:w-14 sm:text-[34px]',
+                                timerEditableFieldClassName,
                                 canEditTimerTarget
                                   ? 'focus:border-white/55 focus:bg-[#102347]'
                                   : 'cursor-default text-slate-100/90',
@@ -470,14 +532,14 @@ export function TimerPanel({
                               readOnly={!canEditTimerTarget}
                               value={timerDraftParts.hours}
                             />
-                            <span className="mt-1.5 text-[10px] font-semibold tracking-[0.22em] text-slate-400">HH</span>
+                            <span className={timerUnitLabelClassName}>HH</span>
                           </div>
-                          <span className="pt-2 font-mono text-2xl text-slate-300/85 sm:pt-2.5 sm:text-[28px]">:</span>
+                          <span className={timerSeparatorClassName}>:</span>
                           <div className="flex flex-col items-center">
                             <input
                               aria-label="MM"
                               className={classNames(
-                                'h-12 w-12 rounded-xl border border-slate-400/30 bg-[#0a1530]/70 text-center font-mono text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-100 outline-none transition sm:h-14 sm:w-14 sm:text-[34px]',
+                                timerEditableFieldClassName,
                                 canEditTimerTarget
                                   ? 'focus:border-white/55 focus:bg-[#102347]'
                                   : 'cursor-default text-slate-100/90',
@@ -491,14 +553,14 @@ export function TimerPanel({
                               readOnly={!canEditTimerTarget}
                               value={timerDraftParts.minutes}
                             />
-                            <span className="mt-1.5 text-[10px] font-semibold tracking-[0.22em] text-slate-400">MM</span>
+                            <span className={timerUnitLabelClassName}>MM</span>
                           </div>
-                          <span className="pt-2 font-mono text-2xl text-slate-300/85 sm:pt-2.5 sm:text-[28px]">:</span>
+                          <span className={timerSeparatorClassName}>:</span>
                           <div className="flex flex-col items-center">
                             <input
                               aria-label="SS"
                               className={classNames(
-                                'h-12 w-12 rounded-xl border border-slate-400/30 bg-[#0a1530]/70 text-center font-mono text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-100 outline-none transition sm:h-14 sm:w-14 sm:text-[34px]',
+                                timerEditableFieldClassName,
                                 canEditTimerTarget
                                   ? 'focus:border-white/55 focus:bg-[#102347]'
                                   : 'cursor-default text-slate-100/90',
@@ -512,11 +574,11 @@ export function TimerPanel({
                               readOnly={!canEditTimerTarget}
                               value={timerDraftParts.seconds}
                             />
-                            <span className="mt-1.5 text-[10px] font-semibold tracking-[0.22em] text-slate-400">SS</span>
+                            <span className={timerUnitLabelClassName}>SS</span>
                           </div>
                         </div>
                       </div>
-                      <p className="mt-3 line-clamp-2 max-w-[86%] bg-slate-200/8 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
+                      <p className={timerTaskTitleClassName}>
                         {taskTitle}
                       </p>
                     </div>
@@ -580,7 +642,7 @@ export function TimerPanel({
           <div
             className={classNames(
               'mx-auto w-full max-w-[460px] border-t',
-              isFocusOnlyMode ? 'mt-1 pt-4 sm:mt-2' : 'mt-0.5 pt-3 sm:mt-auto sm:pt-4',
+              'mt-0.5 pt-3 sm:mt-auto sm:pt-4',
               '[@media(max-height:840px)]:mt-2 [@media(max-height:840px)]:pt-3',
               accents.dividerClassName,
             )}
@@ -593,7 +655,7 @@ export function TimerPanel({
             </p>
           </div>
 
-          <div className={classNames('flex items-center justify-center gap-3', isFocusOnlyMode ? 'mt-5' : 'mt-3')}>
+          <div className={classNames('flex items-center justify-center gap-3', 'mt-3')}>
             <button
               aria-label={copy.stopFocus}
               className={classNames(
@@ -618,15 +680,7 @@ export function TimerPanel({
                   : 'cursor-not-allowed border-slate-800/70 bg-slate-900/20 text-slate-600',
               )}
               disabled={!canToggleFocus}
-              onClick={() => {
-                const shouldUseDraftStartTarget =
-                  mode === 'timer' && (isTimerFieldsFocused || hasManualTimerDraftChange)
-                const requestedStartTargetSeconds =
-                  shouldUseDraftStartTarget
-                    ? parseTimerDraftPartsToSeconds(timerDraftParts) ?? undefined
-                    : undefined
-                onToggleFocus(mode, requestedStartTargetSeconds)
-              }}
+              onClick={handleToggleFocusClick}
               style={canToggleFocus ? playButtonGlowStyle : undefined}
               type="button"
             >

@@ -1693,7 +1693,7 @@ export function FocusDashboard({
 
       {
         isFocusOnlyMode ? (
-          <section className="focus-only-overlay-enter app-scroll relative h-[100svh] overflow-x-hidden overflow-y-auto sm:overflow-y-hidden [@media(max-height:840px)]:overflow-y-auto">
+          <section className="focus-only-overlay-enter app-scroll relative h-[100svh] overflow-x-hidden overflow-y-auto sm:overflow-y-hidden [@media(max-height:620px)]:overflow-y-auto">
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
               <div className="absolute inset-0 bg-[linear-gradient(180deg,#040a16_0%,#030814_100%)]" />
               <div
@@ -1722,7 +1722,7 @@ export function FocusDashboard({
               <span className="hidden font-medium sm:inline">{copy.exitFocusOnlyShort}</span>
             </button>
 
-            <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-4 sm:px-8 sm:py-8 [@media(max-height:840px)]:items-start">
+            <div className="focus-only-content-enter relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] items-center px-3 py-2 sm:px-7 sm:py-3 [@media(max-height:620px)]:items-start">
               <TimerPanel
                 activeTask={activeTask}
                 canUseTimerMode={Boolean(activeTaskTargetSeconds)}
