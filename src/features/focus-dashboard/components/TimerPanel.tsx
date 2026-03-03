@@ -16,7 +16,7 @@ import { formatSecondsHms } from '../utils/time'
 
 type TimerPanelProps = {
   timeLabel: string
-  onToggleFocus: (mode: FocusTimerMode) => void
+  onToggleFocus: (mode: FocusTimerMode, requestedStartTargetSeconds?: number) => void
   onStopFocus: () => void
   onChangeMode: (mode: FocusTimerMode) => void
   onUpdateTimerTargetSeconds?: (targetSeconds: number) => void
@@ -610,7 +610,15 @@ export function TimerPanel({
                   : 'cursor-not-allowed border-slate-800/70 bg-slate-900/20 text-slate-600',
               )}
               disabled={!canToggleFocus}
-              onClick={() => onToggleFocus(mode)}
+              onClick={() => {
+                const shouldUseDraftStartTarget =
+                  mode === 'timer' && (!hasActiveSession || isTimerFieldsFocused)
+                const requestedStartTargetSeconds =
+                  shouldUseDraftStartTarget
+                    ? parseTimerDraftPartsToSeconds(timerDraftParts) ?? undefined
+                    : undefined
+                onToggleFocus(mode, requestedStartTargetSeconds)
+              }}
               style={canToggleFocus ? playButtonGlowStyle : undefined}
               type="button"
             >

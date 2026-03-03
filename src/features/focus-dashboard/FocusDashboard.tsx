@@ -1231,10 +1231,20 @@ export function FocusDashboard({
       isFocusCommandInFlightRef.current = false
     }
   }
-  const handleToggleFocus = async (requestedStartMode?: FocusTimerMode) => {
+  const handleToggleFocus = async (
+    requestedStartMode?: FocusTimerMode,
+    requestedStartTargetSeconds?: number,
+  ) => {
     if (!activeTask) {
       return
     }
+
+    const normalizedRequestedStartTargetSeconds =
+      typeof requestedStartTargetSeconds === 'number' &&
+        Number.isFinite(requestedStartTargetSeconds) &&
+        requestedStartTargetSeconds > 0
+        ? Math.min(24 * 60 * 60, Math.round(requestedStartTargetSeconds))
+        : null
 
     runNonBlockingFocusSideEffect(stopTimerEndAlarm)
 
@@ -1294,7 +1304,7 @@ export function FocusDashboard({
         }
 
         if (requestedMode === 'timer' && response.data.active_focus_session) {
-          const desiredTargetSeconds = getTargetSecondsForStart(activeTask, 'timer')
+          const desiredTargetSeconds = normalizedRequestedStartTargetSeconds ?? getTargetSecondsForStart(activeTask, 'timer')
           if (
             desiredTargetSeconds &&
             response.data.active_focus_session.timer_mode === 'timer' &&
@@ -1342,7 +1352,10 @@ export function FocusDashboard({
 
     const requestedMode = requestedStartMode ?? timerMode
     const nextMode = resolveTimerModeForTask(activeTask, requestedMode)
-    const nextTargetSeconds = getTargetSecondsForStart(activeTask, nextMode)
+    const nextTargetSeconds =
+      nextMode === 'timer'
+        ? (normalizedRequestedStartTargetSeconds ?? getTargetSecondsForStart(activeTask, 'timer'))
+        : null
     setTimerMode(nextMode)
 
     isFocusCommandInFlightRef.current = true
@@ -1440,12 +1453,13 @@ export function FocusDashboard({
       return
     }
 
+    const activeTaskId = activeTask.id
     const boundedSeconds = Math.max(1, Math.min(24 * 60 * 60, Math.round(nextTargetSeconds)))
     const nextTargetDurationMinutes = boundedSeconds / 60
 
     setTaskList((currentTasks) =>
       currentTasks.map((task) =>
-        task.id === activeTask.id
+        task.id === activeTaskId
           ? {
             ...task,
             targetDurationMinutes: nextTargetDurationMinutes,
@@ -1469,6 +1483,40 @@ export function FocusDashboard({
 
     setSessionElapsedSeconds((currentSeconds) => Math.min(currentSeconds, boundedSeconds))
     setTimerMode('timer')
+
+    void (async () => {
+      try {
+        const updatedTask = await updateTaskApi(activeTaskId, {
+          target_duration_seconds: boundedSeconds,
+        })
+        if (!updatedTask) {
+          onSignOut?.()
+          return
+        }
+
+        setTaskList((currentTasks) =>
+          currentTasks.map((task) => (task.id === activeTaskId ? mergeServerTaskIntoUiTask(updatedTask, task) : task)),
+        )
+      } catch (error) {
+        if (error instanceof ApiHttpError) {
+          if (error.status === 401) {
+            onSignOut?.()
+            return
+          }
+
+          if (error.status === 404) {
+            applyTaskRemovalFromUi(activeTaskId)
+            return
+          }
+        }
+
+        console.error(
+          'Failed to persist timer target from TimerPanel',
+          { taskId: activeTaskId, targetSeconds: boundedSeconds },
+          error,
+        )
+      }
+    })()
   }
   const handlePlayTask = async (selectedTask: Task, preferredMode?: FocusTimerMode) => {
     if (activeTask && selectedTask.id === activeTask.id) {

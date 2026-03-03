@@ -61,12 +61,22 @@ export function useFocusSessionController({
 
   const localActiveTaskTargetSeconds =
     (activeTask?.targetDurationMinutes ?? 0) > 0 ? Math.round((activeTask?.targetDurationMinutes ?? 0) * 60) : null
+  const authoritativeActiveTaskTargetSeconds =
+    authoritativeFocusSession &&
+      activeTask &&
+      authoritativeFocusSession.task_id === activeTask.id &&
+      authoritativeFocusSession.timer_mode === 'timer'
+      ? normalizePositiveSeconds(authoritativeFocusSession.target_seconds)
+      : null
   const activeTaskTargetSeconds =
     authoritativeFocusSession &&
     activeTask &&
     authoritativeFocusSession.task_id === activeTask.id &&
     authoritativeFocusSession.timer_mode === 'timer'
-      ? normalizePositiveSeconds(authoritativeFocusSession.target_seconds)
+      // Running session should trust its own target; paused/idle can prefer the locally edited target.
+      ? authoritativeFocusSession.session_state === 'running'
+        ? (authoritativeActiveTaskTargetSeconds ?? localActiveTaskTargetSeconds)
+        : (localActiveTaskTargetSeconds ?? authoritativeActiveTaskTargetSeconds)
       : localActiveTaskTargetSeconds
 
   const timerProgressPercent =
