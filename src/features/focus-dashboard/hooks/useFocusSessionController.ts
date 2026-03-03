@@ -42,7 +42,8 @@ export function useFocusSessionController({
   const [lastServerNowUtc, setLastServerNowUtc] = useState<string | null>(initialServerNowUtc ?? null)
   const [serverTickKey, setServerTickKey] = useState(0)
 
-  const timerMode = authoritativeFocusSession?.timer_mode ?? timerModeLocal
+  const timerMode =
+    authoritativeFocusSession?.session_state === 'running' ? authoritativeFocusSession.timer_mode : timerModeLocal
   const isFocusRunning = authoritativeFocusSession
     ? authoritativeFocusSession.session_state === 'running'
     : isFocusRunningLocal

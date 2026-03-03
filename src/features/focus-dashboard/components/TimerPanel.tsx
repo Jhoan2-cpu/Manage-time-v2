@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faHourglassHalf,
@@ -12,12 +12,16 @@ import { useI18n } from '../../../i18n'
 import { taskIconMap } from '../constants/taskOptions'
 import type { FocusTimerMode, Task, TaskColorKey } from '../types'
 import { classNames } from '../utils/classNames'
+import { formatSecondsHms } from '../utils/time'
 
 type TimerPanelProps = {
   timeLabel: string
-  onToggleFocus: () => void
+  onToggleFocus: (mode: FocusTimerMode) => void
   onStopFocus: () => void
   onChangeMode: (mode: FocusTimerMode) => void
+  onUpdateTimerTargetSeconds?: (targetSeconds: number) => void
+  timerTargetSeconds?: number | null
+  isTimerAlarmActive?: boolean
   activeTask: Task | null
   totalTaskTimeLabel: string
   mode: FocusTimerMode
@@ -27,6 +31,12 @@ type TimerPanelProps = {
   hasActiveSession: boolean
   canStopFocus: boolean
   isFocusOnlyMode?: boolean
+}
+
+type TimerDraftParts = {
+  hours: string
+  minutes: string
+  seconds: string
 }
 
 const timerAccentStyles: Record<
@@ -137,6 +147,9 @@ export function TimerPanel({
   onToggleFocus,
   onStopFocus,
   onChangeMode,
+  onUpdateTimerTargetSeconds,
+  timerTargetSeconds = null,
+  isTimerAlarmActive = false,
   activeTask,
   totalTaskTimeLabel,
   mode,
@@ -176,19 +189,156 @@ export function TimerPanel({
   const taskTitle = activeTask?.title ?? copy.noTaskSelected
   const stopwatchLabel = normalizeStopwatchLabel(timeLabel)
   const playGlowRgb = timerPlayGlowRgbByColor[activeTask?.colorTag ?? 'blue']
+  const [timerDraftParts, setTimerDraftParts] = useState(() => parseHmsLabelToDraftParts(stopwatchLabel))
+  const [isTimerFieldsFocused, setIsTimerFieldsFocused] = useState(false)
+  const timerFieldsRef = useRef<HTMLDivElement>(null)
+  const progressAnimationFrameRef = useRef<number | null>(null)
+  const progressAnchorRef = useRef({ percent: 0, startedAtMs: 0 })
+  const [smoothedProgressPercent, setSmoothedProgressPercent] = useState(0)
   const playButtonGlowStyle = { '--timer-play-glow-rgb': playGlowRgb } as CSSProperties
   const toggleFocusAriaLabel = isRunning ? copy.pauseFocus : hasActiveSession ? copy.resumeFocus : copy.startFocus
   const toggleFocusIcon = isRunning ? faPause : faPlay
   const canToggleFocus = Boolean(activeTask)
   const rawProgress = typeof timerProgressPercent === 'number' && Number.isFinite(timerProgressPercent) ? timerProgressPercent : 0
   const progressPercent = Math.max(0, Math.min(100, rawProgress))
-  const progressDegrees = progressPercent * 3.6
+  const hasTimerCompleted =
+    mode === 'timer' &&
+    Boolean(timerTargetSeconds && timerTargetSeconds > 0) &&
+    stopwatchLabel === '00:00:00'
+  const isTimerCompletionVisual = hasTimerCompleted && isTimerAlarmActive
+  const hasAnimatedTimerProgress = Boolean(mode === 'timer' && isRunning && timerTargetSeconds && timerTargetSeconds > 0)
+  const effectiveProgressPercent = hasAnimatedTimerProgress ? smoothedProgressPercent : progressPercent
+  const renderProgressPercent = isTimerCompletionVisual ? 100 : hasTimerCompleted && !isTimerAlarmActive ? 0 : effectiveProgressPercent
+  const progressDegrees = renderProgressPercent * 3.6
+  const timerCompletePulseStyle = { '--timer-complete-glow-rgb': playGlowRgb } as CSSProperties
   const timerRingStyle = {
+    boxShadow: isTimerCompletionVisual
+      ? `0 0 0 1px rgba(255,255,255,0.3), 0 0 34px rgba(${playGlowRgb},0.68), 0 0 86px rgba(${playGlowRgb},0.44), 0 22px 40px rgba(2,6,23,0.56)`
+      : `0 0 0 1px rgba(255,255,255,0.2), 0 0 24px rgba(${playGlowRgb},0.42), 0 20px 34px rgba(2,6,23,0.44)`,
     background: `conic-gradient(rgba(${playGlowRgb},0.98) ${progressDegrees}deg, rgba(148,163,184,0.2) ${progressDegrees}deg 360deg)`,
+    transition: 'box-shadow 320ms ease-out',
+  } as CSSProperties
+  const timerMarkerStyle = {
+    boxShadow: `0 0 14px rgba(255,255,255,0.98), 0 0 34px rgba(${playGlowRgb},0.92), 0 0 62px rgba(${playGlowRgb},0.62)`,
   } as CSSProperties
 
-  const canSwitchToStopwatch = !hasActiveSession && Boolean(activeTask)
-  const canSwitchToTimer = !hasActiveSession && Boolean(activeTask) && canUseTimerMode
+  const canSwitchToStopwatch = !isRunning && Boolean(activeTask)
+  const canSwitchToTimer = !isRunning && Boolean(activeTask) && canUseTimerMode
+  const canEditTimerTarget =
+    mode === 'timer' &&
+    !isRunning &&
+    Boolean(activeTask) &&
+    typeof onUpdateTimerTargetSeconds === 'function'
+
+  useEffect(() => {
+    if (!isTimerFieldsFocused) {
+      setTimerDraftParts(parseHmsLabelToDraftParts(stopwatchLabel))
+    }
+  }, [isTimerFieldsFocused, stopwatchLabel])
+
+  useEffect(() => {
+    progressAnchorRef.current = {
+      percent: progressPercent,
+      startedAtMs: performance.now(),
+    }
+
+    if (!hasAnimatedTimerProgress) {
+      setSmoothedProgressPercent(progressPercent)
+    }
+  }, [hasAnimatedTimerProgress, progressPercent])
+
+  useEffect(() => {
+    if (progressAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(progressAnimationFrameRef.current)
+      progressAnimationFrameRef.current = null
+    }
+
+    if (!hasAnimatedTimerProgress || !timerTargetSeconds || timerTargetSeconds <= 0) {
+      setSmoothedProgressPercent(progressPercent)
+      return
+    }
+
+    const progressPerMillisecond = 100 / (timerTargetSeconds * 1000)
+    const animate = (now: number) => {
+      const { percent: anchorPercent, startedAtMs } = progressAnchorRef.current
+      const elapsedMs = Math.max(0, now - startedAtMs)
+      const nextProgress = Math.max(anchorPercent, Math.min(100, anchorPercent + elapsedMs * progressPerMillisecond))
+      setSmoothedProgressPercent(nextProgress)
+      progressAnimationFrameRef.current = window.requestAnimationFrame(animate)
+    }
+
+    progressAnimationFrameRef.current = window.requestAnimationFrame(animate)
+    return () => {
+      if (progressAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(progressAnimationFrameRef.current)
+        progressAnimationFrameRef.current = null
+      }
+    }
+  }, [hasAnimatedTimerProgress, progressPercent, timerTargetSeconds])
+
+  const cancelTimerEdit = () => {
+    setTimerDraftParts(parseHmsLabelToDraftParts(stopwatchLabel))
+    setIsTimerFieldsFocused(false)
+  }
+
+  const commitTimerEdit = () => {
+    if (!canEditTimerTarget) {
+      cancelTimerEdit()
+      return
+    }
+
+    const parsedSeconds = parseTimerDraftPartsToSeconds(timerDraftParts)
+    if (parsedSeconds === null) {
+      cancelTimerEdit()
+      return
+    }
+
+    onUpdateTimerTargetSeconds?.(parsedSeconds)
+    setTimerDraftParts(parseHmsLabelToDraftParts(formatSecondsHms(parsedSeconds)))
+    setIsTimerFieldsFocused(false)
+  }
+
+  const handleTimerFieldChange = (field: keyof TimerDraftParts, value: string) => {
+    setTimerDraftParts((current) => ({
+      ...current,
+      [field]: value.replace(/[^\d]/g, '').slice(0, 2),
+    }))
+  }
+
+  const handleTimerFieldFocus = () => {
+    if (!canEditTimerTarget) {
+      return
+    }
+
+    setIsTimerFieldsFocused(true)
+  }
+
+  const handleTimerFieldBlur = () => {
+    window.setTimeout(() => {
+      const root = timerFieldsRef.current
+      if (root && root.contains(document.activeElement)) {
+        return
+      }
+
+      setIsTimerFieldsFocused(false)
+      commitTimerEdit()
+    }, 0)
+  }
+
+  const handleTimerFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      commitTimerEdit()
+      event.currentTarget.blur()
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelTimerEdit()
+      event.currentTarget.blur()
+    }
+  }
 
   return (
     <>
@@ -267,30 +417,113 @@ export function TimerPanel({
 
               <div
                 className={classNames(
-                  'absolute inset-0 flex items-center justify-start pt-1 sm:pt-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform-style:preserve-3d]',
+                  'absolute inset-0 flex items-center justify-center pt-1 sm:pt-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform-style:preserve-3d]',
                   mode === 'timer'
                     ? 'opacity-100 [transform:translateX(0%)_rotateY(0deg)]'
                     : 'pointer-events-none opacity-0 [transform:translateX(18%)_rotateY(-34deg)]',
                 )}
               >
                 <div className="relative h-[min(72vw,17.6rem)] w-[min(72vw,17.6rem)] sm:h-[17.6rem] sm:w-[17.6rem]">
-                  <div className="absolute inset-0 rounded-full p-[4px] shadow-[0_18px_34px_rgba(2,6,23,0.44)]" style={timerRingStyle}>
-                    <div className="flex h-full w-full flex-col items-center justify-center rounded-full border border-slate-200/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),rgba(2,6,23,0.72)_55%,rgba(2,6,23,0.88))] px-5 text-center">
-                      <p
-                        className={classNames(
-                          'font-mono text-[clamp(40px,11.6vw,68px)] font-semibold leading-none tracking-tight tabular-nums text-slate-100',
-                          accents.timeGlowClassName,
-                        )}
-                      >
-                        {stopwatchLabel}
-                      </p>
+                  <div
+                    className={classNames('absolute inset-0 rounded-full p-[4px]', isTimerCompletionVisual && 'timer-complete-ring-breathe')}
+                    style={isTimerCompletionVisual ? { ...timerRingStyle, ...timerCompletePulseStyle } : timerRingStyle}
+                  >
+                    {isTimerCompletionVisual ? (
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-[-6px] rounded-full timer-complete-aura-breathe"
+                        style={timerCompletePulseStyle}
+                      />
+                    ) : null}
+                    <div
+                      className={classNames(
+                        'flex h-full w-full flex-col items-center justify-center rounded-full border border-white/20 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),rgba(2,6,23,0.72)_55%,rgba(2,6,23,0.88))] px-5 text-center',
+                        isTimerCompletionVisual && 'timer-complete-core-breathe',
+                      )}
+                      style={isTimerCompletionVisual ? timerCompletePulseStyle : undefined}
+                    >
+                      <div className="flex flex-col items-center">
+                        <div className="flex items-start justify-center gap-1.5 sm:gap-2.5" ref={timerFieldsRef}>
+                          <div className="flex flex-col items-center">
+                            <input
+                              aria-label="HH"
+                              className={classNames(
+                                'h-12 w-12 rounded-xl border border-slate-400/30 bg-[#0a1530]/70 text-center font-mono text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-100 outline-none transition sm:h-14 sm:w-14 sm:text-[34px]',
+                                canEditTimerTarget
+                                  ? 'focus:border-white/55 focus:bg-[#102347]'
+                                  : 'cursor-default text-slate-100/90',
+                                accents.timeGlowClassName,
+                              )}
+                              inputMode="numeric"
+                              onBlur={handleTimerFieldBlur}
+                              onChange={(event) => handleTimerFieldChange('hours', event.target.value)}
+                              onFocus={handleTimerFieldFocus}
+                              onKeyDown={handleTimerFieldKeyDown}
+                              readOnly={!canEditTimerTarget}
+                              value={timerDraftParts.hours}
+                            />
+                            <span className="mt-1.5 text-[10px] font-semibold tracking-[0.22em] text-slate-400">HH</span>
+                          </div>
+                          <span className="pt-2 font-mono text-2xl text-slate-300/85 sm:pt-2.5 sm:text-[28px]">:</span>
+                          <div className="flex flex-col items-center">
+                            <input
+                              aria-label="MM"
+                              className={classNames(
+                                'h-12 w-12 rounded-xl border border-slate-400/30 bg-[#0a1530]/70 text-center font-mono text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-100 outline-none transition sm:h-14 sm:w-14 sm:text-[34px]',
+                                canEditTimerTarget
+                                  ? 'focus:border-white/55 focus:bg-[#102347]'
+                                  : 'cursor-default text-slate-100/90',
+                                accents.timeGlowClassName,
+                              )}
+                              inputMode="numeric"
+                              onBlur={handleTimerFieldBlur}
+                              onChange={(event) => handleTimerFieldChange('minutes', event.target.value)}
+                              onFocus={handleTimerFieldFocus}
+                              onKeyDown={handleTimerFieldKeyDown}
+                              readOnly={!canEditTimerTarget}
+                              value={timerDraftParts.minutes}
+                            />
+                            <span className="mt-1.5 text-[10px] font-semibold tracking-[0.22em] text-slate-400">MM</span>
+                          </div>
+                          <span className="pt-2 font-mono text-2xl text-slate-300/85 sm:pt-2.5 sm:text-[28px]">:</span>
+                          <div className="flex flex-col items-center">
+                            <input
+                              aria-label="SS"
+                              className={classNames(
+                                'h-12 w-12 rounded-xl border border-slate-400/30 bg-[#0a1530]/70 text-center font-mono text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-100 outline-none transition sm:h-14 sm:w-14 sm:text-[34px]',
+                                canEditTimerTarget
+                                  ? 'focus:border-white/55 focus:bg-[#102347]'
+                                  : 'cursor-default text-slate-100/90',
+                                accents.timeGlowClassName,
+                              )}
+                              inputMode="numeric"
+                              onBlur={handleTimerFieldBlur}
+                              onChange={(event) => handleTimerFieldChange('seconds', event.target.value)}
+                              onFocus={handleTimerFieldFocus}
+                              onKeyDown={handleTimerFieldKeyDown}
+                              readOnly={!canEditTimerTarget}
+                              value={timerDraftParts.seconds}
+                            />
+                            <span className="mt-1.5 text-[10px] font-semibold tracking-[0.22em] text-slate-400">SS</span>
+                          </div>
+                        </div>
+                      </div>
                       <p className="mt-3 line-clamp-2 max-w-[86%] bg-slate-200/8 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
                         {taskTitle}
                       </p>
                     </div>
                   </div>
-                  <div className="pointer-events-none absolute inset-0" style={{ transform: `rotate(${progressDegrees}deg)` }}>
-                    <span className="absolute left-1/2 top-[2px] h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white/40 bg-white/95 shadow-[0_0_10px_rgba(255,255,255,0.7)]" />
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ transform: `rotate(${progressDegrees}deg)` }}
+                  >
+                    <span
+                      className={classNames(
+                        'absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/55 bg-white',
+                        isTimerCompletionVisual && 'timer-complete-marker-breathe',
+                      )}
+                      style={isTimerCompletionVisual ? { ...timerMarkerStyle, ...timerCompletePulseStyle } : timerMarkerStyle}
+                    />
                   </div>
                 </div>
               </div>
@@ -377,7 +610,7 @@ export function TimerPanel({
                   : 'cursor-not-allowed border-slate-800/70 bg-slate-900/20 text-slate-600',
               )}
               disabled={!canToggleFocus}
-              onClick={onToggleFocus}
+              onClick={() => onToggleFocus(mode)}
               style={canToggleFocus ? playButtonGlowStyle : undefined}
               type="button"
             >
@@ -413,4 +646,35 @@ function normalizeStopwatchLabel(timeLabel: string) {
   }
 
   return '00:00:00'
+}
+
+function parseHmsLabelToDraftParts(label: string): TimerDraftParts {
+  const normalized = normalizeStopwatchLabel(label)
+  const [hours = '00', minutes = '00', seconds = '00'] = normalized.split(':')
+  return {
+    hours,
+    minutes,
+    seconds,
+  }
+}
+
+function parseTimerDraftPartsToSeconds(parts: TimerDraftParts) {
+  const hours = Number((parts.hours || '0').trim())
+  const minutes = Number((parts.minutes || '0').trim())
+  const seconds = Number((parts.seconds || '0').trim())
+
+  if (![hours, minutes, seconds].every((value) => Number.isFinite(value) && value >= 0)) {
+    return null
+  }
+
+  if (minutes > 59 || seconds > 59) {
+    return null
+  }
+
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds
+  if (totalSeconds <= 0) {
+    return null
+  }
+
+  return Math.min(Math.round(totalSeconds), 24 * 60 * 60)
 }

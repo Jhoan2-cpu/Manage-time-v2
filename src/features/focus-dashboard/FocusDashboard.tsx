@@ -1274,17 +1274,44 @@ export function FocusDashboard({
         return
       }
 
+      const requestedMode = resolveTimerModeForTask(activeTask, requestedStartMode ?? timerMode)
+      if (requestedMode !== activeFocusSession.timer_mode) {
+        await activateTaskAndStartNewCount(activeTask, requestedMode)
+        return
+      }
+
       runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
 
       isFocusCommandInFlightRef.current = true
       try {
-        const response = await focusSessionCommand('resume', {
+        let response = await focusSessionCommand('resume', {
           expected_version: activeFocusSession.version,
         })
 
         if (!response) {
           onSignOut?.()
           return
+        }
+
+        if (requestedMode === 'timer' && response.data.active_focus_session) {
+          const desiredTargetSeconds = getTargetSecondsForStart(activeTask, 'timer')
+          if (
+            desiredTargetSeconds &&
+            response.data.active_focus_session.timer_mode === 'timer' &&
+            response.data.active_focus_session.target_seconds !== desiredTargetSeconds
+          ) {
+            response = {
+              ...response,
+              data: {
+                ...response.data,
+                active_focus_session: {
+                  ...response.data.active_focus_session,
+                  target_seconds: desiredTargetSeconds,
+                  elapsed_seconds_total: Math.min(response.data.active_focus_session.elapsed_seconds_total, desiredTargetSeconds),
+                },
+              },
+            }
+          }
         }
 
         applyFocusSessionEnvelope(response)
@@ -1397,7 +1424,7 @@ export function FocusDashboard({
     }
   }
   const handleChangeTimerMode = (nextMode: FocusTimerMode) => {
-    if (!activeTask || activeFocusSession) {
+    if (!activeTask || isFocusRunning) {
       return
     }
 
@@ -1407,6 +1434,41 @@ export function FocusDashboard({
 
     runNonBlockingFocusSideEffect(stopTimerEndAlarm)
     setTimerMode(nextMode)
+  }
+  const handleUpdateTimerTargetSeconds = (nextTargetSeconds: number) => {
+    if (!activeTask || !Number.isFinite(nextTargetSeconds)) {
+      return
+    }
+
+    const boundedSeconds = Math.max(1, Math.min(24 * 60 * 60, Math.round(nextTargetSeconds)))
+    const nextTargetDurationMinutes = boundedSeconds / 60
+
+    setTaskList((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === activeTask.id
+          ? {
+            ...task,
+            targetDurationMinutes: nextTargetDurationMinutes,
+          }
+          : task,
+      ),
+    )
+
+    if (
+      activeFocusSession &&
+      activeFocusSession.task_id === activeTask.id &&
+      activeFocusSession.session_state === 'paused' &&
+      activeFocusSession.timer_mode === 'timer'
+    ) {
+      applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? new Date().toISOString(), {
+        ...activeFocusSession,
+        target_seconds: boundedSeconds,
+        elapsed_seconds_total: Math.min(activeFocusSession.elapsed_seconds_total, boundedSeconds),
+      })
+    }
+
+    setSessionElapsedSeconds((currentSeconds) => Math.min(currentSeconds, boundedSeconds))
+    setTimerMode('timer')
   }
   const handlePlayTask = async (selectedTask: Task, preferredMode?: FocusTimerMode) => {
     if (activeTask && selectedTask.id === activeTask.id) {
@@ -1499,6 +1561,9 @@ export function FocusDashboard({
                 onChangeMode={handleChangeTimerMode}
                 onStopFocus={handleStopFocus}
                 onToggleFocus={handleToggleFocus}
+                onUpdateTimerTargetSeconds={handleUpdateTimerTargetSeconds}
+                timerTargetSeconds={activeTaskTargetSeconds}
+                isTimerAlarmActive={isTimerAlarmPlaying}
                 timeLabel={timerDisplayLabel}
                 timerProgressPercent={timerProgressPercent}
                 totalTaskTimeLabel={activeTaskTotalTimeLabel}
@@ -1572,6 +1637,9 @@ export function FocusDashboard({
                       onChangeMode={handleChangeTimerMode}
                       onStopFocus={handleStopFocus}
                       onToggleFocus={handleToggleFocus}
+                      onUpdateTimerTargetSeconds={handleUpdateTimerTargetSeconds}
+                      timerTargetSeconds={activeTaskTargetSeconds}
+                      isTimerAlarmActive={isTimerAlarmPlaying}
                       timeLabel={timerDisplayLabel}
                       timerProgressPercent={timerProgressPercent}
                       totalTaskTimeLabel={activeTaskTotalTimeLabel}

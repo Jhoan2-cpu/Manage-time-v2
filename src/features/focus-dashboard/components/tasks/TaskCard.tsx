@@ -4,7 +4,7 @@ import {
   faBell,
   faHourglassHalf,
   faPause,
-  faStopwatch,
+  faPlay,
 } from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../../i18n'
 import { taskColorMap, taskIconMap } from '../../constants/taskOptions'
@@ -82,19 +82,20 @@ export function TaskCard({
     typeof task.targetDurationMinutes === 'number' && Number.isFinite(task.targetDurationMinutes) && task.targetDurationMinutes > 0
       ? formatTargetTimerChip(task.targetDurationMinutes)
       : null
+  const defaultStartMode: FocusTimerMode = timerPresetLabel ? 'timer' : 'stopwatch'
   const cardGlowStyle = { '--task-card-glow-rgb': taskCardGlowRgbByColor[task.colorTag] } as CSSProperties
   const copy =
     locale === 'es'
       ? {
         pause: 'Pausar',
         alarm: 'Alarma',
-        startStopwatch: 'Iniciar cronometro',
+        startFocus: 'Iniciar enfoque',
         timer: 'Temporizador',
       }
       : {
         pause: 'Pause',
         alarm: 'Alarm',
-        startStopwatch: 'Start stopwatch',
+        startFocus: 'Start focus',
         timer: 'Timer',
       }
 
@@ -157,8 +158,7 @@ export function TaskCard({
             <span
               aria-label={`${copy.alarm} ${alarmLabel}`}
               className={classNames(
-                'pointer-events-none inline-flex h-7 items-center gap-1 rounded-lg border px-1.5 text-[10px] font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]',
-                colorStyles.iconShellClassName,
+                'pointer-events-none inline-flex h-7 items-center gap-1 px-1 text-[10px] font-medium text-slate-200/90',
               )}
               title={`${copy.alarm} ${alarmLabel}`}
             >
@@ -168,38 +168,32 @@ export function TaskCard({
           ) : null}
 
           {timerPresetLabel ? (
-            <button
+            <span
               aria-label={`${copy.timer} ${timerPresetLabel}`}
               className={classNames(
-                'inline-flex h-7 items-center gap-1 rounded-lg border px-1.5 text-[10px] font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:brightness-110',
-                colorStyles.iconShellClassName,
+                'pointer-events-none inline-flex h-7 items-center gap-1 px-1 text-[10px] font-medium text-slate-200/90',
               )}
-              onClick={() => {
-                onAcknowledgeAlarmAttention?.(task)
-                onPlayTask?.(task, 'timer')
-              }}
-              type="button"
             >
               <FontAwesomeIcon className="text-[9px]" icon={faHourglassHalf} />
               <span className="font-mono">{timerPresetLabel}</span>
-            </button>
+            </span>
           ) : null}
 
           <button
-            aria-label={`${isActiveRunning ? copy.pause : copy.startStopwatch} ${task.title}`}
+            aria-label={`${isActiveRunning ? copy.pause : copy.startFocus} ${task.title}`}
             className={classNames(
               'grid h-7 w-7 place-items-center rounded-full border transition shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:brightness-110',
               colorStyles.iconShellClassName,
             )}
             onClick={() => {
               onAcknowledgeAlarmAttention?.(task)
-              onPlayTask?.(task, 'stopwatch')
+              onPlayTask?.(task, defaultStartMode)
             }}
             type="button"
           >
             <FontAwesomeIcon
               className={classNames(isActiveRunning ? 'text-[10px]' : 'text-[11px]')}
-              icon={isActiveRunning ? faPause : faStopwatch}
+              icon={isActiveRunning ? faPause : faPlay}
             />
           </button>
         </div>

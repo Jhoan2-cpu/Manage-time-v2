@@ -302,6 +302,102 @@ body {
   animation: timer-play-paused-blink 1.2s ease-in-out infinite;
 }
 
+@keyframes timer-complete-ring-breathe {
+  0% {
+    filter: brightness(1) saturate(1);
+    opacity: 0.88;
+  }
+  50% {
+    filter: brightness(1.32) saturate(1.34);
+    opacity: 1;
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+    opacity: 0.88;
+  }
+}
+
+.timer-complete-ring-breathe {
+  will-change: filter, opacity;
+  animation: timer-complete-ring-breathe 2.9s ease-in-out infinite;
+}
+
+@keyframes timer-complete-core-breathe {
+  0% {
+    filter: brightness(1);
+    box-shadow:
+      inset 0 0 0 1px rgba(var(--timer-complete-glow-rgb), 0.14),
+      0 0 0 rgba(var(--timer-complete-glow-rgb), 0);
+  }
+  50% {
+    filter: brightness(1.26);
+    box-shadow:
+      inset 0 0 0 1px rgba(var(--timer-complete-glow-rgb), 0.46),
+      0 0 44px rgba(var(--timer-complete-glow-rgb), 0.34),
+      0 0 86px rgba(var(--timer-complete-glow-rgb), 0.24);
+  }
+  100% {
+    filter: brightness(1);
+    box-shadow:
+      inset 0 0 0 1px rgba(var(--timer-complete-glow-rgb), 0.14),
+      0 0 0 rgba(var(--timer-complete-glow-rgb), 0);
+  }
+}
+
+.timer-complete-core-breathe {
+  will-change: box-shadow, filter;
+  animation: timer-complete-core-breathe 2.9s ease-in-out infinite;
+}
+
+@keyframes timer-complete-aura-breathe {
+  0% {
+    opacity: 0.4;
+    filter: blur(6px);
+    box-shadow:
+      0 0 22px rgba(var(--timer-complete-glow-rgb), 0.24),
+      0 0 44px rgba(var(--timer-complete-glow-rgb), 0.12);
+  }
+  50% {
+    opacity: 0.88;
+    filter: blur(13px);
+    box-shadow:
+      0 0 46px rgba(var(--timer-complete-glow-rgb), 0.5),
+      0 0 112px rgba(var(--timer-complete-glow-rgb), 0.3);
+  }
+  100% {
+    opacity: 0.4;
+    filter: blur(6px);
+    box-shadow:
+      0 0 22px rgba(var(--timer-complete-glow-rgb), 0.24),
+      0 0 44px rgba(var(--timer-complete-glow-rgb), 0.12);
+  }
+}
+
+.timer-complete-aura-breathe {
+  will-change: opacity, filter, box-shadow;
+  animation: timer-complete-aura-breathe 2.9s ease-in-out infinite;
+}
+
+@keyframes timer-complete-marker-breathe {
+  0% {
+    opacity: 0.88;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.35);
+  }
+  100% {
+    opacity: 0.88;
+    filter: brightness(1);
+  }
+}
+
+.timer-complete-marker-breathe {
+  will-change: opacity, filter;
+  animation: timer-complete-marker-breathe 2.9s ease-in-out infinite;
+}
+
 @keyframes task-card-focus-ignite {
   0% {
     box-shadow:
@@ -540,7 +636,11 @@ body {
   .task-card-scheduled-alarm-alert,
   .task-card-scheduled-alarm-alert::after,
   .task-card-alarm-chip-alert,
-  .task-card-alarm-time-alert {
+  .task-card-alarm-time-alert,
+  .timer-complete-ring-breathe,
+  .timer-complete-core-breathe,
+  .timer-complete-aura-breathe,
+  .timer-complete-marker-breathe {
     animation: none !important;
   }
 }
