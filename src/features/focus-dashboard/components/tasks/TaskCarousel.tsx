@@ -10,6 +10,7 @@ import { TaskCard } from './TaskCard'
 type TaskCarouselProps = {
   tasks: Task[]
   sessionCountByTaskId: Record<string, number>
+  taskCooldownEndsAtMsByTaskId?: Record<string, number>
   isFocusRunning?: boolean
   accentColorTag?: TaskColorKey
   effectiveTimeZone?: string
@@ -73,6 +74,7 @@ const carouselScrollbarStyleByColor: Record<TaskColorKey, CSSProperties> = {
 export function TaskCarousel({
   tasks,
   sessionCountByTaskId,
+  taskCooldownEndsAtMsByTaskId = {},
   isFocusRunning = false,
   accentColorTag = 'blue',
   effectiveTimeZone,
@@ -320,6 +322,7 @@ export function TaskCarousel({
                 tasks.map((task) => (
                   <div className="snap-start" key={task.id}>
                     <TaskCard
+                      cooldownEndsAtMs={taskCooldownEndsAtMsByTaskId[task.id]}
                       isAlarmAttentionActive={Boolean(alarmAttentionByTaskId[task.id])}
                       isRunning={isFocusRunning}
                       onAcknowledgeAlarmAttention={handleAcknowledgeAlarmAttention}

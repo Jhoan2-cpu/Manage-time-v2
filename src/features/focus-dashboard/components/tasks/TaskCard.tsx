@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faBell,
@@ -20,6 +20,7 @@ type TaskCardProps = {
   onAcknowledgeAlarmAttention?: (task: Task) => void
   onPlayTask?: (task: Task, preferredMode?: FocusTimerMode) => void
   onEditTask?: (task: Task) => void
+  cooldownEndsAtMs?: number
 }
 
 const taskStateStyles: Record<TaskState, { shell: string }> = {
@@ -61,6 +62,8 @@ const taskCardTiltClassByColor: Record<Task['colorTag'], string> = {
   violet: '-rotate-[0.25deg]',
 }
 
+const TASK_CARD_COOLDOWN_MS = 3000
+
 export function TaskCard({
   task,
   sessionCount,
@@ -69,6 +72,7 @@ export function TaskCard({
   onAcknowledgeAlarmAttention,
   onPlayTask,
   onEditTask,
+  cooldownEndsAtMs,
 }: TaskCardProps) {
   const { locale } = useI18n()
   const stateStyles = taskStateStyles[task.state]
@@ -77,6 +81,23 @@ export function TaskCard({
   const iconTextClassName = taskCardIconTextClassByColor[task.colorTag]
   const isActive = task.state === 'active'
   const isActiveRunning = isActive && isRunning
+  const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now())
+  const hasCooldownEnd = typeof cooldownEndsAtMs === 'number' && Number.isFinite(cooldownEndsAtMs)
+  const cooldownRemainingMs = hasCooldownEnd ? Math.max(0, Math.round(cooldownEndsAtMs - cooldownNowMs)) : 0
+  const isCooldownActive = cooldownRemainingMs > 0
+  const cooldownProgressPercent = hasCooldownEnd
+    ? Math.max(
+      0,
+      Math.min(100, ((TASK_CARD_COOLDOWN_MS - cooldownRemainingMs) / TASK_CARD_COOLDOWN_MS) * 100),
+    )
+    : 0
+  const cooldownProgressDegrees = cooldownProgressPercent * 3.6
+  const canTriggerFocus = !isCooldownActive || isActiveRunning
+  const cooldownSecondsLabel = Math.max(1, Math.ceil(cooldownRemainingMs / 1000))
+  const cooldownRingStyle = {
+    background: `conic-gradient(rgba(${taskCardGlowRgbByColor[task.colorTag]},0.96) ${cooldownProgressDegrees}deg, rgba(148,163,184,0.24) ${cooldownProgressDegrees}deg 360deg)`,
+    boxShadow: `0 0 14px rgba(${taskCardGlowRgbByColor[task.colorTag]},0.35)`,
+  } as CSSProperties
   const alarmLabel = typeof task.alarmTime === 'string' && task.alarmTime.trim() ? task.alarmTime.trim() : null
   const timerPresetLabel =
     typeof task.targetDurationMinutes === 'number' && Number.isFinite(task.targetDurationMinutes) && task.targetDurationMinutes > 0
@@ -99,6 +120,27 @@ export function TaskCard({
         timer: 'Timer',
       }
 
+  useEffect(() => {
+    if (!hasCooldownEnd || !cooldownEndsAtMs) {
+      return
+    }
+
+    let animationFrame = 0
+    const tick = () => {
+      setCooldownNowMs(Date.now())
+      if (Date.now() < cooldownEndsAtMs) {
+        animationFrame = window.requestAnimationFrame(tick)
+      }
+    }
+
+    tick()
+    return () => {
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame)
+      }
+    }
+  }, [cooldownEndsAtMs, hasCooldownEnd])
+
   return (
     <article
       className={classNames(
@@ -109,6 +151,7 @@ export function TaskCard({
         !isActive && 'task-card-hover-glow',
         isActive && 'task-card-focus-ignite',
         isAlarmAttentionActive && 'task-card-scheduled-alarm-alert',
+        isCooldownActive && 'opacity-90',
         colorStyles.cardClassName,
         isActive && classNames('ring-2 ring-inset', colorStyles.selectedRingClassName),
         stateStyles.shell,
@@ -121,11 +164,23 @@ export function TaskCard({
           return
         }
 
+        if (isCooldownActive) {
+          return
+        }
+
         onEditTask?.(task)
       }}
       style={cardGlowStyle}
       data-session-count={sessionCount}
     >
+      {isCooldownActive ? (
+        <div className="pointer-events-none absolute right-1.5 top-1.5 z-20 h-7 w-7 rounded-full p-[2px]" style={cooldownRingStyle}>
+          <div className="grid h-full w-full place-items-center rounded-full border border-slate-200/30 bg-[#061328]/85 text-[10px] font-mono font-semibold text-slate-100">
+            {cooldownSecondsLabel}
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex items-start gap-1.5">
         <div className="min-w-0 flex flex-1 items-start gap-1.5">
           <span
@@ -182,10 +237,15 @@ export function TaskCard({
           <button
             aria-label={`${isActiveRunning ? copy.pause : copy.startFocus} ${task.title}`}
             className={classNames(
-              'grid h-7 w-7 place-items-center rounded-full border transition shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:brightness-110',
+              'grid h-7 w-7 place-items-center rounded-full border transition shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55',
               colorStyles.iconShellClassName,
             )}
+            disabled={!canTriggerFocus}
             onClick={() => {
+              if (!canTriggerFocus) {
+                return
+              }
+
               onAcknowledgeAlarmAttention?.(task)
               onPlayTask?.(task, defaultStartMode)
             }}

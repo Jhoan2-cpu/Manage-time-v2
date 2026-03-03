@@ -30,6 +30,7 @@ type TimerPanelProps = {
   isRunning: boolean
   hasActiveSession: boolean
   canStopFocus: boolean
+  isToggleCooldownActive?: boolean
   isFocusOnlyMode?: boolean
 }
 
@@ -158,6 +159,7 @@ export function TimerPanel({
   isRunning,
   hasActiveSession,
   canStopFocus,
+  isToggleCooldownActive = false,
   isFocusOnlyMode = false,
 }: TimerPanelProps) {
   const { locale } = useI18n()
@@ -199,7 +201,7 @@ export function TimerPanel({
   const playButtonGlowStyle = { '--timer-play-glow-rgb': playGlowRgb } as CSSProperties
   const toggleFocusAriaLabel = isRunning ? copy.pauseFocus : hasActiveSession ? copy.resumeFocus : copy.startFocus
   const toggleFocusIcon = isRunning ? faPause : faPlay
-  const canToggleFocus = Boolean(activeTask)
+  const canToggleFocus = Boolean(activeTask) && !isToggleCooldownActive
   const rawProgress = typeof timerProgressPercent === 'number' && Number.isFinite(timerProgressPercent) ? timerProgressPercent : 0
   const progressPercent = Math.max(0, Math.min(100, rawProgress))
   const hasTimerCompleted =

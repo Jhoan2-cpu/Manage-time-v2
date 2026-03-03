@@ -95,6 +95,7 @@ const FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES: AppBootstrapInclude[] = [
   'dashboard_stats',
   'active_focus_session',
 ]
+const TASK_START_COOLDOWN_MS = 3000
 
 export function FocusDashboard({
   userName,
@@ -195,6 +196,7 @@ export function FocusDashboard({
     onSignOut,
   })
   const [workspaceGlowPulseKey, setWorkspaceGlowPulseKey] = useState(0)
+  const [taskCooldownEndsAtByTaskId, setTaskCooldownEndsAtByTaskId] = useState<Record<string, number>>({})
   const latestPreferencesRef = useRef<UserPreferences | null>(bootstrapData?.preferences ?? null)
   const pendingPreferencesPatchRef = useRef<UpdatePreferencesPayload>({})
   const preferencesPatchTimerRef = useRef<number | null>(null)
@@ -308,6 +310,48 @@ export function FocusDashboard({
     }, debounceMs)
   }
 
+  const startTaskCooldown = (taskId: string | null | undefined) => {
+    if (!taskId) {
+      return
+    }
+
+    setTaskCooldownEndsAtByTaskId((current) => ({
+      ...current,
+      [taskId]: Date.now() + TASK_START_COOLDOWN_MS,
+    }))
+  }
+
+  const isTaskCooldownActive = (taskId: string | null | undefined) => {
+    if (!taskId) {
+      return false
+    }
+
+    const cooldownEndsAt = taskCooldownEndsAtByTaskId[taskId]
+    return typeof cooldownEndsAt === 'number' && cooldownEndsAt > Date.now()
+  }
+
+  useEffect(() => {
+    if (Object.keys(taskCooldownEndsAtByTaskId).length === 0) {
+      return
+    }
+
+    const pruneIntervalId = window.setInterval(() => {
+      setTaskCooldownEndsAtByTaskId((current) => {
+        const nowMs = Date.now()
+        const nextEntries = Object.entries(current).filter(([, endsAt]) => endsAt > nowMs)
+        if (nextEntries.length === Object.keys(current).length) {
+          return current
+        }
+
+        return Object.fromEntries(nextEntries)
+      })
+    }, 300)
+
+    return () => {
+      window.clearInterval(pruneIntervalId)
+    }
+  }, [taskCooldownEndsAtByTaskId])
+
   const handleToggleBackgroundMusicPersist = () => {
     const nextValue = !isBackgroundMusicPlaying
     handleToggleBackgroundMusic()
@@ -401,6 +445,15 @@ export function FocusDashboard({
     }
 
     cleanupTaskUiStateAfterDelete(deletedTaskId)
+    setTaskCooldownEndsAtByTaskId((current) => {
+      if (!(deletedTaskId in current)) {
+        return current
+      }
+
+      const next = { ...current }
+      delete next[deletedTaskId]
+      return next
+    })
     setTaskPendingSwitchConfirm((current) => (current?.task.id === deletedTaskId ? null : current))
   }
 
@@ -860,6 +913,7 @@ export function FocusDashboard({
     () => (activeTask ? localizeStaticTaskTitle(activeTask, locale) : null),
     [activeTask, locale],
   )
+  const isActiveTaskCooldownActive = Boolean(activeTask && isTaskCooldownActive(activeTask.id) && !isFocusRunning)
   const activeWorkspaceAccentColor = activeTask?.colorTag ?? 'blue'
   const workspaceAccentRgb = workspaceAccentRgbByColor[activeWorkspaceAccentColor]
   const carouselTaskList = useMemo(
@@ -1007,6 +1061,7 @@ export function FocusDashboard({
               Math.min(elapsedBeforeStop, activeTaskTargetSeconds)
             setSessionElapsedSeconds(Math.max(0, completedSeconds))
             setIsFocusRunning(false)
+            startTaskCooldown(activeFocusSession.task_id)
             if (!response.data.created_time_entry_id) {
               commitCurrentFocusSession(completedSeconds)
             } else {
@@ -1238,6 +1293,7 @@ export function FocusDashboard({
 
     isFocusCommandInFlightRef.current = true
     try {
+      const previousSessionTaskId = activeFocusSession.task_id
       const response = await focusSessionCommand('switch-task', {
         expected_version: activeFocusSession.version,
         task_id: selectedTask.id,
@@ -1261,6 +1317,9 @@ export function FocusDashboard({
       void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
       setSessionElapsedSeconds(0)
       setTimerMode(nextMode)
+      if (previousSessionTaskId !== selectedTask.id) {
+        startTaskCooldown(previousSessionTaskId)
+      }
       runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
       setIsFocusRunning(true)
     } catch (error) {
@@ -1277,6 +1336,11 @@ export function FocusDashboard({
     requestedStartTargetSeconds?: number,
   ) => {
     if (!activeTask) {
+      return
+    }
+
+    const isSessionCurrentlyRunning = activeFocusSession?.session_state === 'running' || isFocusRunning
+    if (!isSessionCurrentlyRunning && isTaskCooldownActive(activeTask.id)) {
       return
     }
 
@@ -1313,6 +1377,7 @@ export function FocusDashboard({
 
           applyFocusSessionEnvelope(response)
           setIsFocusRunning(false)
+          startTaskCooldown(activeFocusSession.task_id)
           runNonBlockingFocusSideEffect(handleStartUntrackedSession)
         } catch (error) {
           const handled = await handleFocusSessionApiError(error)
@@ -1443,6 +1508,7 @@ export function FocusDashboard({
       setSessionElapsedSeconds(0)
       setIsFocusRunning(false)
       resetCountersAfterStop(activeTask?.id, timerMode)
+      startTaskCooldown(activeTask?.id)
       runNonBlockingFocusSideEffect(handleStartUntrackedSession)
       return
     }
@@ -1472,6 +1538,7 @@ export function FocusDashboard({
       setSessionElapsedSeconds(0)
       setIsFocusRunning(false)
       resetCountersAfterStop(activeSessionTaskId, activeSessionMode)
+      startTaskCooldown(activeSessionTaskId)
 
       if (stoppedElapsed > 0 && !response.data.created_time_entry_id) {
         runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(stoppedElapsed))
@@ -1572,6 +1639,10 @@ export function FocusDashboard({
     })()
   }
   const handlePlayTask = async (selectedTask: Task, preferredMode?: FocusTimerMode) => {
+    if (isTaskCooldownActive(selectedTask.id)) {
+      return
+    }
+
     if (activeTask && selectedTask.id === activeTask.id) {
       const nextPreferredMode = timerMode
       await handleToggleFocus(nextPreferredMode)
@@ -1657,6 +1728,7 @@ export function FocusDashboard({
                 canUseTimerMode={Boolean(activeTaskTargetSeconds)}
                 canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
                 hasActiveSession={Boolean(activeFocusSession)}
+                isToggleCooldownActive={isActiveTaskCooldownActive}
                 isFocusOnlyMode
                 isRunning={isFocusRunning}
                 mode={timerMode}
@@ -1727,6 +1799,7 @@ export function FocusDashboard({
                       onEditTask={handleEditTask}
                       onPlayTask={handlePlayTask}
                       sessionCountByTaskId={sessionCountByTaskId}
+                      taskCooldownEndsAtMsByTaskId={taskCooldownEndsAtByTaskId}
                       tasks={carouselTaskList}
                     />
                     <TimerPanel
@@ -1734,6 +1807,7 @@ export function FocusDashboard({
                       canUseTimerMode={Boolean(activeTaskTargetSeconds)}
                       canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
                       hasActiveSession={Boolean(activeFocusSession)}
+                      isToggleCooldownActive={isActiveTaskCooldownActive}
                       isRunning={isFocusRunning}
                       mode={timerMode}
                       onChangeMode={handleChangeTimerMode}
