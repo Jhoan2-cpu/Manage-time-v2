@@ -2,21 +2,16 @@ import { ApiHttpError, apiFetch, ensureCsrfCookie, parseJsonResponse } from '../
 import type { AppLocale } from '../../i18n/messages'
 import {
   isMockBackendEnabled,
-  mockCreateTask,
   mockCreateTimeEntry,
-  mockDeleteTask,
   mockFocusSessionCommand,
   mockGetActiveFocusSession,
-  mockGetAppBootstrap,
   mockGetHistoryDayDetail,
   mockGetHistoryDays,
   mockGetHistoryOverview,
   mockGetPreferences,
-  mockGetTasks,
   mockReorderTasks,
   mockStartFocusSession,
   mockUpdatePreferences,
-  mockUpdateTask,
 } from '../../lib/mock/mockBackend'
 
 export type AppBootstrapInclude =
@@ -130,19 +125,36 @@ type PreferencesEnvelope = {
   data: UserPreferences
 }
 
-export type TaskApiItem = AppBootstrapTaskItem
-export type TaskApiColorTag = AppBootstrapTaskItem['color_tag']
-export type TaskApiIconTag = AppBootstrapTaskItem['icon_tag']
+export type TaskApiItem = {
+  id: string
+  user_id: string
+  name: string
+  icon_tag: string | null
+  color_tag: string | null
+  alarm_time_local: string | null
+  timer_initial_seconds: number | null
+  version: number
+  created_at: string
+  updated_at: string
+}
+export type TaskApiColorTag = TaskApiItem['color_tag']
+export type TaskApiIconTag = TaskApiItem['icon_tag']
 
 export type CreateTaskPayload = {
-  title: string
+  name: string
   color_tag: TaskApiColorTag
   icon_tag: TaskApiIconTag
-  target_duration_seconds: number | null
   alarm_time_local: string | null
 }
 
-export type UpdateTaskPayload = Partial<CreateTaskPayload>
+export type UpdateTaskPayload = {
+  if_version: number
+  name?: string
+  color_tag?: TaskApiColorTag
+  icon_tag?: TaskApiIconTag
+  alarm_time_local?: string | null
+  timer_initial_seconds?: number | null
+}
 
 type TasksListEnvelope = {
   data: TaskApiItem[]
@@ -150,6 +162,18 @@ type TasksListEnvelope = {
 
 type TaskEnvelope = {
   data: TaskApiItem
+}
+
+export type TaskVersionConflictEnvelope = {
+  message: string
+  code: 'VERSION_CONFLICT'
+  data?: {
+    current?: {
+      id?: string
+      version?: number
+      updated_at?: string
+    }
+  }
 }
 
 export type ActiveFocusSession = AppBootstrapActiveFocusSession
@@ -308,11 +332,6 @@ type TimeEntryCreatedEnvelope = {
 }
 
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
-  if (isMockBackendEnabled()) {
-    const data = mockGetAppBootstrap()
-    return data ? (data as AppBootstrapData) : null
-  }
-
   try {
     const response = await requestBootstrap(options.include)
     if (response.status === 401) {
@@ -377,12 +396,7 @@ export async function updatePreferences(payload: UpdatePreferencesPayload) {
 }
 
 export async function getTasks() {
-  if (isMockBackendEnabled()) {
-    const data = mockGetTasks()
-    return data ? (data as TaskApiItem[]) : null
-  }
-
-  const response = await apiFetch('/api/v1/tasks', { method: 'GET' })
+  const response = await apiFetch('/api/v1/focus/tasks', { method: 'GET' })
   if (response.status === 401) {
     return null
   }
@@ -392,14 +406,12 @@ export async function getTasks() {
 }
 
 export async function createTask(payload: CreateTaskPayload) {
-  if (isMockBackendEnabled()) {
-    const data = mockCreateTask(payload)
-    return data ? (data as TaskApiItem) : null
-  }
-
   await ensureCsrfCookie()
-  const response = await apiFetch('/api/v1/tasks', {
+  const response = await apiFetch('/api/v1/focus/tasks', {
     method: 'POST',
+    headers: {
+      'X-Origin-Device-Id': getOrCreateOriginDeviceId(),
+    },
     body: JSON.stringify(payload),
   })
 
@@ -412,14 +424,12 @@ export async function createTask(payload: CreateTaskPayload) {
 }
 
 export async function updateTask(taskId: string, payload: UpdateTaskPayload) {
-  if (isMockBackendEnabled()) {
-    const data = mockUpdateTask(taskId, payload)
-    return data ? (data as TaskApiItem) : null
-  }
-
   await ensureCsrfCookie()
-  const response = await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`, {
+  const response = await apiFetch(`/api/v1/focus/tasks/${encodeURIComponent(taskId)}`, {
     method: 'PATCH',
+    headers: {
+      'X-Origin-Device-Id': getOrCreateOriginDeviceId(),
+    },
     body: JSON.stringify(payload),
   })
 
@@ -431,15 +441,15 @@ export async function updateTask(taskId: string, payload: UpdateTaskPayload) {
   return json.data
 }
 
-export async function deleteTask(taskId: string) {
-  if (isMockBackendEnabled()) {
-    const result = mockDeleteTask(taskId)
-    return result ?? null
-  }
-
+export async function deleteTask(taskId: string, options: { ifVersion: number }) {
   await ensureCsrfCookie()
-  const response = await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`, {
+  const expectedVersion = Math.max(1, Math.floor(options.ifVersion))
+  const response = await apiFetch(`/api/v1/focus/tasks/${encodeURIComponent(taskId)}?if_version=${expectedVersion}`, {
     method: 'DELETE',
+    headers: {
+      'If-Match': `${expectedVersion}`,
+      'X-Origin-Device-Id': getOrCreateOriginDeviceId(),
+    },
   })
 
   if (response.status === 401) {
@@ -677,6 +687,38 @@ export function getFocusSessionConflictFromApiError(error: unknown) {
   } satisfies FocusSessionConflictEnvelope
 }
 
+export function getTaskVersionConflictFromApiError(error: unknown) {
+  if (!(error instanceof ApiHttpError) || error.status !== 409) {
+    return null
+  }
+
+  const body = error.body as Partial<TaskVersionConflictEnvelope> | null
+  if (!body || body.code !== 'VERSION_CONFLICT') {
+    return null
+  }
+
+  return {
+    message: typeof body.message === 'string' && body.message.trim() ? body.message : 'Version conflict.',
+    code: 'VERSION_CONFLICT' as const,
+    data: {
+      current: {
+        id:
+          typeof body.data?.current?.id === 'string'
+            ? body.data.current.id
+            : undefined,
+        version:
+          typeof body.data?.current?.version === 'number' && Number.isFinite(body.data.current.version)
+            ? body.data.current.version
+            : undefined,
+        updated_at:
+          typeof body.data?.current?.updated_at === 'string'
+            ? body.data.current.updated_at
+            : undefined,
+      },
+    },
+  } satisfies TaskVersionConflictEnvelope
+}
+
 async function requestBootstrap(include?: AppBootstrapInclude[]) {
   const includeQuery =
     Array.isArray(include) && include.length > 0
@@ -684,6 +726,27 @@ async function requestBootstrap(include?: AppBootstrapInclude[]) {
       : ''
 
   return apiFetch(`/api/v1/app/bootstrap${includeQuery}`, { method: 'GET' })
+}
+
+export function getOrCreateOriginDeviceId() {
+  if (typeof window === 'undefined') {
+    return 'web-server'
+  }
+
+  const storageKey = 'velor_origin_device_id'
+  const existing = window.localStorage.getItem(storageKey)?.trim()
+  if (existing) {
+    return existing
+  }
+
+  const randomPart =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10)
+
+  const next = `web-${randomPart}`
+  window.localStorage.setItem(storageKey, next)
+  return next
 }
 
 function isFocusSessionConflictCode(value: unknown): value is FocusSessionConflictCode {

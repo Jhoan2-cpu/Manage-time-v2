@@ -47,12 +47,64 @@ export function getOrCreateReverbEchoClient() {
     forceTLS: config.scheme === 'https',
     enabledTransports: ['ws', 'wss'],
     authEndpoint: `${API_BASE_URL}/broadcasting/auth`,
-    withCredentials: true,
     auth: {
       headers: {
         ...(config.xsrfToken ? { 'X-XSRF-TOKEN': config.xsrfToken } : {}),
       },
     },
+    authorizer: (channel: { name: string }) => ({
+      authorize: async (socketId: string, callback: (error: boolean, data: unknown) => void) => {
+        try {
+          let xsrfToken = readCookieValue('XSRF-TOKEN')
+          if (!xsrfToken) {
+            await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                Accept: 'application/json',
+              },
+            })
+            xsrfToken = readCookieValue('XSRF-TOKEN')
+          }
+
+          const decodedXsrfToken = xsrfToken ? decodeURIComponent(xsrfToken) : null
+          const response = await fetch(`${API_BASE_URL}/broadcasting/auth`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'X-Requested-With': 'XMLHttpRequest',
+              ...(decodedXsrfToken ? { 'X-XSRF-TOKEN': decodedXsrfToken } : {}),
+            },
+            body: new URLSearchParams({
+              socket_id: socketId,
+              channel_name: channel.name,
+            }).toString(),
+          })
+
+          if (!response.ok) {
+            let responseBody: unknown = null
+            try {
+              responseBody = await response.json()
+            } catch {
+              responseBody = await response.text()
+            }
+
+            callback(true, {
+              status: response.status,
+              body: responseBody,
+            })
+            return
+          }
+
+          const data = await response.json()
+          callback(false, data)
+        } catch (error) {
+          callback(true, error)
+        }
+      },
+    }),
   })
   echoConfigSignature = signature
 
@@ -111,4 +163,3 @@ function readCookieValue(name: string) {
 
   return null
 }
-

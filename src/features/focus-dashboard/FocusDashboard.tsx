@@ -18,11 +18,11 @@ import { NewTaskModal, type NewTaskPayload } from './components/tasks/NewTaskMod
 import { SwitchTaskConfirmModal } from './components/tasks/SwitchTaskConfirmModal'
 import { TimerPanel } from './components/TimerPanel'
 import { TaskCarousel } from './components/tasks/TaskCarousel'
-import { historyLogEntries, logEntries as initialLogEntries, tasks } from './data/mockData'
 import { useCurrentTime } from './hooks/useCurrentTime'
 import { useFocusSessionController } from './hooks/useFocusSessionController'
 import { useFocusRealtimeChannel, type FocusRealtimeEvent } from './hooks/useFocusRealtimeChannel'
 import { useFocusDashboardShellState } from './hooks/useFocusDashboardShellState'
+import { useTaskcardsRealtimeChannel, type TaskcardsRealtimeEvent } from './hooks/useTaskcardsRealtimeChannel'
 import { useTaskManagementState } from './hooks/useTaskManagementState'
 import {
   createTask as createTaskApi,
@@ -32,6 +32,8 @@ import {
   getAppBootstrap,
   getActiveFocusSession,
   getFocusSessionConflictFromApiError,
+  getOrCreateOriginDeviceId,
+  getTaskVersionConflictFromApiError,
   getTasks as getTasksApi,
   startFocusSession,
   updatePreferences,
@@ -51,7 +53,7 @@ import {
   adaptTaskItemToUi,
 } from './bootstrapAdapter'
 import { buildUntrackedCreateTimeEntryPayloadFromSession } from './historyApiAdapter'
-import type { FocusTimerMode, LogEntry, Task, TaskColorKey } from './types'
+import type { FocusTimerMode, LogEntry, Task, TaskColorKey, TaskIconKey } from './types'
 import { classNames } from './utils/classNames'
 import { formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
 import { useI18n } from '../../i18n'
@@ -88,6 +90,8 @@ const fallbackDashboardStats = {
   focusTime: '0m 00s',
   totalTracked: '0m 00s',
 }
+const emptyFallbackTasks: Task[] = []
+const emptyFallbackLogEntries: LogEntry[] = []
 
 const FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES: AppBootstrapInclude[] = [
   'tasks',
@@ -96,6 +100,170 @@ const FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES: AppBootstrapInclude[] = [
   'active_focus_session',
 ]
 const TASK_START_COOLDOWN_MS = 3000
+const TASKS_REALTIME_DEDUP_CAPACITY = 240
+const TASK_COLOR_HEX_BY_KEY: Record<TaskColorKey, string> = {
+  blue: '#1A73E8',
+  green: '#0F9D58',
+  amber: '#F9AB00',
+  rose: '#E91E63',
+  pink: '#D81B60',
+  violet: '#7E57C2',
+}
+const TASK_ICON_API_BY_KEY: Record<TaskIconKey, string> = {
+  briefcase: 'briefcase',
+  learning: 'graduation-cap',
+  tools: 'screwdriver-wrench',
+  code: 'code',
+  book: 'book-open',
+  pen: 'pen',
+  cart: 'cart-shopping',
+  game: 'gamepad',
+}
+const TASK_ICON_KEY_BY_API_TAG: Record<string, TaskIconKey> = {
+  briefcase: 'briefcase',
+  learning: 'learning',
+  'graduation-cap': 'learning',
+  tools: 'tools',
+  'screwdriver-wrench': 'tools',
+  code: 'code',
+  book: 'book',
+  'book-open': 'book',
+  pen: 'pen',
+  cart: 'cart',
+  'cart-shopping': 'cart',
+  game: 'game',
+  gamepad: 'game',
+}
+
+function normalizeAlarmTimeToHm(value: string | null | undefined) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null
+  }
+
+  const normalized = value.trim()
+  const withSecondsMatch = normalized.match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/)
+  if (!withSecondsMatch) {
+    return null
+  }
+
+  return `${withSecondsMatch[1]}:${withSecondsMatch[2]}`
+}
+
+function normalizeTaskApiColorToUi(colorTag: string | null | undefined, fallback: TaskColorKey = 'blue'): TaskColorKey {
+  if (typeof colorTag !== 'string' || !colorTag.trim()) {
+    return fallback
+  }
+
+  const normalized = colorTag.trim().toLowerCase()
+  if (
+    normalized === 'blue' ||
+    normalized === 'green' ||
+    normalized === 'amber' ||
+    normalized === 'rose' ||
+    normalized === 'pink' ||
+    normalized === 'violet'
+  ) {
+    return normalized
+  }
+
+  const targetRgb = parseHexColorToRgb(normalized)
+  if (!targetRgb) {
+    return fallback
+  }
+
+  let bestMatch: TaskColorKey = fallback
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const [colorKey, colorHex] of Object.entries(TASK_COLOR_HEX_BY_KEY) as [TaskColorKey, string][]) {
+    const candidateRgb = parseHexColorToRgb(colorHex)
+    if (!candidateRgb) {
+      continue
+    }
+
+    const distance =
+      Math.pow(targetRgb.r - candidateRgb.r, 2) +
+      Math.pow(targetRgb.g - candidateRgb.g, 2) +
+      Math.pow(targetRgb.b - candidateRgb.b, 2)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestMatch = colorKey
+    }
+  }
+
+  return bestMatch
+}
+
+function normalizeTaskApiIconToUi(iconTag: string | null | undefined, fallback: TaskIconKey = 'briefcase'): TaskIconKey {
+  if (typeof iconTag !== 'string' || !iconTag.trim()) {
+    return fallback
+  }
+
+  const normalized = iconTag.trim().toLowerCase()
+  return TASK_ICON_KEY_BY_API_TAG[normalized] ?? fallback
+}
+
+function parseHexColorToRgb(value: string) {
+  const normalized = value.trim()
+  const match = normalized.match(/^#?([a-f0-9]{6})$/i)
+  if (!match) {
+    return null
+  }
+
+  const raw = match[1]
+  return {
+    r: Number.parseInt(raw.slice(0, 2), 16),
+    g: Number.parseInt(raw.slice(2, 4), 16),
+    b: Number.parseInt(raw.slice(4, 6), 16),
+  }
+}
+
+function adaptTaskApiItemToUi(
+  serverTask: TaskApiItem,
+  options: {
+    state?: Task['state']
+    existingTask?: Task
+    localTargetDurationMinutes?: number | null
+  } = {},
+): Task {
+  const existingTask = options.existingTask
+  const normalizedTimerInitialSeconds =
+    typeof serverTask.timer_initial_seconds === 'number' && Number.isFinite(serverTask.timer_initial_seconds)
+      ? Math.max(0, Math.floor(serverTask.timer_initial_seconds))
+      : null
+
+  return {
+    id: serverTask.id,
+    userId: serverTask.user_id,
+    title:
+      typeof serverTask.name === 'string' && serverTask.name.trim()
+        ? serverTask.name.trim()
+        : existingTask?.title ?? 'Untitled task',
+    details: existingTask?.details ?? '',
+    statusText: existingTask?.statusText ?? '',
+    duration: existingTask?.duration ?? '00:00:00',
+    state: options.state ?? existingTask?.state ?? 'scheduled',
+    colorTag: normalizeTaskApiColorToUi(serverTask.color_tag, existingTask?.colorTag ?? 'blue'),
+    iconTag: normalizeTaskApiIconToUi(serverTask.icon_tag, existingTask?.iconTag ?? 'briefcase'),
+    targetDurationMinutes:
+      options.localTargetDurationMinutes !== undefined
+        ? options.localTargetDurationMinutes
+        : normalizedTimerInitialSeconds !== null
+          ? normalizedTimerInitialSeconds / 60
+          : (existingTask?.targetDurationMinutes ?? null),
+    alarmTime: normalizeAlarmTimeToHm(serverTask.alarm_time_local),
+    version:
+      typeof serverTask.version === 'number' && Number.isFinite(serverTask.version)
+        ? Math.max(1, Math.floor(serverTask.version))
+        : existingTask?.version,
+    createdAtUtc:
+      typeof serverTask.created_at === 'string' && serverTask.created_at.trim()
+        ? serverTask.created_at
+        : existingTask?.createdAtUtc,
+    updatedAtUtc:
+      typeof serverTask.updated_at === 'string' && serverTask.updated_at.trim()
+        ? serverTask.updated_at
+        : existingTask?.updatedAtUtc,
+  }
+}
 
 export function FocusDashboard({
   userName,
@@ -137,7 +305,7 @@ export function FocusDashboard({
         ? adaptBootstrapTasksToUi(bootstrapData, {
           activeFocusSessionTaskId: bootstrapData.active_focus_session?.task_id ?? null,
         })
-        : tasks,
+        : emptyFallbackTasks,
     [bootstrapData],
   )
   const bootstrapInitialDailyLogEntries = useMemo(
@@ -148,7 +316,7 @@ export function FocusDashboard({
           timeZone: bootstrapData.preferences?.time_zone_name,
           untrackedLabel: copy.untrackedTime,
         })
-        : initialLogEntries,
+        : emptyFallbackLogEntries,
     [bootstrapData, copy.manualAdjustment, copy.untrackedTime],
   )
   const bootstrapDashboardStats = useMemo(
@@ -206,6 +374,8 @@ export function FocusDashboard({
   const isFocusSessionSyncInFlightRef = useRef(false)
   const timerCompleteStopRequestKeyRef = useRef<string | null>(null)
   const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
+  const processedTaskRealtimeEventIdsRef = useRef<string[]>([])
+  const localOriginDeviceId = useMemo(() => getOrCreateOriginDeviceId(), [])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -389,30 +559,12 @@ export function FocusDashboard({
     queuePreferencesPatch({ time_zone_name: nextValue }, 150)
   }
 
-  const mergeServerTaskIntoUiTask = (serverTask: TaskApiItem, existingTask: Task) => {
-    const adapted = adaptTaskItemToUi(serverTask, { state: existingTask.state })
-    return {
-      ...adapted,
-      state: existingTask.state,
-      details: existingTask.details,
-      statusText: existingTask.statusText,
-      // Keep the local duration label to avoid regressing UI when local session/runtime has newer values than M4 backend.
-      duration: existingTask.duration,
-    } satisfies Task
-  }
-
   const buildTasksApiPayloadFromModalPayload = (payload: NewTaskPayload): CreateTaskPayload => {
-    const totalSeconds =
-      typeof payload.targetDurationMinutes === 'number' && Number.isFinite(payload.targetDurationMinutes)
-        ? Math.max(0, Math.round(payload.targetDurationMinutes * 60))
-        : 0
-
     return {
-      title: payload.title.trim(),
-      color_tag: payload.colorTag,
-      icon_tag: payload.iconTag,
-      target_duration_seconds: totalSeconds > 0 ? Math.min(totalSeconds, 24 * 60 * 60) : null,
-      alarm_time_local: payload.alarmTime?.trim() ? payload.alarmTime.trim() : null,
+      name: payload.title.trim(),
+      color_tag: TASK_COLOR_HEX_BY_KEY[payload.colorTag] ?? payload.colorTag,
+      icon_tag: TASK_ICON_API_BY_KEY[payload.iconTag] ?? payload.iconTag,
+      alarm_time_local: normalizeAlarmTimeToHm(payload.alarmTime),
     }
   }
 
@@ -463,14 +615,36 @@ export function FocusDashboard({
 
     try {
       if (editingTaskId) {
-        const updatedTask = await updateTaskApi(editingTaskId, apiPayload)
+        const ifVersion =
+          typeof editingTask?.version === 'number' && Number.isFinite(editingTask.version)
+            ? Math.max(1, Math.floor(editingTask.version))
+            : 1
+
+        const timerInitialSeconds =
+          typeof payload.targetDurationMinutes === 'number' && Number.isFinite(payload.targetDurationMinutes)
+            ? Math.max(0, Math.round(payload.targetDurationMinutes * 60))
+            : 0
+
+        const updatedTask = await updateTaskApi(editingTaskId, {
+          ...apiPayload,
+          if_version: ifVersion,
+          timer_initial_seconds: timerInitialSeconds > 0 ? Math.min(timerInitialSeconds, 24 * 60 * 60) : null,
+        })
         if (!updatedTask) {
           onSignOut?.()
           return
         }
 
         setTaskList((currentTasks) =>
-          currentTasks.map((task) => (task.id === editingTaskId ? mergeServerTaskIntoUiTask(updatedTask, task) : task)),
+          currentTasks.map((task) =>
+            task.id === editingTaskId
+              ? adaptTaskApiItemToUi(updatedTask, {
+                  existingTask: task,
+                  state: task.state,
+                  localTargetDurationMinutes: payload.targetDurationMinutes,
+                })
+              : task,
+          ),
         )
         return
       }
@@ -482,9 +656,19 @@ export function FocusDashboard({
       }
 
       setTaskList((currentTasks) => {
+        const existingTask = currentTasks.find((task) => task.id === createdTask.id)
         const nextState = currentTasks.length === 0 ? 'active' : 'scheduled'
-        const uiTask = adaptTaskItemToUi(createdTask, { state: nextState })
-        return [...currentTasks, uiTask]
+        const uiTask = adaptTaskApiItemToUi(createdTask, {
+          existingTask,
+          state: existingTask?.state ?? nextState,
+          localTargetDurationMinutes: existingTask?.targetDurationMinutes ?? payload.targetDurationMinutes,
+        })
+
+        if (!existingTask) {
+          return [...currentTasks, uiTask]
+        }
+
+        return currentTasks.map((task) => (task.id === uiTask.id ? uiTask : task))
       })
     } catch (error) {
       if (error instanceof ApiHttpError) {
@@ -495,6 +679,17 @@ export function FocusDashboard({
 
         if (error.status === 404 && editingTaskId) {
           applyTaskRemovalFromUi(editingTaskId)
+          return
+        }
+
+        if (error.status === 409) {
+          const conflict = getTaskVersionConflictFromApiError(error)
+          console.warn('Task version conflict during create/update. Refreshing tasks from server.', conflict ?? error)
+          try {
+            await refreshTasksFromServer()
+          } catch (refreshError) {
+            console.error('Failed to refresh tasks after version conflict', refreshError)
+          }
           return
         }
       }
@@ -510,7 +705,7 @@ export function FocusDashboard({
   const localizedHistoryEntries = useMemo(
     () =>
       localizeStaticLogActivities(
-        bootstrapData ? dailyLogEntries : historyLogEntries,
+        bootstrapData ? dailyLogEntries : emptyFallbackLogEntries,
         copy.untrackedTime,
       ),
     [bootstrapData, copy.untrackedTime, dailyLogEntries],
@@ -659,7 +854,11 @@ export function FocusDashboard({
               ? 'done'
               : 'scheduled'
 
-        const adapted = adaptTaskItemToUi(serverTask, { state })
+        const adapted = adaptTaskApiItemToUi(serverTask, {
+          existingTask,
+          state,
+          localTargetDurationMinutes: existingTask?.targetDurationMinutes ?? null,
+        })
         if (!existingTask) {
           return adapted
         }
@@ -828,12 +1027,209 @@ export function FocusDashboard({
     }
   }
 
+  const hasProcessedTaskRealtimeEvent = (eventId: string) => {
+    return processedTaskRealtimeEventIdsRef.current.includes(eventId)
+  }
+
+  const markTaskRealtimeEventProcessed = (eventId: string) => {
+    const queue = processedTaskRealtimeEventIdsRef.current
+    queue.push(eventId)
+    if (queue.length > TASKS_REALTIME_DEDUP_CAPACITY) {
+      queue.splice(0, queue.length - TASKS_REALTIME_DEDUP_CAPACITY)
+    }
+  }
+
+  const applyTaskcardsRealtimeEvent = (event: TaskcardsRealtimeEvent) => {
+    const expectedUserId = bootstrapData?.user.id
+    const incomingTask = event?.task
+    const incomingTaskId =
+      typeof incomingTask?.id === 'string' && incomingTask.id.trim()
+        ? incomingTask.id.trim()
+        : typeof incomingTask?.task_id === 'string' && incomingTask.task_id.trim()
+          ? incomingTask.task_id.trim()
+          : null
+    if (!incomingTask || !incomingTaskId) {
+      return
+    }
+
+    const incomingUserId =
+      typeof incomingTask.user_id === 'string' && incomingTask.user_id.trim()
+        ? incomingTask.user_id.trim()
+        : typeof event.user_id === 'string' && event.user_id.trim()
+          ? event.user_id.trim()
+          : null
+
+    if (
+      expectedUserId &&
+      incomingUserId &&
+      incomingUserId !== expectedUserId
+    ) {
+      return
+    }
+
+    const eventId = typeof event.event_id === 'string' && event.event_id.trim() ? event.event_id.trim() : null
+    if (eventId && hasProcessedTaskRealtimeEvent(eventId)) {
+      return
+    }
+
+    const incomingOriginDeviceId =
+      typeof event.origin_device_id === 'string' && event.origin_device_id.trim()
+        ? event.origin_device_id.trim()
+        : null
+    if (incomingOriginDeviceId && incomingOriginDeviceId === localOriginDeviceId) {
+      if (eventId) {
+        markTaskRealtimeEventProcessed(eventId)
+      }
+      return
+    }
+
+    const incomingVersion =
+      typeof incomingTask.version === 'number' && Number.isFinite(incomingTask.version)
+        ? Math.max(1, Math.floor(incomingTask.version))
+        : null
+
+    if (incomingVersion === null) {
+      if (event.event === 'focus.task.deleted') {
+        applyTaskRemovalFromUi(incomingTaskId)
+        if (eventId) {
+          markTaskRealtimeEventProcessed(eventId)
+        }
+        return
+      }
+
+      void refreshTasksFromServer()
+      if (eventId) {
+        markTaskRealtimeEventProcessed(eventId)
+      }
+      return
+    }
+
+    if (event.event === 'focus.task.deleted') {
+      const localTask = taskList.find((task) => task.id === incomingTaskId)
+      const localVersion =
+        localTask && typeof localTask.version === 'number' && Number.isFinite(localTask.version)
+          ? Math.max(1, Math.floor(localTask.version))
+          : null
+      if (localVersion !== null && incomingVersion < localVersion) {
+        return
+      }
+
+      if (localTask) {
+        applyTaskRemovalFromUi(incomingTaskId)
+      }
+      if (eventId) {
+        markTaskRealtimeEventProcessed(eventId)
+      }
+      return
+    }
+
+    const localTaskForUpsert = taskList.find((task) => task.id === incomingTaskId)
+    if (!localTaskForUpsert && (typeof incomingTask.name !== 'string' || !incomingTask.name.trim())) {
+      void refreshTasksFromServer()
+      if (eventId) {
+        markTaskRealtimeEventProcessed(eventId)
+      }
+      return
+    }
+
+    const hasRenderableTaskMetadata =
+      (typeof incomingTask.name === 'string' && incomingTask.name.trim().length > 0) ||
+      (typeof incomingTask.icon_tag === 'string' && incomingTask.icon_tag.trim().length > 0) ||
+      incomingTask.icon_tag === null ||
+      (typeof incomingTask.color_tag === 'string' && incomingTask.color_tag.trim().length > 0) ||
+      incomingTask.color_tag === null ||
+      (typeof incomingTask.alarm_time_local === 'string' && incomingTask.alarm_time_local.trim().length > 0) ||
+      incomingTask.alarm_time_local === null ||
+      typeof incomingTask.timer_initial_seconds === 'number'
+
+    if (event.event === 'focus.task.updated' && !hasRenderableTaskMetadata) {
+      void refreshTasksFromServer()
+      if (eventId) {
+        markTaskRealtimeEventProcessed(eventId)
+      }
+      return
+    }
+
+    setTaskList((currentTasks) => {
+      const currentIndex = currentTasks.findIndex((task) => task.id === incomingTaskId)
+      const currentTask = currentIndex >= 0 ? currentTasks[currentIndex] : null
+      const currentVersion =
+        currentTask && typeof currentTask.version === 'number' && Number.isFinite(currentTask.version)
+          ? Math.max(1, Math.floor(currentTask.version))
+          : null
+
+      if (currentVersion !== null && incomingVersion < currentVersion) {
+        return currentTasks
+      }
+
+      if (currentVersion !== null && incomingVersion === currentVersion) {
+        return currentTasks
+      }
+
+      const taskForUi = adaptTaskApiItemToUi(
+        {
+          id: incomingTaskId,
+          user_id: incomingTask.user_id ?? currentTask?.userId ?? expectedUserId ?? '',
+          name:
+            typeof incomingTask.name === 'string' && incomingTask.name.trim()
+              ? incomingTask.name
+              : currentTask?.title ?? 'Untitled task',
+          icon_tag: incomingTask.icon_tag ?? null,
+          color_tag: incomingTask.color_tag ?? null,
+          alarm_time_local: incomingTask.alarm_time_local ?? null,
+          timer_initial_seconds:
+            typeof incomingTask.timer_initial_seconds === 'number' && Number.isFinite(incomingTask.timer_initial_seconds)
+              ? Math.max(0, Math.floor(incomingTask.timer_initial_seconds))
+              : null,
+          version: incomingVersion,
+          created_at:
+            typeof incomingTask.created_at === 'string' && incomingTask.created_at.trim()
+              ? incomingTask.created_at
+              : currentTask?.createdAtUtc ?? '',
+          updated_at:
+            typeof incomingTask.updated_at === 'string' && incomingTask.updated_at.trim()
+              ? incomingTask.updated_at
+              : currentTask?.updatedAtUtc ?? '',
+        },
+        {
+          existingTask: currentTask ?? undefined,
+          state: currentTask?.state ?? (currentTasks.length === 0 ? 'active' : 'scheduled'),
+          localTargetDurationMinutes:
+            typeof incomingTask.timer_initial_seconds === 'number' && Number.isFinite(incomingTask.timer_initial_seconds)
+              ? Math.max(0, Math.floor(incomingTask.timer_initial_seconds)) / 60
+              : undefined,
+        },
+      )
+
+      if (currentIndex < 0) {
+        return [...currentTasks, taskForUi]
+      }
+
+      const nextTasks = [...currentTasks]
+      nextTasks[currentIndex] = taskForUi
+      return nextTasks
+    })
+
+    if (eventId) {
+      markTaskRealtimeEventProcessed(eventId)
+    }
+  }
+
   useFocusRealtimeChannel({
     userId: bootstrapData?.user.id ?? null,
     enabled: false,
     onEvent: applyRealtimeFocusEvent,
     onReconnectSync: () => {
       void syncActiveFocusSession()
+    },
+  })
+
+  useTaskcardsRealtimeChannel({
+    userId: bootstrapData?.user.id ?? null,
+    enabled: Boolean(bootstrapData?.user.id),
+    onEvent: applyTaskcardsRealtimeEvent,
+    onReconnectSync: () => {
+      void refreshTasksFromServer()
     },
   })
 
@@ -952,10 +1348,12 @@ export function FocusDashboard({
 
   useEffect(() => {
     void syncActiveFocusSession()
+    void refreshTasksFromServer()
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         void syncActiveFocusSession()
+        void refreshTasksFromServer()
       }
     }
 
@@ -1095,9 +1493,13 @@ export function FocusDashboard({
     }
 
     const deletingTaskId = taskPendingDelete.id
+    const deletingTaskVersion =
+      typeof taskPendingDelete.version === 'number' && Number.isFinite(taskPendingDelete.version)
+        ? Math.max(1, Math.floor(taskPendingDelete.version))
+        : 1
 
     try {
-      const result = await deleteTaskApi(deletingTaskId)
+      const result = await deleteTaskApi(deletingTaskId, { ifVersion: deletingTaskVersion })
       if (!result) {
         onSignOut?.()
         return
@@ -1113,6 +1515,17 @@ export function FocusDashboard({
 
         if (error.status === 404) {
           applyTaskRemovalFromUi(deletingTaskId)
+          return
+        }
+
+        if (error.status === 409) {
+          const conflict = getTaskVersionConflictFromApiError(error)
+          console.warn('Task version conflict during delete. Refreshing tasks from server.', conflict ?? error)
+          try {
+            await refreshTasksFromServer()
+          } catch (refreshError) {
+            console.error('Failed to refresh tasks after delete conflict', refreshError)
+          }
           return
         }
       }
@@ -1604,39 +2017,7 @@ export function FocusDashboard({
     setSessionElapsedSeconds((currentSeconds) => Math.min(currentSeconds, boundedSeconds))
     setTimerMode('timer')
 
-    void (async () => {
-      try {
-        const updatedTask = await updateTaskApi(activeTaskId, {
-          target_duration_seconds: boundedSeconds,
-        })
-        if (!updatedTask) {
-          onSignOut?.()
-          return
-        }
-
-        setTaskList((currentTasks) =>
-          currentTasks.map((task) => (task.id === activeTaskId ? mergeServerTaskIntoUiTask(updatedTask, task) : task)),
-        )
-      } catch (error) {
-        if (error instanceof ApiHttpError) {
-          if (error.status === 401) {
-            onSignOut?.()
-            return
-          }
-
-          if (error.status === 404) {
-            applyTaskRemovalFromUi(activeTaskId)
-            return
-          }
-        }
-
-        console.error(
-          'Failed to persist timer target from TimerPanel',
-          { taskId: activeTaskId, targetSeconds: boundedSeconds },
-          error,
-        )
-      }
-    })()
+    // Taskcards CRUD endpoint is metadata-only; timer runtime stays local until focus runtime endpoints are integrated.
   }
   const handlePlayTask = async (selectedTask: Task, preferredMode?: FocusTimerMode) => {
     if (isTaskCooldownActive(selectedTask.id)) {

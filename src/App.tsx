@@ -12,7 +12,7 @@ import {
   type UserPreferences,
 } from './features/focus-dashboard/api'
 import { HomePage } from './features/home/components/HomePage'
-import { getApiErrorFirstMessage } from './lib/api/http'
+import { ApiHttpError, getApiErrorFirstMessage } from './lib/api/http'
 import { stopFocusAudioPlayback } from './lib/audio/uiSfx'
 import type { AppLocale } from './i18n/messages'
 type AppBootstrapStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -24,6 +24,14 @@ const APP_BOOTSTRAP_INCLUDES: AppBootstrapInclude[] = [
   'dashboard_stats',
   'active_focus_session',
 ]
+
+function detectBrowserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
 
 function App() {
   const { locale, setLocale } = useI18n()
@@ -75,11 +83,13 @@ function App() {
       return
     }
 
-    if (appBootstrapStatus === 'ready' && appBootstrapData && appBootstrapUserId === sessionUser.id) {
+    if (appBootstrapStatus === 'error') {
       return
     }
 
-    let didCancel = false
+    if (appBootstrapStatus === 'ready' && appBootstrapData && appBootstrapUserId === sessionUser.id) {
+      return
+    }
 
     const loadAppBootstrap = async () => {
       setAppBootstrapStatus('loading')
@@ -88,10 +98,6 @@ function App() {
 
       try {
         const bootstrap = await getAppBootstrap({ include: APP_BOOTSTRAP_INCLUDES })
-        if (didCancel) {
-          return
-        }
-
         if (!bootstrap) {
           forceGuestToLogin()
           return
@@ -110,7 +116,50 @@ function App() {
           setLocale(nextLocale)
         }
       } catch (error) {
-        if (didCancel) {
+        if (error instanceof ApiHttpError && error.status === 404) {
+          const nowIso = new Date().toISOString()
+          const fallbackBootstrap: AppBootstrapData = {
+            server_now_utc: nowIso,
+            user: {
+              id: sessionUser.id,
+              display_name: sessionUser.displayName,
+              email: sessionUser.email,
+              locale: sessionUser.locale,
+            },
+            workspace: {
+              id: 'default',
+              name: 'My Workspace',
+            },
+            preferences: {
+              locale: sessionUser.locale,
+              time_zone_name: detectBrowserTimeZone(),
+              time_zone_auto_detect: true,
+              ui_sounds_enabled: true,
+              background_music_enabled: false,
+              background_music_volume_percent: 50,
+              confirm_task_switch_enabled: true,
+              sign_out_confirmation_enabled: true,
+            },
+            tasks: [],
+            daily_log: {
+              date_local: nowIso.slice(0, 10),
+              tracked_seconds: 0,
+              untracked_seconds: 0,
+              entries: [],
+            },
+            dashboard_stats: {
+              tracked_seconds_today: 0,
+              untracked_seconds_today: 0,
+              tracked_sessions_count_today: 0,
+              focus_time_total_seconds: 0,
+            },
+            active_focus_session: null,
+          }
+
+          setAppBootstrapData(fallbackBootstrap)
+          setAppBootstrapStatus('ready')
+          setAppBootstrapError(null)
+          setAppBootstrapUserId(sessionUser.id)
           return
         }
 
@@ -128,19 +177,12 @@ function App() {
     }
 
     void loadAppBootstrap()
-
-    return () => {
-      didCancel = true
-    }
   }, [
-    appBootstrapData,
-    appBootstrapStatus,
-    appBootstrapUserId,
     appBootstrapReloadKey,
     authStatus,
-    currentPath,
     fallbackDisplayName,
     locale,
+    route,
     sessionUser,
     forceGuestToLogin,
     setLocale,
@@ -266,7 +308,10 @@ function App() {
             <div className="mt-4 flex items-center gap-2">
               <button
                 className="inline-flex items-center justify-center rounded-xl bg-blue-600/85 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
-                onClick={() => setAppBootstrapReloadKey((current) => current + 1)}
+                onClick={() => {
+                  setAppBootstrapStatus('idle')
+                  setAppBootstrapReloadKey((current) => current + 1)
+                }}
                 type="button"
               >
                 {locale === 'es' ? 'Reintentar' : 'Retry'}

@@ -8,6 +8,7 @@ export type FocusTimerMode = 'stopwatch' | 'timer'
 
 export interface Task {
   id: string
+  userId?: string
   title: string
   details: string
   statusText: string
@@ -17,6 +18,9 @@ export interface Task {
   iconTag: TaskIconKey
   targetDurationMinutes: number | null
   alarmTime: string | null
+  version?: number
+  createdAtUtc?: string
+  updatedAtUtc?: string
 }
 
 export interface LogEntry {

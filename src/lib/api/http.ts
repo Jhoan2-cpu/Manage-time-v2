@@ -19,18 +19,24 @@ export class ApiHttpError extends Error {
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}) {
+  const method = `${init.method ?? 'GET'}`.toUpperCase()
+  const shouldSendCsrfHeader = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
   const xsrfToken = getCookieValue('XSRF-TOKEN')
-  const shouldAttachXsrfHeader = Boolean(xsrfToken) && !hasHeader(init.headers, 'X-XSRF-TOKEN')
+  const shouldAttachXsrfHeader =
+    shouldSendCsrfHeader &&
+    Boolean(xsrfToken) &&
+    !hasHeader(init.headers, 'X-XSRF-TOKEN')
+  const defaultHeaders: HeadersInit = {
+    Accept: 'application/json',
+    ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(shouldAttachXsrfHeader ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrfToken!) } : {}),
+  }
+  const mergedHeaders = mergeHeaders(defaultHeaders, init.headers)
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(shouldAttachXsrfHeader ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrfToken!) } : {}),
-      ...init.headers,
-    },
     ...init,
+    credentials: 'include',
+    headers: mergedHeaders,
   })
 
   return response
@@ -117,4 +123,18 @@ function hasHeader(headers: RequestInit['headers'], targetName: string) {
   }
 
   return Object.keys(headers).some((name) => name.toLowerCase() === targetName.toLowerCase())
+}
+
+function mergeHeaders(defaultHeaders: HeadersInit, extraHeaders?: HeadersInit) {
+  const merged = new Headers(defaultHeaders)
+  if (!extraHeaders) {
+    return merged
+  }
+
+  const extra = new Headers(extraHeaders)
+  extra.forEach((value, key) => {
+    merged.set(key, value)
+  })
+
+  return merged
 }
