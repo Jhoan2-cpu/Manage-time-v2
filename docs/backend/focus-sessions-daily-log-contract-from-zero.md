@@ -1,157 +1,292 @@
-# Focus Sessions + Daily Log Contract (Desde Cero) - Laravel + Reverb
+# Timer + Cronometro Contract (Desde Cero) - Frontend <-> Laravel + Reverb
 
 ## Scope
 
-Este modulo une:
-- contador (focus session)
-- sesiones de enfoque
-- tiempo no trackeado (untracked)
-- daily log (historial diario)
+Backend objetivo:
+- controlar play/pause/resume/stop del contador
+- persistir historial en:
+  - `FOCUS_TIME_ENTRIES`
+  - `IDLE_TIME_ENTRIES`
+- sincronizar estado entre dispositivos del mismo usuario (Reverb)
 
-Regla central:
-- backend registra timestamps exactos (con milisegundos)
-- frontend solo renderiza el contador y estado visual
-- backend es fuente de verdad para sesiones e historial
-
----
-
-## Que se registra exactamente
-
-### Al dar Play en una Task Card
-
-Backend registra:
-- `started_at_utc` exacto (`YYYY-MM-DDTHH:mm:ss.SSSZ`)
-- `last_resumed_at_utc` exacto
-- `timer_mode` (`timer` o `stopwatch`)
-- `target_seconds_snapshot` (valor del taskcard en ese instante)
-
-Notas:
-- si el usuario cambia luego la tarea (ej. nuevo target), el snapshot historico se mantiene
-- si habia tiempo untracked activo, se cierra en ese mismo instante
-
-### Al dar Pause
-
-Backend registra:
-- `last_paused_at_utc` exacto
-- actualiza `elapsed_seconds_total`
-- crea/inicia `active_untracked_session` desde ese instante
-
-### Cuando no hay tarea en ejecucion
-
-Backend registra tiempo muerto como `untracked`:
-- inicia `active_untracked_session` cuando no existe focus en running
-- cierra `active_untracked_session` cuando se inicia/reanuda foco
-- al cerrar, persiste `time_entry` tipo `untracked`
-
-### Daily Log
-
-- no se edita manualmente desde contador
-- se construye desde `time_entries` (`focus` + `untracked` + `manual_adjustment`)
+Frontend objetivo:
+- iniciar timer o cronometro desde task card
+- pausar / reanudar / detener
+- ver estado consistente en todas las sesiones abiertas
 
 ---
 
-## Endpoints (contrato)
+## Tablas objetivo (source of truth)
 
-## 1) Obtener sesion activa
+### `FOCUS_TIME_ENTRIES`
+
+Guarda tramos de tiempo enfocado (timer o cronometro).
+
+Columnas clave:
+- `id` (uuid)
+- `user_id` (fk)
+- `focus_task_id_nullable` (fk nullable a `FOCUS_TASKS`)
+- `task_title_snapshot`
+- `task_icon_snapshot`
+- `task_color_snapshot`
+- `timer_target_snapshot_seconds` (nullable)
+- `mode_snapshot` (`timer|stopwatch`)
+- `started_at_utc` (timestamp(3))
+- `ended_at_utc` (timestamp(3), nullable mientras esta corriendo)
+- `elapsed_seconds`
+- `stop_reason` (`paused|user_stop|timer_finished|switch_task|app_shutdown`)
+- `created_at`
+- `updated_at`
+
+### `IDLE_TIME_ENTRIES`
+
+Guarda tiempo no trackeado (sin tarea corriendo).
+
+Columnas clave:
+- `id` (uuid)
+- `user_id` (fk)
+- `started_at_utc` (timestamp(3))
+- `ended_at_utc` (timestamp(3), nullable mientras sigue en idle)
+- `elapsed_seconds`
+- `reason` (`day_start|after_pause|after_stop|after_timer_finished|no_active_task`)
+- `created_at`
+- `updated_at`
+
+---
+
+## Reglas de negocio obligatorias
+
+1. Solo puede existir **1 tramo activo** por usuario:
+- o `FOCUS_TIME_ENTRIES` con `ended_at_utc = null`
+- o `IDLE_TIME_ENTRIES` con `ended_at_utc = null`
+
+2. Si inicia foco (`play`), backend debe cerrar idle activo (si existe).
+
+3. Si pausa o detiene foco, backend debe abrir idle nuevo inmediatamente.
+
+4. Si `timer` llega a `00:00:00`, backend debe cerrar foco con `stop_reason = timer_finished` y abrir idle.
+
+5. `timer_target_snapshot_seconds`:
+- se guarda cuando `mode_snapshot = timer`
+- en `stopwatch` se guarda `null`
+
+6. Frontend renderiza contador; backend manda estado autoritativo.
+
+---
+
+## Estado actual de runtime
 
 El frontend enviara al backend:  
-`GET /api/v1/focus-sessions/active`
+`GET /api/v1/focus/runtime`
 
 si todo esta correcto enviara (`200`):
 ```json
 {
   "data": {
-    "server_now_utc": "2026-03-02T16:20:10.123Z",
-    "active_focus_session": {
-      "id": "fs_123",
-      "task_id": "task_123",
-      "timer_mode": "timer",
-      "session_state": "running",
-      "target_seconds_snapshot": 3600,
-      "started_at_utc": "2026-03-02T16:10:00.456Z",
-      "last_resumed_at_utc": "2026-03-02T16:10:00.456Z",
-      "last_paused_at_utc": null,
-      "elapsed_seconds_total": 600,
-      "version": 4
+    "server_now_utc": "2026-03-03T22:10:05.321Z",
+    "active_focus_entry": {
+      "id": "fte_100",
+      "focus_task_id_nullable": "task_123",
+      "mode_snapshot": "timer",
+      "timer_target_snapshot_seconds": 2700,
+      "started_at_utc": "2026-03-03T22:00:00.000Z",
+      "ended_at_utc": null
     },
-    "active_untracked_session": null
+    "active_idle_entry": null
   }
+}
+```
+
+sino (`401`):
+```json
+{
+  "message": "Unauthenticated."
 }
 ```
 
 ---
 
-## 2) Iniciar sesion de enfoque (Play)
+## 1) Iniciar enfoque (Play)
 
 El frontend enviara al backend:  
-`POST /api/v1/focus-sessions/start`
+`POST /api/v1/focus/start`
 
 body:
 ```json
 {
   "task_id": "task_123",
-  "timer_mode": "timer",
-  "target_seconds": 3600
+  "mode": "timer",
+  "timer_target_seconds": 2700
 }
 ```
+
+Reglas:
+- `mode = timer` => `timer_target_seconds` requerido
+- `mode = stopwatch` => `timer_target_seconds = null`
+- cerrar `IDLE_TIME_ENTRIES` activo (si existe)
+- crear `FOCUS_TIME_ENTRIES` nuevo con `ended_at_utc = null`
 
 si todo esta correcto enviara (`200`):
 ```json
 {
   "data": {
-    "server_now_utc": "2026-03-02T16:10:00.456Z",
-    "active_focus_session": {
-      "id": "fs_123",
-      "task_id": "task_123",
-      "timer_mode": "timer",
-      "session_state": "running",
-      "target_seconds_snapshot": 3600,
-      "started_at_utc": "2026-03-02T16:10:00.456Z",
-      "last_resumed_at_utc": "2026-03-02T16:10:00.456Z",
-      "last_paused_at_utc": null,
-      "elapsed_seconds_total": 0,
-      "version": 1
+    "server_now_utc": "2026-03-03T22:00:00.000Z",
+    "active_focus_entry": {
+      "id": "fte_100",
+      "focus_task_id_nullable": "task_123",
+      "task_title_snapshot": "Q3 Report Writing",
+      "task_icon_snapshot": "briefcase",
+      "task_color_snapshot": "blue",
+      "mode_snapshot": "timer",
+      "timer_target_snapshot_seconds": 2700,
+      "started_at_utc": "2026-03-03T22:00:00.000Z",
+      "ended_at_utc": null
     },
-    "active_untracked_session": null,
-    "closed_untracked_time_entry_id": "te_987"
+    "closed_idle_entry_id": "ite_10"
+  }
+}
+```
+
+sino (`422`):
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "mode": [
+      "The selected mode is invalid."
+    ]
   }
 }
 ```
 
 ---
 
-## 3) Pausar sesion (Pause)
+## 2) Pausar enfoque
 
 El frontend enviara al backend:  
-`POST /api/v1/focus-sessions/pause`
+`POST /api/v1/focus/pause`
 
 body:
 ```json
 {
-  "expected_version": 1
+  "active_focus_entry_id": "fte_100"
 }
 ```
+
+Reglas:
+- cerrar `FOCUS_TIME_ENTRIES` activo (`ended_at_utc = now`)
+- calcular `elapsed_seconds`
+- guardar `stop_reason = paused`
+- crear `IDLE_TIME_ENTRIES` nuevo (`ended_at_utc = null`, `reason = after_pause`)
 
 si todo esta correcto enviara (`200`):
 ```json
 {
   "data": {
-    "server_now_utc": "2026-03-02T16:20:10.123Z",
-    "active_focus_session": {
-      "id": "fs_123",
-      "task_id": "task_123",
-      "timer_mode": "timer",
-      "session_state": "paused",
-      "target_seconds_snapshot": 3600,
-      "started_at_utc": "2026-03-02T16:10:00.456Z",
-      "last_resumed_at_utc": "2026-03-02T16:10:00.456Z",
-      "last_paused_at_utc": "2026-03-02T16:20:10.123Z",
-      "elapsed_seconds_total": 610,
-      "version": 2
+    "server_now_utc": "2026-03-03T22:20:10.111Z",
+    "closed_focus_entry": {
+      "id": "fte_100",
+      "elapsed_seconds": 1210,
+      "stop_reason": "paused"
     },
-    "active_untracked_session": {
-      "id": "uts_1",
-      "started_at_utc": "2026-03-02T16:20:10.123Z"
+    "active_idle_entry": {
+      "id": "ite_11",
+      "started_at_utc": "2026-03-03T22:20:10.111Z",
+      "ended_at_utc": null,
+      "reason": "after_pause"
+    }
+  }
+}
+```
+
+sino (`409`):
+```json
+{
+  "message": "No active focus entry to pause.",
+  "code": "FOCUS_NOT_RUNNING"
+}
+```
+
+---
+
+## 3) Reanudar enfoque
+
+El frontend enviara al backend:  
+`POST /api/v1/focus/resume`
+
+body:
+```json
+{
+  "task_id": "task_123",
+  "mode": "timer",
+  "timer_target_seconds": 1490
+}
+```
+
+Reglas:
+- cerrar `IDLE_TIME_ENTRIES` activo (si existe)
+- crear nuevo `FOCUS_TIME_ENTRIES` con `ended_at_utc = null`
+- para `timer`, snapshot debe guardar el target vigente al reanudar
+
+si todo esta correcto enviara (`200`):
+```json
+{
+  "data": {
+    "server_now_utc": "2026-03-03T22:25:00.000Z",
+    "active_focus_entry": {
+      "id": "fte_101",
+      "focus_task_id_nullable": "task_123",
+      "mode_snapshot": "timer",
+      "timer_target_snapshot_seconds": 1490,
+      "started_at_utc": "2026-03-03T22:25:00.000Z",
+      "ended_at_utc": null
+    },
+    "closed_idle_entry_id": "ite_11"
+  }
+}
+```
+
+---
+
+## 4) Detener enfoque (Stop)
+
+El frontend enviara al backend:  
+`POST /api/v1/focus/stop`
+
+body:
+```json
+{
+  "active_focus_entry_id": "fte_101",
+  "reason": "user_stop"
+}
+```
+
+`reason` permitido:
+- `user_stop`
+- `timer_finished`
+- `switch_task`
+
+Reglas:
+- cerrar `FOCUS_TIME_ENTRIES` activo
+- calcular `elapsed_seconds`
+- guardar `stop_reason`
+- crear `IDLE_TIME_ENTRIES` nuevo con `reason` derivado
+
+si todo esta correcto enviara (`200`):
+```json
+{
+  "data": {
+    "server_now_utc": "2026-03-03T22:40:00.500Z",
+    "closed_focus_entry": {
+      "id": "fte_101",
+      "elapsed_seconds": 900,
+      "stop_reason": "user_stop"
+    },
+    "active_idle_entry": {
+      "id": "ite_12",
+      "started_at_utc": "2026-03-03T22:40:00.500Z",
+      "ended_at_utc": null,
+      "reason": "after_stop"
     }
   }
 }
@@ -159,109 +294,63 @@ si todo esta correcto enviara (`200`):
 
 ---
 
-## 4) Reanudar sesion
+## 5) Timer llega a cero (evento de negocio)
 
-El frontend enviara al backend:  
-`POST /api/v1/focus-sessions/resume`
+Flujo recomendado:
+- frontend detecta `00:00:00`
+- frontend envia:
+  - `POST /api/v1/focus/stop`
+  - body con `reason = timer_finished`
 
-body:
-```json
-{
-  "expected_version": 2
-}
-```
-
-si todo esta correcto enviara (`200`):
-```json
-{
-  "data": {
-    "server_now_utc": "2026-03-02T16:25:00.999Z",
-    "active_focus_session": {
-      "id": "fs_123",
-      "task_id": "task_123",
-      "timer_mode": "timer",
-      "session_state": "running",
-      "target_seconds_snapshot": 3600,
-      "started_at_utc": "2026-03-02T16:10:00.456Z",
-      "last_resumed_at_utc": "2026-03-02T16:25:00.999Z",
-      "last_paused_at_utc": "2026-03-02T16:20:10.123Z",
-      "elapsed_seconds_total": 610,
-      "version": 3
-    },
-    "active_untracked_session": null,
-    "closed_untracked_time_entry_id": "te_999"
-  }
-}
-```
+resultado esperado:
+- se cierra `FOCUS_TIME_ENTRIES` con `stop_reason = timer_finished`
+- se abre `IDLE_TIME_ENTRIES` con `reason = after_timer_finished`
+- se emite evento realtime para que otros dispositivos reflejen stop + alarma
 
 ---
 
-## 5) Detener sesion
-
-El frontend enviara al backend:  
-`POST /api/v1/focus-sessions/stop`
-
-body:
-```json
-{
-  "expected_version": 3,
-  "stopped_reason": "user_stop"
-}
-```
-
-si todo esta correcto enviara (`200`):
-```json
-{
-  "data": {
-    "server_now_utc": "2026-03-02T16:40:00.222Z",
-    "active_focus_session": null,
-    "stopped_session_summary": {
-      "task_id": "task_123",
-      "timer_mode": "timer",
-      "elapsed_seconds_final": 1510,
-      "target_seconds_snapshot": 3600,
-      "stopped_reason": "user_stop"
-    },
-    "created_time_entry_id": "te_focus_1",
-    "active_untracked_session": {
-      "id": "uts_2",
-      "started_at_utc": "2026-03-02T16:40:00.222Z"
-    }
-  }
-}
-```
-
----
-
-## 6) Heartbeat / re-sync
-
-El frontend enviara al backend:  
-`POST /api/v1/focus-sessions/heartbeat`
-
-body:
-```json
-{
-  "expected_version": 3
-}
-```
-
-uso:
-- sincronizar estado autoritativo
-- resolver drift entre dispositivos
-- recuperar estado al volver a foco
-
----
-
-## 7) Daily log / historial (derivado de time_entries)
-
-El frontend enviara al backend:
-- `GET /api/v1/history/overview`
-- `GET /api/v1/history/days`
-- `GET /api/v1/history/days/{date}`
+## 6) Idle al inicio del dia / sin foco activo
 
 Regla:
-- backend calcula todo desde `time_entries`
-- incluye entries `focus` y `untracked`
+- si no existe foco activo ni idle activo para el usuario, backend debe abrir idle:
+  - `started_at_utc = now`
+  - `reason = day_start` o `no_active_task`
+
+Esto puede dispararse en:
+- primer `GET /api/v1/focus/runtime` del dia
+- job programado de corte diario (opcional)
+
+---
+
+## Realtime con Reverb
+
+Canal privado:
+- wire-level: `private-user.{userId}.focus-runtime`
+- frontend Echo: `echo.private('user.{userId}.focus-runtime')`
+
+Eventos:
+- `.focus.started`
+- `.focus.paused`
+- `.focus.resumed`
+- `.focus.stopped`
+- `.idle.started`
+- `.idle.stopped`
+
+payload base:
+```json
+{
+  "type": "focus.stopped",
+  "meta": {
+    "user_id": "usr_123",
+    "emitted_at_utc": "2026-03-03T22:40:00.500Z",
+    "origin_device_id": "web-ab12"
+  },
+  "data": {
+    "closed_focus_entry_id": "fte_101",
+    "active_idle_entry_id": "ite_12"
+  }
+}
+```
 
 ---
 
@@ -284,11 +373,8 @@ sino (`404`):
 sino (`409`):
 ```json
 {
-  "message": "Session version conflict.",
-  "code": "FOCUS_SESSION_VERSION_CONFLICT",
-  "data": {
-    "server_version": 4
-  }
+  "message": "Runtime conflict.",
+  "code": "FOCUS_RUNTIME_CONFLICT"
 }
 ```
 
@@ -297,8 +383,8 @@ sino (`422`):
 {
   "message": "The given data was invalid.",
   "errors": {
-    "timer_mode": [
-      "The selected timer mode is invalid."
+    "timer_target_seconds": [
+      "The timer target seconds field is required when mode is timer."
     ]
   }
 }
@@ -306,80 +392,11 @@ sino (`422`):
 
 ---
 
-## Realtime (Reverb)
+## Configuracion adicional obligatoria (Laravel)
 
-Canal privado:
-- wire-level: `private-user.{userId}.focus`
-- frontend Echo: `echo.private('user.{userId}.focus')`
-
-Eventos:
-- `.focus_session.updated`
-- `.focus_session.stopped`
-- `.untracked_session.updated`
-- `.time_entry.created`
-
-Objetivo realtime:
-- todos los dispositivos del mismo usuario ven el mismo estado de contador y log casi en tiempo real
-
----
-
-## Modelo DB recomendado (minimo)
-
-### `focus_sessions`
-
-- `id` (uuid)
-- `user_id` (fk)
-- `task_id` (fk)
-- `timer_mode` (`timer|stopwatch`)
-- `target_seconds_snapshot` (nullable int)
-- `session_state` (`running|paused|stopped`)
-- `started_at_utc` (timestamp(3))
-- `last_resumed_at_utc` (timestamp(3), nullable)
-- `last_paused_at_utc` (timestamp(3), nullable)
-- `elapsed_seconds_total` (int)
-- `version` (int)
-- `stopped_at_utc` (timestamp(3), nullable)
-- `stopped_reason` (nullable string)
-
-### `active_untracked_sessions`
-
-- `id` (uuid)
-- `user_id` (fk unique)
-- `started_at_utc` (timestamp(3))
-
-### `time_entries`
-
-- `id` (uuid)
-- `user_id` (fk)
-- `task_id` (nullable fk)
-- `focus_session_id` (nullable fk)
-- `entry_type` (`focus|untracked|manual_adjustment`)
-- `timer_mode_snapshot` (nullable string)
-- `target_seconds_snapshot` (nullable int)
-- `started_at_utc` (timestamp(3))
-- `ended_at_utc` (timestamp(3))
-- `duration_seconds` (int)
-- `created_at`
-- `updated_at`
-
-Nota:
-- `daily_log` no necesita tabla fisica; se arma consultando `time_entries`.
-
----
-
-## Configuracion adicional obligatoria
-
-### Frontend
-
-- usar `credentials: 'include'`
-- mutaciones protegidas con:
-  - `GET /sanctum/csrf-cookie`
-- al recibir eventos Reverb:
-  - aplicar snapshot
-  - si llega `created_time_entry_id`, invalidar/refetch de daily log
-
-### Backend Laravel
-
-- timestamps con precision de milisegundos (`timestamp(3)`)
-- emitir eventos realtime despues de commit DB
-- validacion optimista por `expected_version` en comandos
+- todas las transiciones (`start/pause/resume/stop`) en transaccion DB
+- lock por usuario en runtime (`SELECT ... FOR UPDATE`) para evitar doble play
+- timestamps con milisegundos (`timestamp(3)`)
+- `elapsed_seconds` calculado en backend con UTC
+- emitir Reverb despues de commit
+- siempre filtrar por `auth()->id()`
