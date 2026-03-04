@@ -1,9 +1,10 @@
 import type { CSSProperties, KeyboardEvent, RefObject } from 'react'
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLayerGroup, faStop } from '@fortawesome/free-solid-svg-icons'
+import { faLayerGroup } from '@fortawesome/free-solid-svg-icons'
 import type { FocusTimerMode } from '../types'
 import { classNames } from '../utils/classNames'
+import { FocusOnlyTimerFooter } from './timer-panel/FocusOnlyTimerFooter'
 
 type TimerDraftParts = {
   hours: string
@@ -220,51 +221,23 @@ export function FocusOnlyTimerPanel({
           </div>
         </div>
 
-        <div className={classNames('mx-auto mt-1.5 w-full max-w-[500px] border-t pt-3', accentDividerClassName)}>
-          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500 sm:text-[11px]">
-            {copyTotalTaskTime}
-            <span className={classNames('ml-2 font-mono tracking-[0.16em]', accentTotalValueClassName)}>
-              {totalTaskTimeLabel}
-            </span>
-          </p>
-        </div>
-
-        <div className="mt-3 flex items-center justify-center gap-3">
-          <button
-            aria-label={copyStopFocus}
-            className={classNames(
-              'grid h-12 w-12 place-items-center rounded-full border transition hover:-translate-y-0.5 active:translate-y-0 sm:h-[3.25rem] sm:w-[3.25rem]',
-              canStopFocus
-                ? 'border-slate-600/80 bg-slate-900/45 text-slate-100 shadow-[0_8px_20px_rgba(2,6,23,0.38)] hover:border-slate-500/85 hover:bg-slate-800/55'
-                : 'cursor-not-allowed border-slate-800/70 bg-slate-900/20 text-slate-600',
-            )}
-            disabled={!canStopFocus}
-            onClick={onStopFocus}
-            type="button"
-          >
-            <FontAwesomeIcon className="text-[14px]" icon={faStop} />
-          </button>
-
-          <button
-            aria-label={toggleFocusAriaLabel}
-            className={classNames(
-              'grid h-12 w-12 place-items-center rounded-full border transition hover:-translate-y-0.5 active:translate-y-0 sm:h-[3.25rem] sm:w-[3.25rem]',
-              canToggleFocus ? accentPlayButtonClassName : 'cursor-not-allowed border-slate-800/70 bg-slate-900/20 text-slate-600',
-            )}
-            disabled={!canToggleFocus}
-            onClick={onToggleFocusClick}
-            style={canToggleFocus ? playButtonGlowStyle : undefined}
-            type="button"
-          >
-            <FontAwesomeIcon
-              className={classNames(
-                isRunning ? 'text-[18px]' : 'translate-x-[1px] text-xl',
-                accentPlayIconClassName,
-              )}
-              icon={toggleFocusIcon}
-            />
-          </button>
-        </div>
+        <FocusOnlyTimerFooter
+          accentDividerClassName={accentDividerClassName}
+          accentPlayButtonClassName={accentPlayButtonClassName}
+          accentPlayIconClassName={accentPlayIconClassName}
+          accentTotalValueClassName={accentTotalValueClassName}
+          canStopFocus={canStopFocus}
+          canToggleFocus={canToggleFocus}
+          copyStopFocus={copyStopFocus}
+          copyTotalTaskTime={copyTotalTaskTime}
+          isRunning={isRunning}
+          onStopFocus={onStopFocus}
+          onToggleFocusClick={onToggleFocusClick}
+          playButtonGlowStyle={playButtonGlowStyle}
+          toggleFocusAriaLabel={toggleFocusAriaLabel}
+          toggleFocusIcon={toggleFocusIcon}
+          totalTaskTimeLabel={totalTaskTimeLabel}
+        />
       </div>
     </div>
   )
