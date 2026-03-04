@@ -1,16 +1,12 @@
 import { API_BASE_URL, apiFetch, ensureCsrfCookie, parseJsonResponse } from '../../lib/api/http'
 import type { AppLocale } from '../../i18n/messages'
 import {
-  isMockBackendEnabled,
-  mockLoginAuth,
-  mockLoginWithGoogle,
-  mockLogoutAuth,
-  mockMeAuth,
-  mockRegisterAuth,
+  clearMockSessionFromAuth,
+  syncMockSessionFromAuthUser,
 } from '../../lib/mock/mockBackend'
 
 export type AuthApiUser = {
-  id: string
+  id: string | number
   display_name: string
   email: string
   locale?: AppLocale
@@ -46,75 +42,60 @@ export type RegisterAuthPayload = {
 }
 
 export async function registerAuth(payload: RegisterAuthPayload) {
-  if (isMockBackendEnabled()) {
-    return mockRegisterAuth(payload)
-  }
-
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/auth/register', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 
-  return parseJsonResponse<RegisterAuthResponse>(response, 'Register failed')
+  const json = await parseJsonResponse<RegisterAuthResponse>(response, 'Register failed')
+  syncMockSessionFromAuthUser(json.data.user)
+  return json
 }
 
 export async function loginAuth(payload: { email: string; password: string }) {
-  if (isMockBackendEnabled()) {
-    return mockLoginAuth(payload)
-  }
-
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 
-  return parseJsonResponse<AuthUserEnvelope>(response, 'Login failed')
+  const json = await parseJsonResponse<AuthUserEnvelope>(response, 'Login failed')
+  syncMockSessionFromAuthUser(json.data.user)
+  return json
 }
 
 export async function meAuth() {
-  if (isMockBackendEnabled()) {
-    return mockMeAuth()
-  }
-
   const response = await apiFetch('/api/v1/auth/me', { method: 'GET' })
   if (response.status === 401) {
+    clearMockSessionFromAuth()
     return null
   }
 
   const json = await parseJsonResponse<MeAuthResponse>(response, 'Auth session lookup failed')
+  syncMockSessionFromAuthUser(json.data)
   return json.data
 }
 
 export async function logoutAuth() {
-  if (isMockBackendEnabled()) {
-    return mockLogoutAuth()
-  }
-
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/auth/logout', { method: 'POST' })
 
   if (response.status === 401) {
+    clearMockSessionFromAuth()
     return { message: 'Logged out.' }
   }
 
-  return parseJsonResponse<{ message: string }>(response, 'Logout failed')
+  const json = await parseJsonResponse<{ message: string }>(response, 'Logout failed')
+  clearMockSessionFromAuth()
+  return json
 }
 
-export function loginWithGoogleRedirect(intent: 'login' | 'register' = 'login') {
+export function loginWithGoogleRedirect(intent?: 'login' | 'register') {
   if (typeof window === 'undefined') {
     return
   }
 
-  if (isMockBackendEnabled()) {
-    mockLoginWithGoogle(intent)
-    if (window.location.pathname !== '/app') {
-      window.history.pushState(null, '', '/app')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    }
-    return
-  }
-
-  window.location.href = `${API_BASE_URL}/api/v1/auth/google/redirect?intent=${intent}`
+  const query = intent ? `?intent=${intent}` : ''
+  window.location.href = `${API_BASE_URL}/api/v1/auth/google/redirect${query}`
 }

@@ -62,7 +62,7 @@ export function initUiSfx() {
   }
 
   clickHowl = new Howl({
-    src: ['/public/sfx/click.mp3', '/sfx/click.mp3', createUiClickWavDataUri()],
+    src: ['/sfx/click.mp3', createUiClickWavDataUri()],
     volume: 0.12,
     preload: true,
   })
@@ -78,7 +78,6 @@ export function initUiSfx() {
     volume: backgroundMusicVolume,
     loop: true,
     preload: true,
-    html5: true,
     onplay: emitBackgroundMusicState,
     onpause: emitBackgroundMusicState,
     onstop: emitBackgroundMusicState,
@@ -92,7 +91,6 @@ export function initUiSfx() {
     volume: 0.22,
     loop: true,
     preload: true,
-    html5: true,
     onplay: emitTimerRingtoneState,
     onpause: emitTimerRingtoneState,
     onstop: emitTimerRingtoneState,

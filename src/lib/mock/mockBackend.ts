@@ -85,6 +85,44 @@ export function isMockBackendEnabled() {
   return true
 }
 
+// Bridges a real backend-authenticated user into the local mock runtime,
+// so the rest of the app can remain frontend-only while auth is already real.
+export function syncMockSessionFromAuthUser(user: {
+  id: string | number
+  display_name: string
+  email: string
+  locale?: AppLocale
+}) {
+  const normalizedEmail = normalizeEmail(user.email)
+  const normalizedLocale: AppLocale = user.locale === 'en' ? 'en' : 'es'
+  const userId = `${user.id}`
+  const displayName = typeof user.display_name === 'string' && user.display_name.trim()
+    ? user.display_name.trim()
+    : deriveDisplayName(normalizedEmail)
+
+  const existing = store.usersById.get(userId)
+  if (existing) {
+    existing.email = normalizedEmail
+    existing.display_name = displayName
+    existing.locale = normalizedLocale
+  } else {
+    store.usersById.set(userId, {
+      id: userId,
+      email: normalizedEmail,
+      display_name: displayName,
+      locale: normalizedLocale,
+    })
+  }
+
+  store.userIdByEmail.set(normalizedEmail, userId)
+  store.currentUserId = userId
+  ensureSeed(userId, normalizedLocale, undefined)
+}
+
+export function clearMockSessionFromAuth() {
+  store.currentUserId = null
+}
+
 export function mockRegisterAuth(payload: {
   display_name: string
   email: string

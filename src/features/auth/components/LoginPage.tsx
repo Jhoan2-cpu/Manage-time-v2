@@ -1,4 +1,4 @@
-import { FormEvent, useState, type ReactNode } from 'react'
+import { FormEvent, useEffect, useState, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEnvelope, faEye, faEyeSlash, faLock, faRightToBracket, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
@@ -21,6 +21,22 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onClose 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const isSubmitDisabled = isSubmitting || !email.trim() || !password
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('auth_error') !== 'google') {
+      return
+    }
+
+    setErrorMessage(locale === 'es' ? 'Error al iniciar sesión con Google.' : 'Google sign-in failed.')
+    if (window.location.pathname === '/login') {
+      window.history.replaceState(null, '', '/login')
+    }
+  }, [locale])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

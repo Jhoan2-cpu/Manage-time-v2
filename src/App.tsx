@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getBrowserAppLocale, useI18n } from './i18n'
+import { useI18n } from './i18n'
 import { LoginPage } from './features/auth/components/LoginPage'
 import { RegisterPage } from './features/auth/components/RegisterPage'
+import { useAuthModule } from './features/auth/hooks/useAuthModule'
+import { mapAuthApiUserToSessionUser } from './features/auth/utils/sessionUser'
 import { FocusDashboard } from './features/focus-dashboard/FocusDashboard'
 import {
   getAppBootstrap,
@@ -12,26 +14,7 @@ import {
 import { HomePage } from './features/home/components/HomePage'
 import { getApiErrorFirstMessage } from './lib/api/http'
 import { stopFocusAudioPlayback } from './lib/audio/uiSfx'
-import {
-  loginAuth,
-  loginWithGoogleRedirect,
-  logoutAuth,
-  meAuth,
-  registerAuth,
-  type AuthApiUser,
-} from './features/auth/api'
 import type { AppLocale } from './i18n/messages'
-import { isMockBackendEnabled } from './lib/mock/mockBackend'
-
-type AppSessionUser = {
-  id: string
-  displayName: string
-  email: string
-  locale: AppLocale
-}
-
-type AppRoute = 'home' | 'login' | 'register' | 'app'
-type AuthStatus = 'loading' | 'guest' | 'authenticated'
 type AppBootstrapStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 const APP_BOOTSTRAP_INCLUDES: AppBootstrapInclude[] = [
@@ -44,98 +27,42 @@ const APP_BOOTSTRAP_INCLUDES: AppBootstrapInclude[] = [
 
 function App() {
   const { locale, setLocale } = useI18n()
-  const [sessionUser, setSessionUser] = useState<AppSessionUser | null>(null)
-  const [authStatus, setAuthStatus] = useState<AuthStatus>('loading')
   const [appBootstrapStatus, setAppBootstrapStatus] = useState<AppBootstrapStatus>('idle')
   const [appBootstrapData, setAppBootstrapData] = useState<AppBootstrapData | null>(null)
   const [appBootstrapError, setAppBootstrapError] = useState<string | null>(null)
   const [appBootstrapUserId, setAppBootstrapUserId] = useState<string | null>(null)
   const [appBootstrapReloadKey, setAppBootstrapReloadKey] = useState(0)
-  const [currentPath, setCurrentPath] = useState(() => getBrowserPath())
-  const fallbackDisplayName = locale === 'es' ? 'Usuario Velor' : 'Velor User'
+  const resetAppBootstrapState = () => {
+    setAppBootstrapStatus('idle')
+    setAppBootstrapData(null)
+    setAppBootstrapError(null)
+    setAppBootstrapUserId(null)
+  }
+  const {
+    authStatus,
+    currentPath,
+    fallbackDisplayName,
+    forceGuestToLogin,
+    goToApp,
+    goToLogin,
+    goToRegister,
+    handleCloseAuthForm,
+    handleGoogleAuth,
+    handleGoogleRegisterAuth,
+    handleLogin,
+    handleRegister,
+    handleSignOut,
+    route,
+    sessionUser,
+    setSessionUser,
+  } = useAuthModule({
+    locale,
+    onResetAppBootstrapState: resetAppBootstrapState,
+    onStopAudioPlayback: stopFocusAudioPlayback,
+    setLocale,
+  })
 
   useEffect(() => {
-    let didCancel = false
-    const fallbackDisplayNameAtBoot = locale === 'es' ? 'Usuario Velor' : 'Velor User'
-
-    const bootstrapAuthSession = async () => {
-      setAuthStatus('loading')
-
-      try {
-        const user = await meAuth()
-        if (didCancel) {
-          return
-        }
-
-        if (!user) {
-          setSessionUser(null)
-          setAuthStatus('guest')
-          return
-        }
-
-        const nextUser = mapAuthApiUserToSessionUser(user, fallbackDisplayNameAtBoot)
-        setSessionUser(nextUser)
-        setLocale(nextUser.locale)
-        setAuthStatus('authenticated')
-      } catch {
-        if (didCancel) {
-          return
-        }
-        setSessionUser(null)
-        setAuthStatus('guest')
-      }
-    }
-
-    void bootstrapAuthSession()
-
-    return () => {
-      didCancel = true
-    }
-  }, [setLocale])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    const handlePopState = () => {
-      setCurrentPath(getBrowserPath())
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (authStatus === 'loading') {
-      return
-    }
-
-    const route = resolveRoute(currentPath)
-
-    if (route === 'app' && authStatus !== 'authenticated') {
-      navigateTo('/login', true)
-      setCurrentPath('/login')
-      return
-    }
-
-    if ((route === 'login' || route === 'register') && authStatus === 'authenticated') {
-      navigateTo('/app', true)
-      setCurrentPath('/app')
-      return
-    }
-
-    if (!isKnownPath(currentPath)) {
-      navigateTo('/', true)
-      setCurrentPath('/')
-    }
-  }, [authStatus, currentPath])
-
-  useEffect(() => {
-    const route = resolveRoute(currentPath)
-
     if (authStatus !== 'authenticated' || !sessionUser) {
       setAppBootstrapStatus((current) => (current === 'idle' ? current : 'idle'))
       setAppBootstrapData(null)
@@ -166,15 +93,7 @@ function App() {
         }
 
         if (!bootstrap) {
-          stopFocusAudioPlayback()
-          setAppBootstrapStatus('idle')
-          setAppBootstrapData(null)
-          setAppBootstrapError(null)
-          setAppBootstrapUserId(null)
-          setSessionUser(null)
-          setAuthStatus('guest')
-          navigateTo('/login', true)
-          setCurrentPath('/login')
+          forceGuestToLogin()
           return
         }
 
@@ -223,6 +142,7 @@ function App() {
     fallbackDisplayName,
     locale,
     sessionUser,
+    forceGuestToLogin,
     setLocale,
   ])
 
@@ -237,89 +157,6 @@ function App() {
     )
   }, [locale, sessionUser])
 
-  const handleLogin = async ({ email, password }: { email: string; password: string }) => {
-    const result = await loginAuth({ email, password })
-    const nextUser = mapAuthApiUserToSessionUser(result.data.user, fallbackDisplayName)
-    setSessionUser(nextUser)
-    if (nextUser.locale !== locale) {
-      setLocale(nextUser.locale)
-    }
-    setAuthStatus('authenticated')
-    setAppBootstrapStatus('idle')
-    setAppBootstrapData(null)
-    setAppBootstrapError(null)
-    setAppBootstrapUserId(null)
-    navigateTo('/app')
-    setCurrentPath('/app')
-  }
-  const handleRegister = async ({
-    displayName,
-    email,
-    password,
-    passwordConfirmation,
-    timeZoneName,
-  }: {
-    displayName: string
-    email: string
-    password: string
-    passwordConfirmation: string
-    timeZoneName: string
-  }) => {
-    const result = await registerAuth({
-      display_name: displayName.trim(),
-      email,
-      password,
-      password_confirmation: passwordConfirmation,
-      locale: getBrowserAppLocale(),
-      time_zone_name: timeZoneName.trim() || 'UTC',
-    })
-
-    const nextUser = mapAuthApiUserToSessionUser(result.data.user, fallbackDisplayName)
-    setSessionUser(nextUser)
-    if (nextUser.locale !== locale) {
-      setLocale(nextUser.locale)
-    }
-    setAuthStatus('authenticated')
-    setAppBootstrapStatus('idle')
-    setAppBootstrapData(null)
-    setAppBootstrapError(null)
-    setAppBootstrapUserId(null)
-    navigateTo('/app')
-    setCurrentPath('/app')
-  }
-  const handleGoogleAuth = () => {
-    if (isMockBackendEnabled()) {
-      void handleLogin({ email: 'google-demo@velor.mock', password: 'mock-google' })
-      return
-    }
-
-    loginWithGoogleRedirect('login')
-  }
-  const handleGoogleRegisterAuth = () => {
-    if (isMockBackendEnabled()) {
-      void handleLogin({ email: 'google-new@velor.mock', password: 'mock-google' })
-      return
-    }
-
-    loginWithGoogleRedirect('register')
-  }
-
-  const handleSignOut = async () => {
-    stopFocusAudioPlayback()
-    try {
-      await logoutAuth()
-    } catch {
-      // If the backend session already expired, clear local auth state anyway.
-    }
-    setAppBootstrapStatus('idle')
-    setAppBootstrapData(null)
-    setAppBootstrapError(null)
-    setAppBootstrapUserId(null)
-    setSessionUser(null)
-    setAuthStatus('guest')
-    navigateTo('/login')
-    setCurrentPath('/login')
-  }
   const handlePreferencesUpdated = (preferences: UserPreferences) => {
     setAppBootstrapData((current) => {
       if (!current) {
@@ -353,17 +190,12 @@ function App() {
     }
   }
 
-  const route = resolveRoute(currentPath)
   const hasReadyAppBootstrap =
     route === 'app' &&
     sessionUser !== null &&
     appBootstrapStatus === 'ready' &&
     appBootstrapData !== null &&
     appBootstrapUserId === sessionUser.id
-  const handleCloseAuthForm = () => {
-    navigateTo('/')
-    setCurrentPath('/')
-  }
 
   if (authStatus === 'loading') {
     return (
@@ -380,10 +212,7 @@ function App() {
       return (
         <RegisterPage
           onClose={handleCloseAuthForm}
-          onOpenLogin={() => {
-            navigateTo('/login')
-            setCurrentPath('/login')
-          }}
+          onOpenLogin={goToLogin}
           onRegister={handleRegister}
           onRegisterWithGoogle={handleGoogleRegisterAuth}
         />
@@ -395,10 +224,7 @@ function App() {
           onClose={handleCloseAuthForm}
           onLogin={handleLogin}
           onLoginWithGoogle={handleGoogleAuth}
-          onOpenRegister={() => {
-            navigateTo('/register')
-            setCurrentPath('/register')
-          }}
+          onOpenRegister={goToRegister}
         />
       )
     }
@@ -406,14 +232,8 @@ function App() {
     return (
       <HomePage
         hasSession={false}
-        onOpenLogin={() => {
-          navigateTo('/login')
-          setCurrentPath('/login')
-        }}
-        onOpenRegister={() => {
-          navigateTo('/register')
-          setCurrentPath('/register')
-        }}
+        onOpenLogin={goToLogin}
+        onOpenRegister={goToRegister}
       />
     )
   }
@@ -422,18 +242,9 @@ function App() {
     return (
       <HomePage
         hasSession
-        onOpenApp={() => {
-          navigateTo('/app')
-          setCurrentPath('/app')
-        }}
-        onOpenLogin={() => {
-          navigateTo('/app')
-          setCurrentPath('/app')
-        }}
-        onOpenRegister={() => {
-          navigateTo('/app')
-          setCurrentPath('/app')
-        }}
+        onOpenApp={goToApp}
+        onOpenLogin={goToApp}
+        onOpenRegister={goToApp}
       />
     )
   }
@@ -495,80 +306,3 @@ function App() {
 }
 
 export default App
-
-function deriveDisplayNameFromEmail(email: string, fallback = 'Velor User') {
-  const localPart = email.trim().split('@')[0] ?? ''
-
-  if (!localPart) {
-    return fallback
-  }
-
-  const formatted = localPart
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-    .join(' ')
-
-  return formatted || fallback
-}
-
-function mapAuthApiUserToSessionUser(user: AuthApiUser, fallbackDisplayName: string): AppSessionUser {
-  const normalizedEmail = typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''
-
-  return {
-    id: user.id,
-    email: normalizedEmail,
-    displayName:
-      typeof user.display_name === 'string' && user.display_name.trim()
-        ? user.display_name.trim()
-        : deriveDisplayNameFromEmail(normalizedEmail, fallbackDisplayName),
-    locale: user.locale === 'en' ? 'en' : 'es',
-  }
-}
-
-function getBrowserPath() {
-  if (typeof window === 'undefined') {
-    return '/'
-  }
-
-  return window.location.pathname || '/'
-}
-
-function isKnownPath(pathname: string) {
-  return pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/app'
-}
-
-function resolveRoute(pathname: string): AppRoute {
-  if (pathname === '/login') {
-    return 'login'
-  }
-
-  if (pathname === '/register') {
-    return 'register'
-  }
-
-  if (pathname === '/app') {
-    return 'app'
-  }
-
-  return 'home'
-}
-
-function navigateTo(pathname: string, replace = false) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const nextPath = pathname || '/'
-  if (window.location.pathname === nextPath) {
-    return
-  }
-
-  if (replace) {
-    window.history.replaceState(null, '', nextPath)
-    return
-  }
-
-  window.history.pushState(null, '', nextPath)
-}
