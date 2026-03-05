@@ -225,9 +225,15 @@ function adaptTaskApiItemToUi(
   } = {},
 ): Task {
   const existingTask = options.existingTask
-  const normalizedTimerInitialSeconds =
+  const normalizedTimerInitialSecondsRaw =
     typeof serverTask.timer_initial_seconds === 'number' && Number.isFinite(serverTask.timer_initial_seconds)
-      ? Math.max(0, Math.floor(serverTask.timer_initial_seconds))
+      ? serverTask.timer_initial_seconds
+      : typeof serverTask.target_duration_seconds === 'number' && Number.isFinite(serverTask.target_duration_seconds)
+        ? serverTask.target_duration_seconds
+        : null
+  const normalizedTimerInitialSeconds =
+    normalizedTimerInitialSecondsRaw !== null
+      ? Math.max(0, Math.floor(normalizedTimerInitialSecondsRaw))
       : null
 
   return {
@@ -563,11 +569,19 @@ export function FocusDashboard({
   }
 
   const buildTasksApiPayloadFromModalPayload = (payload: NewTaskPayload): CreateTaskPayload => {
+    const timerInitialSeconds =
+      typeof payload.targetDurationMinutes === 'number' && Number.isFinite(payload.targetDurationMinutes)
+        ? Math.max(0, Math.round(payload.targetDurationMinutes * 60))
+        : 0
+    const normalizedTimerInitialSeconds = timerInitialSeconds > 0 ? Math.min(timerInitialSeconds, 24 * 60 * 60) : null
+
     return {
       name: payload.title.trim(),
       color_tag: TASK_COLOR_HEX_BY_KEY[payload.colorTag] ?? payload.colorTag,
       icon_tag: TASK_ICON_API_BY_KEY[payload.iconTag] ?? payload.iconTag,
       alarm_time_local: normalizeAlarmTimeToHm(payload.alarmTime),
+      timer_initial_seconds: normalizedTimerInitialSeconds,
+      target_duration_seconds: normalizedTimerInitialSeconds,
     }
   }
 
@@ -623,15 +637,11 @@ export function FocusDashboard({
             ? Math.max(1, Math.floor(editingTask.version))
             : 1
 
-        const timerInitialSeconds =
-          typeof payload.targetDurationMinutes === 'number' && Number.isFinite(payload.targetDurationMinutes)
-            ? Math.max(0, Math.round(payload.targetDurationMinutes * 60))
-            : 0
-
         const updatedTask = await updateTaskApi(editingTaskId, {
           ...apiPayload,
           if_version: ifVersion,
-          timer_initial_seconds: timerInitialSeconds > 0 ? Math.min(timerInitialSeconds, 24 * 60 * 60) : null,
+          timer_initial_seconds: apiPayload.timer_initial_seconds ?? null,
+          target_duration_seconds: apiPayload.target_duration_seconds ?? null,
         })
         if (!updatedTask) {
           onSignOut?.()
@@ -644,7 +654,6 @@ export function FocusDashboard({
               ? adaptTaskApiItemToUi(updatedTask, {
                   existingTask: task,
                   state: task.state,
-                  localTargetDurationMinutes: payload.targetDurationMinutes,
                 })
               : task,
           ),
@@ -664,7 +673,6 @@ export function FocusDashboard({
         const uiTask = adaptTaskApiItemToUi(createdTask, {
           existingTask,
           state: existingTask?.state ?? nextState,
-          localTargetDurationMinutes: existingTask?.targetDurationMinutes ?? payload.targetDurationMinutes,
         })
 
         if (!existingTask) {
@@ -863,11 +871,10 @@ export function FocusDashboard({
                 ? 'done'
                 : 'scheduled'
 
-          const adapted = adaptTaskApiItemToUi(serverTask, {
-            existingTask,
-            state,
-            localTargetDurationMinutes: existingTask?.targetDurationMinutes ?? null,
-          })
+        const adapted = adaptTaskApiItemToUi(serverTask, {
+          existingTask,
+          state,
+        })
           if (!existingTask) {
             return adapted
           }

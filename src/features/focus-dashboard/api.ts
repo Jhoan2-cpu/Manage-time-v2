@@ -133,6 +133,7 @@ export type TaskApiItem = {
   color_tag: string | null
   alarm_time_local: string | null
   timer_initial_seconds: number | null
+  target_duration_seconds?: number | null
   version: number
   created_at: string
   updated_at: string
@@ -145,6 +146,8 @@ export type CreateTaskPayload = {
   color_tag: TaskApiColorTag
   icon_tag: TaskApiIconTag
   alarm_time_local: string | null
+  timer_initial_seconds?: number | null
+  target_duration_seconds?: number | null
 }
 
 export type UpdateTaskPayload = {
@@ -154,6 +157,7 @@ export type UpdateTaskPayload = {
   icon_tag?: TaskApiIconTag
   alarm_time_local?: string | null
   timer_initial_seconds?: number | null
+  target_duration_seconds?: number | null
 }
 
 type TasksListEnvelope = {
