@@ -81,8 +81,8 @@ const DEFAULT_TIME_ZONE = detectTimeZone()
 const DEFAULT_LOCALE: AppLocale = 'es'
 
 export function isMockBackendEnabled() {
-  // Frontend-only mode for now: keep all data/session behavior client-side.
-  return true
+  const raw = `${import.meta.env.VITE_ENABLE_MOCK_BACKEND ?? ''}`.trim().toLowerCase()
+  return raw === 'true' || raw === '1' || raw === 'yes'
 }
 
 // Bridges a real backend-authenticated user into the local mock runtime,

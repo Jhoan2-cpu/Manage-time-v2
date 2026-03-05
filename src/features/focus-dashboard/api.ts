@@ -132,7 +132,13 @@ export type TaskApiItem = {
   icon_tag: string | null
   color_tag: string | null
   alarm_time_local: string | null
+  active_mode?: 'timer' | 'stopwatch'
+  state?: 'idle' | 'working' | 'paused' | 'stopped'
   timer_initial_seconds: number | null
+  timer_remaining_seconds?: number | null
+  timer_started_at_utc?: string | null
+  stopwatch_elapsed_seconds?: number | null
+  stopwatch_started_at_utc?: string | null
   target_duration_seconds?: number | null
   version: number
   created_at: string
@@ -211,6 +217,19 @@ export type FocusSessionStateEnvelope = {
   }
 }
 
+type LocalFocusRuntimeSession = {
+  id: string
+  task_id: string
+  timer_mode: FocusTimerModeApi
+  session_state: FocusSessionStateApi
+  target_seconds: number | null
+  started_at_utc: string
+  last_resumed_at_utc: string | null
+  last_paused_at_utc: string | null
+  elapsed_seconds_total: number
+  version: number
+}
+
 export type FocusSessionConflictCode =
   | 'ACTIVE_SESSION_CONFLICT'
   | 'FOCUS_RUNTIME_CONFLICT'
@@ -228,6 +247,10 @@ export type FocusSessionConflictEnvelope = {
     active_focus_session: ActiveFocusSession | null
   }
 }
+
+const AUTH_USER_ID_STORAGE_KEY = 'velor_auth_user_id'
+const FOCUS_RUNTIME_STORAGE_KEY_PREFIX = 'velor_focus_runtime_session:'
+let isFocusRuntimeEndpointKnownMissing = false
 
 export type StartFocusSessionPayload = {
   task_id: string
@@ -549,9 +572,21 @@ export async function getActiveFocusSession() {
     return data ? (data as FocusSessionStateEnvelope) : null
   }
 
-  const response = await apiFetch('/api/v1/focus-sessions/active', { method: 'GET' })
+  if (isFocusRuntimeEndpointKnownMissing) {
+    return getLocalFocusRuntimeEnvelope()
+  }
+
+  const response = await requestFocusRuntime('active', { method: 'GET' })
+  if (!response) {
+    return getLocalFocusRuntimeEnvelope()
+  }
+
   if (response.status === 401) {
     return null
+  }
+
+  if (response.status >= 500) {
+    return getLocalFocusRuntimeEnvelope()
   }
 
   return parseJsonResponse<FocusSessionStateEnvelope>(response, 'Active focus session lookup failed')
@@ -565,15 +600,23 @@ export async function startFocusSession(payload: StartFocusSessionPayload) {
 
   await ensureCsrfCookie()
   const { elapsed_seconds_seed: _elapsedSeed, ...networkPayload } = payload
-  const response = await apiFetch('/api/v1/focus-sessions/start', {
+  const response = await requestFocusRuntime('start', {
     method: 'POST',
     headers: {
       'X-Origin-Device-Id': getOrCreateOriginDeviceId(),
     },
     body: JSON.stringify(networkPayload),
   })
+  if (!response) {
+    return startLocalFocusRuntimeSession(payload)
+  }
+
   if (response.status === 401) {
     return null
+  }
+
+  if (response.status >= 500) {
+    return startLocalFocusRuntimeSession(payload)
   }
 
   return parseJsonResponse<FocusSessionStateEnvelope>(response, 'Focus session start failed')
@@ -608,18 +651,248 @@ export async function focusSessionCommand(
   const networkPayload = endpoint === 'stop'
     ? normalizeStopPayload(networkPayloadBase as StopFocusSessionPayload)
     : networkPayloadBase
-  const response = await apiFetch(`/api/v1/focus-sessions/${endpoint}`, {
+  const response = await requestFocusRuntime(endpoint, {
     method: 'POST',
     headers: {
       'X-Origin-Device-Id': getOrCreateOriginDeviceId(),
     },
     body: JSON.stringify(networkPayload),
   })
+  if (!response) {
+    return runLocalFocusRuntimeCommand(endpoint, payload)
+  }
+
   if (response.status === 401) {
     return null
   }
 
+  if (response.status >= 500) {
+    return runLocalFocusRuntimeCommand(endpoint, payload)
+  }
+
   return parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
+}
+
+async function requestFocusRuntime(
+  endpoint: 'active' | 'start' | 'pause' | 'resume' | 'switch-task' | 'stop' | 'reset' | 'heartbeat',
+  init: RequestInit,
+) {
+  const canonicalPath = `/api/v1/focus-sessions/${endpoint}`
+  const canonicalResponse = await apiFetch(canonicalPath, init)
+  if (canonicalResponse.status !== 404) {
+    return canonicalResponse
+  }
+
+  const aliasPath = `/api/v1/focus/sessions/${endpoint}`
+  const aliasResponse = await apiFetch(aliasPath, init)
+  if (aliasResponse.status !== 404) {
+    return aliasResponse
+  }
+
+  isFocusRuntimeEndpointKnownMissing = true
+  return null
+}
+
+function getLocalFocusRuntimeEnvelope(options: {
+  session?: LocalFocusRuntimeSession | null
+  stoppedSessionSummary?: StoppedFocusSessionSummary | null
+  createdTimeEntryId?: string | null
+} = {}) {
+  const userId = getLocalAuthUserId()
+  const session =
+    options.session !== undefined
+      ? options.session
+      : userId
+        ? readLocalFocusRuntimeSession(userId)
+        : null
+
+  return {
+    data: {
+      server_now_utc: new Date().toISOString(),
+      active_focus_session: session ? mapLocalRuntimeSessionToApi(session) : null,
+      stopped_session_summary: options.stoppedSessionSummary ?? null,
+      created_time_entry_id: options.createdTimeEntryId ?? undefined,
+    },
+  } satisfies FocusSessionStateEnvelope
+}
+
+function startLocalFocusRuntimeSession(payload: StartFocusSessionPayload) {
+  const userId = getLocalAuthUserId()
+  if (!userId) {
+    return getLocalFocusRuntimeEnvelope()
+  }
+
+  const nowIso = new Date().toISOString()
+  const existing = readLocalFocusRuntimeSession(userId)
+  const timerMode: FocusTimerModeApi = payload.timer_mode === 'timer' ? 'timer' : 'stopwatch'
+  const targetSeconds = timerMode === 'timer' ? normalizeTargetSeconds(payload.target_seconds) : null
+  const elapsedSeed = normalizeElapsedSeed(payload.elapsed_seconds_seed, targetSeconds)
+  const version = Math.max(1, (existing?.version ?? 0) + 1)
+  const session: LocalFocusRuntimeSession = {
+    id: existing?.id ?? `local-focus-session-${Date.now()}`,
+    task_id: payload.task_id,
+    timer_mode: timerMode,
+    session_state: 'running',
+    target_seconds: targetSeconds,
+    started_at_utc: nowIso,
+    last_resumed_at_utc: nowIso,
+    last_paused_at_utc: null,
+    elapsed_seconds_total: elapsedSeed,
+    version,
+  }
+
+  writeLocalFocusRuntimeSession(userId, session)
+  return getLocalFocusRuntimeEnvelope({ session })
+}
+
+function runLocalFocusRuntimeCommand(
+  endpoint: 'pause' | 'resume' | 'switch-task' | 'stop' | 'reset' | 'heartbeat',
+  payload:
+    | PauseFocusSessionPayload
+    | ResumeFocusSessionPayload
+    | SwitchTaskFocusSessionPayload
+    | StopFocusSessionPayload
+    | ResetFocusSessionPayload
+    | HeartbeatFocusSessionPayload,
+) {
+  const userId = getLocalAuthUserId()
+  if (!userId) {
+    return getLocalFocusRuntimeEnvelope()
+  }
+
+  const nowIso = new Date().toISOString()
+  const nowMs = Date.now()
+  const session = readLocalFocusRuntimeSession(userId)
+
+  if (endpoint === 'pause') {
+    if (!session) {
+      return getLocalFocusRuntimeEnvelope()
+    }
+
+    if (isRuntimeSessionRunning(session)) {
+      const elapsedAtPause = resolveLocalRuntimeElapsed(session, nowMs)
+      const nextTarget = normalizeTargetSeconds(session.target_seconds)
+      session.elapsed_seconds_total = clampElapsedByTarget(elapsedAtPause, nextTarget)
+      session.session_state = 'paused'
+      session.last_paused_at_utc = nowIso
+      session.version = session.version + 1
+      writeLocalFocusRuntimeSession(userId, session)
+    }
+
+    return getLocalFocusRuntimeEnvelope({ session })
+  }
+
+  if (endpoint === 'resume') {
+    if (!session) {
+      return getLocalFocusRuntimeEnvelope()
+    }
+
+    if (!isRuntimeSessionRunning(session)) {
+      session.session_state = 'running'
+      session.last_resumed_at_utc = nowIso
+      session.last_paused_at_utc = null
+      session.version = session.version + 1
+      writeLocalFocusRuntimeSession(userId, session)
+    }
+
+    return getLocalFocusRuntimeEnvelope({ session })
+  }
+
+  if (endpoint === 'switch-task') {
+    const switchPayload = payload as SwitchTaskFocusSessionPayload
+    const baseSession = session ?? {
+      id: `local-focus-session-${Date.now()}`,
+      task_id: switchPayload.task_id,
+      timer_mode: 'stopwatch' as const,
+      session_state: 'paused' as const,
+      target_seconds: null,
+      started_at_utc: nowIso,
+      last_resumed_at_utc: null,
+      last_paused_at_utc: null,
+      elapsed_seconds_total: 0,
+      version: 0,
+    }
+
+    const timerMode: FocusTimerModeApi =
+      switchPayload.timer_mode === 'timer' || switchPayload.timer_mode === 'stopwatch'
+        ? switchPayload.timer_mode
+        : baseSession.timer_mode
+    const targetSeconds = timerMode === 'timer'
+      ? normalizeTargetSeconds(switchPayload.target_seconds ?? baseSession.target_seconds)
+      : null
+    const elapsedSeed = normalizeElapsedSeed(switchPayload.elapsed_seconds_seed, targetSeconds)
+
+    const nextSession: LocalFocusRuntimeSession = {
+      ...baseSession,
+      task_id: switchPayload.task_id,
+      timer_mode: timerMode,
+      target_seconds: targetSeconds,
+      session_state: 'running',
+      started_at_utc: nowIso,
+      last_resumed_at_utc: nowIso,
+      last_paused_at_utc: null,
+      elapsed_seconds_total: elapsedSeed,
+      version: Math.max(1, baseSession.version + 1),
+    }
+
+    writeLocalFocusRuntimeSession(userId, nextSession)
+    return getLocalFocusRuntimeEnvelope({ session: nextSession })
+  }
+
+  if (endpoint === 'stop') {
+    if (!session) {
+      return getLocalFocusRuntimeEnvelope()
+    }
+
+    const stopPayload = payload as StopFocusSessionPayload
+    const elapsedFinal = resolveLocalRuntimeElapsed(session, nowMs)
+    const canonicalStopReason = normalizeStopReason(stopPayload)
+    const summary: StoppedFocusSessionSummary = {
+      task_id: session.task_id,
+      timer_mode: session.timer_mode,
+      elapsed_seconds_final: clampElapsedByTarget(elapsedFinal, session.target_seconds),
+      target_seconds: normalizeTargetSeconds(session.target_seconds),
+      stop_reason: canonicalStopReason,
+    }
+
+    writeLocalFocusRuntimeSession(userId, null)
+    return getLocalFocusRuntimeEnvelope({
+      session: null,
+      stoppedSessionSummary: summary,
+    })
+  }
+
+  if (endpoint === 'reset') {
+    if (!session) {
+      return getLocalFocusRuntimeEnvelope()
+    }
+
+    const resetPayload = payload as ResetFocusSessionPayload
+    if (resetPayload.task_id === session.task_id) {
+      session.elapsed_seconds_total = 0
+      session.session_state = 'paused'
+      session.last_resumed_at_utc = null
+      session.last_paused_at_utc = nowIso
+      session.version = session.version + 1
+      writeLocalFocusRuntimeSession(userId, session)
+    }
+
+    return getLocalFocusRuntimeEnvelope({ session })
+  }
+
+  if (!session) {
+    return getLocalFocusRuntimeEnvelope()
+  }
+
+  if (session.timer_mode === 'timer') {
+    const capped = clampElapsedByTarget(resolveLocalRuntimeElapsed(session, nowMs), session.target_seconds)
+    if (capped !== session.elapsed_seconds_total && !isRuntimeSessionRunning(session)) {
+      session.elapsed_seconds_total = capped
+      writeLocalFocusRuntimeSession(userId, session)
+    }
+  }
+
+  return getLocalFocusRuntimeEnvelope({ session })
 }
 
 export async function getFocusDailyLog(params: { date: string; time_zone_name: string }) {
@@ -893,4 +1166,177 @@ function normalizeStopPayload(payload: StopFocusSessionPayload) {
     expected_version: payload.expected_version,
     stop_reason: canonicalReason,
   }
+}
+
+function getLocalAuthUserId() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const value = window.localStorage.getItem(AUTH_USER_ID_STORAGE_KEY)
+  if (!value) {
+    return null
+  }
+
+  const normalized = value.trim()
+  return normalized ? normalized : null
+}
+
+function getFocusRuntimeStorageKey(userId: string) {
+  return `${FOCUS_RUNTIME_STORAGE_KEY_PREFIX}${userId}`
+}
+
+function readLocalFocusRuntimeSession(userId: string) {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const raw = window.localStorage.getItem(getFocusRuntimeStorageKey(userId))
+  if (!raw) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<LocalFocusRuntimeSession> | null
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+
+    const timerMode: FocusTimerModeApi = parsed.timer_mode === 'timer' ? 'timer' : 'stopwatch'
+    const sessionState: FocusSessionStateApi =
+      parsed.session_state === 'working' || parsed.session_state === 'running'
+        ? 'running'
+        : parsed.session_state === 'paused'
+          ? 'paused'
+          : 'paused'
+    const normalized: LocalFocusRuntimeSession = {
+      id: typeof parsed.id === 'string' && parsed.id.trim() ? parsed.id.trim() : `local-focus-session-${Date.now()}`,
+      task_id: typeof parsed.task_id === 'string' && parsed.task_id.trim() ? parsed.task_id.trim() : '',
+      timer_mode: timerMode,
+      session_state: sessionState,
+      target_seconds: normalizeTargetSeconds(parsed.target_seconds ?? null),
+      started_at_utc:
+        typeof parsed.started_at_utc === 'string' && parsed.started_at_utc.trim() ? parsed.started_at_utc : new Date().toISOString(),
+      last_resumed_at_utc:
+        typeof parsed.last_resumed_at_utc === 'string' && parsed.last_resumed_at_utc.trim()
+          ? parsed.last_resumed_at_utc
+          : null,
+      last_paused_at_utc:
+        typeof parsed.last_paused_at_utc === 'string' && parsed.last_paused_at_utc.trim()
+          ? parsed.last_paused_at_utc
+          : null,
+      elapsed_seconds_total: normalizeElapsedSeed(parsed.elapsed_seconds_total ?? 0, parsed.target_seconds ?? null),
+      version:
+        typeof parsed.version === 'number' && Number.isFinite(parsed.version)
+          ? Math.max(1, Math.floor(parsed.version))
+          : 1,
+    }
+
+    if (!normalized.task_id) {
+      return null
+    }
+
+    return normalized
+  } catch {
+    return null
+  }
+}
+
+function writeLocalFocusRuntimeSession(userId: string, session: LocalFocusRuntimeSession | null) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const storageKey = getFocusRuntimeStorageKey(userId)
+  if (!session) {
+    window.localStorage.removeItem(storageKey)
+    return
+  }
+
+  window.localStorage.setItem(storageKey, JSON.stringify(session))
+}
+
+function mapLocalRuntimeSessionToApi(session: LocalFocusRuntimeSession): ActiveFocusSession {
+  return {
+    id: session.id,
+    task_id: session.task_id,
+    timer_mode: session.timer_mode,
+    session_state: session.session_state,
+    target_seconds: normalizeTargetSeconds(session.target_seconds),
+    started_at_utc: session.started_at_utc,
+    last_resumed_at_utc: session.last_resumed_at_utc,
+    last_paused_at_utc: session.last_paused_at_utc,
+    elapsed_seconds_total: Math.max(0, Math.floor(session.elapsed_seconds_total)),
+    version: Math.max(1, Math.floor(session.version)),
+  }
+}
+
+function normalizeTargetSeconds(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null
+  }
+
+  return Math.max(1, Math.min(24 * 60 * 60, Math.round(value)))
+}
+
+function normalizeElapsedSeed(value: unknown, targetSeconds: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return 0
+  }
+
+  const normalized = Math.max(0, Math.floor(value))
+  return clampElapsedByTarget(normalized, targetSeconds)
+}
+
+function clampElapsedByTarget(elapsed: number, targetSeconds: unknown) {
+  const target = normalizeTargetSeconds(targetSeconds)
+  if (!target) {
+    return elapsed
+  }
+
+  return Math.min(elapsed, target)
+}
+
+function resolveLocalRuntimeElapsed(session: LocalFocusRuntimeSession, nowMs: number) {
+  const baseElapsed = Math.max(0, Math.floor(session.elapsed_seconds_total))
+  if (!isRuntimeSessionRunning(session)) {
+    return clampElapsedByTarget(baseElapsed, session.target_seconds)
+  }
+
+  if (!session.last_resumed_at_utc) {
+    return clampElapsedByTarget(baseElapsed, session.target_seconds)
+  }
+
+  const resumedAtMs = Date.parse(session.last_resumed_at_utc)
+  if (!Number.isFinite(resumedAtMs)) {
+    return clampElapsedByTarget(baseElapsed, session.target_seconds)
+  }
+
+  const deltaSeconds = Math.max(0, Math.floor((nowMs - resumedAtMs) / 1000))
+  return clampElapsedByTarget(baseElapsed + deltaSeconds, session.target_seconds)
+}
+
+function isRuntimeSessionRunning(session: LocalFocusRuntimeSession) {
+  return session.session_state === 'running' || session.session_state === 'working'
+}
+
+function normalizeStopReason(payload: StopFocusSessionPayload): FocusStoppedReason | null {
+  const value = payload.stop_reason ?? payload.stopped_reason ?? null
+  if (!value) {
+    return null
+  }
+
+  if (
+    value === 'manual' ||
+    value === 'timer_completed' ||
+    value === 'task_switch' ||
+    value === 'session_end' ||
+    value === 'idle_detected' ||
+    value === 'user_stop' ||
+    value === 'timer_complete'
+  ) {
+    return value
+  }
+
+  return null
 }

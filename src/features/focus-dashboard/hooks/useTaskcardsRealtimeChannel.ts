@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ConnectionStatus } from 'laravel-echo'
 import { ensureCsrfCookie } from '../../../lib/api/http'
-import { disconnectReverbEchoClient, getOrCreateReverbEchoClient } from '../../../lib/realtime/reverbEcho'
+import { getOrCreateReverbEchoClient } from '../../../lib/realtime/reverbEcho'
 
 export type TaskcardsRealtimeEventType =
   | 'taskcard.created'
@@ -23,6 +23,12 @@ export type TaskcardsRealtimeEvent = {
     color_tag?: string | null
     alarm_time_local?: string | null
     timer_initial_seconds?: number | null
+    timer_remaining_seconds?: number | null
+    timer_started_at_utc?: string | null
+    stopwatch_elapsed_seconds?: number | null
+    stopwatch_started_at_utc?: string | null
+    active_mode?: 'timer' | 'stopwatch' | null
+    state?: 'idle' | 'working' | 'paused' | 'stopped' | null
     version?: number
     created_at?: string
     updated_at?: string
@@ -68,6 +74,17 @@ type RealtimeTaskPayload = {
     timer_initial_seconds?: number | string | null
     timerInitialSeconds?: number | string | null
     target_duration_seconds?: number | string | null
+    timer_remaining_seconds?: number | string | null
+    timerRemainingSeconds?: number | string | null
+    timer_started_at_utc?: string | null
+    timerStartedAtUtc?: string | null
+    stopwatch_elapsed_seconds?: number | string | null
+    stopwatchElapsedSeconds?: number | string | null
+    stopwatch_started_at_utc?: string | null
+    stopwatchStartedAtUtc?: string | null
+    active_mode?: string | null
+    activeMode?: string | null
+    state?: string | null
     created_at?: string
     updated_at?: string
   }
@@ -85,6 +102,17 @@ type RealtimeTaskPayload = {
   timer_initial_seconds?: number | string | null
   timerInitialSeconds?: number | string | null
   target_duration_seconds?: number | string | null
+  timer_remaining_seconds?: number | string | null
+  timerRemainingSeconds?: number | string | null
+  timer_started_at_utc?: string | null
+  timerStartedAtUtc?: string | null
+  stopwatch_elapsed_seconds?: number | string | null
+  stopwatchElapsedSeconds?: number | string | null
+  stopwatch_started_at_utc?: string | null
+  stopwatchStartedAtUtc?: string | null
+  active_mode?: string | null
+  activeMode?: string | null
+  state?: string | null
   version?: number | string
   created_at?: string
   updated_at?: string
@@ -117,6 +145,7 @@ export function useTaskcardsRealtimeChannel({
 
     let isDisposed = false
     let cleanupConnectionListener: (() => void) | undefined
+    let echoInstance: ReturnType<typeof getOrCreateReverbEchoClient> | null = null
     const canonicalChannelName = `user.${userId}.focus.tasks`
     const legacyChannelName = `user.${userId}.taskcards`
     const includeLegacyChannel =
@@ -149,6 +178,7 @@ export function useTaskcardsRealtimeChannel({
           )
           return
         }
+        echoInstance = echo
 
         setConnectionState(echo.connectionStatus())
         cleanupConnectionListener = echo.connector.onConnectionChange((status) => {
@@ -210,8 +240,15 @@ export function useTaskcardsRealtimeChannel({
       isDisposed = true
       setConnectionState('idle')
       cleanupConnectionListener?.()
-
-      disconnectReverbEchoClient()
+      if (echoInstance) {
+        for (const channelName of channelNames) {
+          try {
+            echoInstance.leave(channelName)
+          } catch {
+            // noop
+          }
+        }
+      }
       didConnectOnceRef.current = false
     }
   }, [enabled, userId])
@@ -321,6 +358,34 @@ function normalizeTaskPayload(payload: RealtimeTaskPayload): TaskcardsRealtimeEv
     timer_initial_seconds: normalizeNullableNonNegativeInt(
       payload.timer_initial_seconds ?? payload.timerInitialSeconds ?? payload.target_duration_seconds,
     ),
+    timer_remaining_seconds: normalizeNullableNonNegativeInt(
+      payload.timer_remaining_seconds ?? payload.timerRemainingSeconds,
+    ),
+    timer_started_at_utc:
+      typeof payload.timer_started_at_utc === 'string'
+        ? payload.timer_started_at_utc
+        : typeof payload.timerStartedAtUtc === 'string'
+          ? payload.timerStartedAtUtc
+          : null,
+    stopwatch_elapsed_seconds: normalizeNullableNonNegativeInt(
+      payload.stopwatch_elapsed_seconds ?? payload.stopwatchElapsedSeconds,
+    ),
+    stopwatch_started_at_utc:
+      typeof payload.stopwatch_started_at_utc === 'string'
+        ? payload.stopwatch_started_at_utc
+        : typeof payload.stopwatchStartedAtUtc === 'string'
+          ? payload.stopwatchStartedAtUtc
+          : null,
+    active_mode:
+      payload.active_mode === 'timer' || payload.activeMode === 'timer'
+        ? 'timer'
+        : payload.active_mode === 'stopwatch' || payload.activeMode === 'stopwatch'
+          ? 'stopwatch'
+          : null,
+    state:
+      payload.state === 'idle' || payload.state === 'working' || payload.state === 'paused' || payload.state === 'stopped'
+        ? payload.state
+        : null,
     version: normalizeVersion(payload.version),
     created_at: typeof payload.created_at === 'string' ? payload.created_at : undefined,
     updated_at: typeof payload.updated_at === 'string' ? payload.updated_at : undefined,

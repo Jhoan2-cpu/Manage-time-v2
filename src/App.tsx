@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from './i18n'
 import { LoginPage } from './features/auth/components/LoginPage'
 import { RegisterPage } from './features/auth/components/RegisterPage'
@@ -16,6 +16,7 @@ import { ApiHttpError, getApiErrorFirstMessage } from './lib/api/http'
 import { stopFocusAudioPlayback } from './lib/audio/uiSfx'
 import type { AppLocale } from './i18n/messages'
 type AppBootstrapStatus = 'idle' | 'loading' | 'ready' | 'error'
+let isAppBootstrapEndpointKnownMissing = false
 
 const APP_BOOTSTRAP_INCLUDES: AppBootstrapInclude[] = [
   'tasks',
@@ -31,6 +32,50 @@ function detectBrowserTimeZone() {
   } catch {
     return 'UTC'
   }
+}
+
+function buildFallbackBootstrapData(params: {
+  user: { id: string; displayName: string | null; email: string | null; locale: AppLocale | null }
+  fallbackDisplayName: string
+}) {
+  const nowIso = new Date().toISOString()
+  return {
+    server_now_utc: nowIso,
+    user: {
+      id: params.user.id,
+      display_name: params.user.displayName ?? params.fallbackDisplayName,
+      email: params.user.email ?? '',
+      locale: params.user.locale ?? 'es',
+    },
+    workspace: {
+      id: 'default',
+      name: 'My Workspace',
+    },
+    preferences: {
+      locale: params.user.locale ?? 'es',
+      time_zone_name: detectBrowserTimeZone(),
+      time_zone_auto_detect: true,
+      ui_sounds_enabled: true,
+      background_music_enabled: false,
+      background_music_volume_percent: 50,
+      confirm_task_switch_enabled: true,
+      sign_out_confirmation_enabled: true,
+    },
+    tasks: [],
+    daily_log: {
+      date_local: nowIso.slice(0, 10),
+      tracked_seconds: 0,
+      untracked_seconds: 0,
+      entries: [],
+    },
+    dashboard_stats: {
+      tracked_seconds_today: 0,
+      untracked_seconds_today: 0,
+      tracked_sessions_count_today: 0,
+      focus_time_total_seconds: 0,
+    },
+    active_focus_session: null,
+  } satisfies AppBootstrapData
 }
 
 function App() {
@@ -69,9 +114,23 @@ function App() {
     onStopAudioPlayback: stopFocusAudioPlayback,
     setLocale,
   })
+  const forceGuestToLoginRef = useRef(forceGuestToLogin)
+  const setLocaleRef = useRef(setLocale)
+  const sessionUserId = sessionUser?.id ?? null
+  const sessionUserDisplayName = sessionUser?.displayName ?? null
+  const sessionUserEmail = sessionUser?.email ?? null
+  const sessionUserLocale = sessionUser?.locale ?? null
 
   useEffect(() => {
-    if (authStatus !== 'authenticated' || !sessionUser) {
+    forceGuestToLoginRef.current = forceGuestToLogin
+  }, [forceGuestToLogin])
+
+  useEffect(() => {
+    setLocaleRef.current = setLocale
+  }, [setLocale])
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !sessionUserId) {
       setAppBootstrapStatus((current) => (current === 'idle' ? current : 'idle'))
       setAppBootstrapData(null)
       setAppBootstrapError(null)
@@ -87,105 +146,132 @@ function App() {
       return
     }
 
-    if (appBootstrapStatus === 'ready' && appBootstrapData && appBootstrapUserId === sessionUser.id) {
+    if (appBootstrapStatus === 'loading' && appBootstrapUserId === sessionUserId) {
+      return
+    }
+
+    if (appBootstrapStatus === 'ready' && appBootstrapData && appBootstrapUserId === sessionUserId) {
       return
     }
 
     const loadAppBootstrap = async () => {
       setAppBootstrapStatus('loading')
       setAppBootstrapError(null)
-      setAppBootstrapUserId(sessionUser.id)
+      setAppBootstrapUserId(sessionUserId)
 
       try {
+        if (isAppBootstrapEndpointKnownMissing) {
+          const fallbackBootstrap = buildFallbackBootstrapData({
+            user: {
+              id: sessionUserId,
+              displayName: sessionUserDisplayName,
+              email: sessionUserEmail,
+              locale: sessionUserLocale,
+            },
+            fallbackDisplayName,
+          })
+          setAppBootstrapData(fallbackBootstrap)
+          setAppBootstrapStatus('ready')
+          setAppBootstrapError(null)
+          setAppBootstrapUserId(sessionUserId)
+          return
+        }
+
         const bootstrap = await getAppBootstrap({ include: APP_BOOTSTRAP_INCLUDES })
         if (!bootstrap) {
-          forceGuestToLogin()
+          forceGuestToLoginRef.current()
           return
         }
 
         setAppBootstrapData(bootstrap)
         setAppBootstrapStatus('ready')
         setAppBootstrapError(null)
-        setAppBootstrapUserId(sessionUser.id)
+        setAppBootstrapUserId(sessionUserId)
 
-        const nextUser = mapAuthApiUserToSessionUser(bootstrap.user, fallbackDisplayName)
-        const nextLocale = bootstrap.preferences.locale ?? nextUser.locale
+        const bootstrapUserCandidate = bootstrap.user as { id?: unknown } | null | undefined
+        const hasMappableBootstrapUser =
+          Boolean(bootstrapUserCandidate) &&
+          (typeof bootstrapUserCandidate?.id === 'string' || typeof bootstrapUserCandidate?.id === 'number')
+        const nextLocale =
+          bootstrap.preferences?.locale === 'en' || bootstrap.preferences?.locale === 'es'
+            ? bootstrap.preferences.locale
+            : sessionUserLocale ?? locale
 
-        setSessionUser((current) => (current && current.id === nextUser.id ? { ...nextUser, locale: nextLocale } : current))
+        if (hasMappableBootstrapUser) {
+          const nextUser = mapAuthApiUserToSessionUser(bootstrap.user, fallbackDisplayName)
+          setSessionUser((current) => (current && current.id === nextUser.id ? { ...nextUser, locale: nextLocale } : current))
+        } else {
+          // Keep current authenticated user when bootstrap payload lacks a full user object.
+          setSessionUser((current) => (current ? { ...current, locale: nextLocale } : current))
+        }
+
         if (nextLocale !== locale) {
-          setLocale(nextLocale)
+          setLocaleRef.current(nextLocale)
         }
       } catch (error) {
+        if (error instanceof ApiHttpError && error.status === 401) {
+          forceGuestToLoginRef.current()
+          return
+        }
+
         if (error instanceof ApiHttpError && error.status === 404) {
-          const nowIso = new Date().toISOString()
-          const fallbackBootstrap: AppBootstrapData = {
-            server_now_utc: nowIso,
+          isAppBootstrapEndpointKnownMissing = true
+          const fallbackBootstrap = buildFallbackBootstrapData({
             user: {
-              id: sessionUser.id,
-              display_name: sessionUser.displayName,
-              email: sessionUser.email,
-              locale: sessionUser.locale,
+              id: sessionUserId,
+              displayName: sessionUserDisplayName,
+              email: sessionUserEmail,
+              locale: sessionUserLocale,
             },
-            workspace: {
-              id: 'default',
-              name: 'My Workspace',
-            },
-            preferences: {
-              locale: sessionUser.locale,
-              time_zone_name: detectBrowserTimeZone(),
-              time_zone_auto_detect: true,
-              ui_sounds_enabled: true,
-              background_music_enabled: false,
-              background_music_volume_percent: 50,
-              confirm_task_switch_enabled: true,
-              sign_out_confirmation_enabled: true,
-            },
-            tasks: [],
-            daily_log: {
-              date_local: nowIso.slice(0, 10),
-              tracked_seconds: 0,
-              untracked_seconds: 0,
-              entries: [],
-            },
-            dashboard_stats: {
-              tracked_seconds_today: 0,
-              untracked_seconds_today: 0,
-              tracked_sessions_count_today: 0,
-              focus_time_total_seconds: 0,
-            },
-            active_focus_session: null,
-          }
+            fallbackDisplayName,
+          })
 
           setAppBootstrapData(fallbackBootstrap)
           setAppBootstrapStatus('ready')
           setAppBootstrapError(null)
-          setAppBootstrapUserId(sessionUser.id)
+          setAppBootstrapUserId(sessionUserId)
           return
         }
 
-        setAppBootstrapData(null)
-        setAppBootstrapStatus('error')
+        console.error('App bootstrap request failed. Falling back to minimal bootstrap payload.', error)
+        const fallbackBootstrap = buildFallbackBootstrapData({
+          user: {
+            id: sessionUserId,
+            displayName: sessionUserDisplayName,
+            email: sessionUserEmail,
+            locale: sessionUserLocale,
+          },
+          fallbackDisplayName,
+        })
+
+        setAppBootstrapData(fallbackBootstrap)
+        setAppBootstrapStatus('ready')
         setAppBootstrapError(
           getApiErrorFirstMessage(
             error,
             locale === 'es'
-              ? 'No se pudo cargar el panel. Intenta nuevamente.'
-              : 'Could not load the dashboard. Please try again.',
+              ? 'No se pudo cargar el bootstrap del panel. Se aplico modo de compatibilidad.'
+              : 'Could not load dashboard bootstrap. Compatibility mode was applied.',
           ),
         )
+        setAppBootstrapUserId(sessionUserId)
       }
     }
 
     void loadAppBootstrap()
   }, [
     appBootstrapReloadKey,
+    appBootstrapData,
+    appBootstrapStatus,
+    appBootstrapUserId,
     authStatus,
     fallbackDisplayName,
     locale,
     route,
-    sessionUser,
-    forceGuestToLogin,
-    setLocale,
+    sessionUserDisplayName,
+    sessionUserEmail,
+    sessionUserId,
+    sessionUserLocale,
   ])
 
   const userForDashboard = useMemo(() => {

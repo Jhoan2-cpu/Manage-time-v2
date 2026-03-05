@@ -5,6 +5,8 @@ import {
   syncMockSessionFromAuthUser,
 } from '../../lib/mock/mockBackend'
 
+const AUTH_USER_ID_STORAGE_KEY = 'velor_auth_user_id'
+
 export type AuthApiUser = {
   id: string | number
   display_name: string
@@ -50,6 +52,7 @@ export async function registerAuth(payload: RegisterAuthPayload) {
 
   const json = await parseJsonResponse<RegisterAuthResponse>(response, 'Register failed')
   syncMockSessionFromAuthUser(json.data.user)
+  setAuthUserIdStorage(json.data.user.id)
   return json
 }
 
@@ -62,6 +65,7 @@ export async function loginAuth(payload: { email: string; password: string }) {
 
   const json = await parseJsonResponse<AuthUserEnvelope>(response, 'Login failed')
   syncMockSessionFromAuthUser(json.data.user)
+  setAuthUserIdStorage(json.data.user.id)
   return json
 }
 
@@ -69,11 +73,13 @@ export async function meAuth() {
   const response = await apiFetch('/api/v1/auth/me', { method: 'GET' })
   if (response.status === 401) {
     clearMockSessionFromAuth()
+    clearAuthUserIdStorage()
     return null
   }
 
   const json = await parseJsonResponse<MeAuthResponse>(response, 'Auth session lookup failed')
   syncMockSessionFromAuthUser(json.data)
+  setAuthUserIdStorage(json.data.id)
   return json.data
 }
 
@@ -83,11 +89,13 @@ export async function logoutAuth() {
 
   if (response.status === 401) {
     clearMockSessionFromAuth()
+    clearAuthUserIdStorage()
     return { message: 'Logged out.' }
   }
 
   const json = await parseJsonResponse<{ message: string }>(response, 'Logout failed')
   clearMockSessionFromAuth()
+  clearAuthUserIdStorage()
   return json
 }
 
@@ -98,4 +106,20 @@ export function loginWithGoogleRedirect(intent?: 'login' | 'register') {
 
   const query = intent ? `?intent=${intent}` : ''
   window.location.href = `${API_BASE_URL}/api/v1/auth/google/redirect${query}`
+}
+
+function setAuthUserIdStorage(userId: string | number) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(AUTH_USER_ID_STORAGE_KEY, `${userId}`)
+}
+
+function clearAuthUserIdStorage() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.removeItem(AUTH_USER_ID_STORAGE_KEY)
 }

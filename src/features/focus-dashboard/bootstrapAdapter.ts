@@ -31,13 +31,16 @@ export function adaptBootstrapTasksToUi(
   bootstrap: Pick<AppBootstrapData, 'tasks' | 'active_focus_session'>,
   options: AdaptBootstrapTasksOptions = {},
 ): Task[] {
+  const tasks = Array.isArray((bootstrap as { tasks?: unknown }).tasks)
+    ? ((bootstrap as { tasks: AppBootstrapTaskItem[] }).tasks ?? [])
+    : []
   const preferredActiveTaskId =
     options.activeFocusSessionTaskId ??
-    bootstrap.active_focus_session?.task_id ??
-    bootstrap.tasks[0]?.id ??
+    (bootstrap.active_focus_session?.task_id ?? null) ??
+    tasks[0]?.id ??
     null
 
-  return bootstrap.tasks.map((task, index) => {
+  return tasks.map((task, index) => {
     const isActive = task.id === preferredActiveTaskId || (preferredActiveTaskId === null && index === 0)
     return adaptTaskItemToUi(task, { state: isActive ? 'active' : 'scheduled' })
   })
@@ -65,19 +68,181 @@ export function adaptBootstrapDailyLogToUiEntries(
   bootstrap: Pick<AppBootstrapData, 'daily_log'>,
   options: AdaptBootstrapDailyLogOptions,
 ): LogEntry[] {
-  const fallbackDate = typeof bootstrap.daily_log.date_local === 'string' ? bootstrap.daily_log.date_local : undefined
+  const dailyLog = (bootstrap as { daily_log?: unknown }).daily_log
+  const normalizedEntries = normalizeBootstrapDailyLogEntries(dailyLog)
+  const fallbackDate = resolveFallbackDateFromDailyLog(dailyLog)
 
-  return [...bootstrap.daily_log.entries]
+  return normalizedEntries
     .map((entry) => adaptBootstrapDailyLogEntry(entry, { ...options, fallbackDate }))
     .sort(sortLogEntryByDateTimeLabel)
 }
 
 export function adaptBootstrapDashboardStatsToUi(stats: AppBootstrapDashboardStats): DashboardStats {
+  const safeStats = (stats ?? {}) as Partial<AppBootstrapDashboardStats>
   return {
-    sessions: normalizeNonNegativeInt(stats.tracked_sessions_count_today),
-    focusTime: formatSecondsCompact(normalizeNonNegativeInt(stats.focus_time_total_seconds)),
-    totalTracked: formatSecondsCompact(normalizeNonNegativeInt(stats.tracked_seconds_today)),
+    sessions: normalizeNonNegativeInt(safeStats.tracked_sessions_count_today),
+    focusTime: formatSecondsCompact(normalizeNonNegativeInt(safeStats.focus_time_total_seconds)),
+    totalTracked: formatSecondsCompact(normalizeNonNegativeInt(safeStats.tracked_seconds_today)),
   }
+}
+
+function resolveFallbackDateFromDailyLog(dailyLog: unknown) {
+  if (!dailyLog || typeof dailyLog !== 'object') {
+    return undefined
+  }
+
+  const candidate = dailyLog as { date_local?: unknown; date?: unknown }
+  if (typeof candidate.date_local === 'string' && candidate.date_local.trim()) {
+    return candidate.date_local.trim()
+  }
+
+  if (typeof candidate.date === 'string' && candidate.date.trim()) {
+    return candidate.date.trim()
+  }
+
+  return undefined
+}
+
+function normalizeBootstrapDailyLogEntries(dailyLog: unknown): AppBootstrapDailyLogEntry[] {
+  if (!dailyLog || typeof dailyLog !== 'object') {
+    return []
+  }
+
+  const source = dailyLog as {
+    entries?: unknown
+    focus_time_entries?: unknown
+    idle_time_entries?: unknown
+  }
+
+  if (Array.isArray(source.entries)) {
+    return source.entries
+      .map(normalizeExistingBootstrapEntry)
+      .filter((entry): entry is AppBootstrapDailyLogEntry => entry !== null)
+  }
+
+  const focusEntries = Array.isArray(source.focus_time_entries) ? source.focus_time_entries : []
+  const idleEntries = Array.isArray(source.idle_time_entries) ? source.idle_time_entries : []
+  if (focusEntries.length === 0 && idleEntries.length === 0) {
+    return []
+  }
+
+  const normalizedFocus = focusEntries
+    .map(normalizeFocusTimeEntryToBootstrapEntry)
+    .filter((entry): entry is AppBootstrapDailyLogEntry => entry !== null)
+  const normalizedIdle = idleEntries
+    .map(normalizeIdleTimeEntryToBootstrapEntry)
+    .filter((entry): entry is AppBootstrapDailyLogEntry => entry !== null)
+
+  return [...normalizedFocus, ...normalizedIdle]
+}
+
+function normalizeExistingBootstrapEntry(raw: unknown): AppBootstrapDailyLogEntry | null {
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+
+  const source = raw as Partial<AppBootstrapDailyLogEntry> & { id?: unknown }
+  const id = normalizeId(source.id)
+  const startedAtUtc = typeof source.started_at_utc === 'string' ? source.started_at_utc : ''
+  if (!id || !startedAtUtc) {
+    return null
+  }
+
+  return {
+    id,
+    entry_type: normalizeEntryType(source.entry_type),
+    task_id: typeof source.task_id === 'string' && source.task_id.trim() ? source.task_id.trim() : null,
+    task_title: typeof source.task_title === 'string' ? source.task_title : null,
+    task_color_tag: typeof source.task_color_tag === 'string' ? source.task_color_tag : null,
+    task_icon_tag: typeof source.task_icon_tag === 'string' ? source.task_icon_tag : null,
+    started_at_utc: startedAtUtc,
+    ended_at_utc: typeof source.ended_at_utc === 'string' ? source.ended_at_utc : startedAtUtc,
+    duration_seconds: normalizeNonNegativeInt(source.duration_seconds),
+    started_at_local_label: typeof source.started_at_local_label === 'string' ? source.started_at_local_label : null,
+  }
+}
+
+function normalizeFocusTimeEntryToBootstrapEntry(raw: unknown): AppBootstrapDailyLogEntry | null {
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+
+  const source = raw as {
+    id?: unknown
+    focus_task_id_nullable?: unknown
+    task_title_snapshot?: unknown
+    task_color_snapshot?: unknown
+    task_icon_snapshot?: unknown
+    started_at_utc?: unknown
+    ended_at_utc?: unknown
+    elapsed_seconds?: unknown
+  }
+  const id = normalizeId(source.id)
+  const startedAtUtc = typeof source.started_at_utc === 'string' ? source.started_at_utc : null
+  if (!id || !startedAtUtc) {
+    return null
+  }
+
+  return {
+    id,
+    entry_type: 'focus',
+    task_id: normalizeOptionalId(source.focus_task_id_nullable),
+    task_title: typeof source.task_title_snapshot === 'string' ? source.task_title_snapshot : null,
+    task_color_tag: typeof source.task_color_snapshot === 'string' ? source.task_color_snapshot : null,
+    task_icon_tag: typeof source.task_icon_snapshot === 'string' ? source.task_icon_snapshot : null,
+    started_at_utc: startedAtUtc,
+    ended_at_utc: typeof source.ended_at_utc === 'string' ? source.ended_at_utc : startedAtUtc,
+    duration_seconds: normalizeNonNegativeInt(source.elapsed_seconds),
+    started_at_local_label: null,
+  }
+}
+
+function normalizeIdleTimeEntryToBootstrapEntry(raw: unknown): AppBootstrapDailyLogEntry | null {
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+
+  const source = raw as {
+    id?: unknown
+    started_at_utc?: unknown
+    ended_at_utc?: unknown
+    elapsed_seconds?: unknown
+  }
+  const id = normalizeId(source.id)
+  const startedAtUtc = typeof source.started_at_utc === 'string' ? source.started_at_utc : null
+  if (!id || !startedAtUtc) {
+    return null
+  }
+
+  return {
+    id,
+    entry_type: 'untracked',
+    task_id: null,
+    task_title: null,
+    task_color_tag: null,
+    task_icon_tag: null,
+    started_at_utc: startedAtUtc,
+    ended_at_utc: typeof source.ended_at_utc === 'string' ? source.ended_at_utc : startedAtUtc,
+    duration_seconds: normalizeNonNegativeInt(source.elapsed_seconds),
+    started_at_local_label: null,
+  }
+}
+
+function normalizeId(value: unknown) {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `${Math.trunc(value)}`
+  }
+
+  return null
+}
+
+function normalizeOptionalId(value: unknown) {
+  const normalized = normalizeId(value)
+  return normalized ?? null
 }
 
 function adaptBootstrapDailyLogEntry(

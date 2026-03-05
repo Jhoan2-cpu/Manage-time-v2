@@ -41,6 +41,7 @@ import {
   updateTask as updateTaskApi,
   type AppBootstrapData,
   type AppBootstrapInclude,
+  type ActiveFocusSession,
   type CreateTaskPayload,
   type FocusSessionStateEnvelope,
   type FocusDailyLogData,
@@ -221,6 +222,105 @@ function parseHexColorToRgb(value: string) {
 
 function isSessionRunningState(state: string | null | undefined) {
   return state === 'running' || state === 'working'
+}
+
+function hasMeaningfulFocusSessionTransition(
+  current: ActiveFocusSession | null | undefined,
+  incoming: ActiveFocusSession | null | undefined,
+) {
+  const currentSession = current ?? null
+  const incomingSession = incoming ?? null
+  if (!currentSession && !incomingSession) {
+    return false
+  }
+
+  if (!currentSession || !incomingSession) {
+    return true
+  }
+
+  return (
+    currentSession.id !== incomingSession.id ||
+    currentSession.task_id !== incomingSession.task_id ||
+    currentSession.timer_mode !== incomingSession.timer_mode ||
+    currentSession.session_state !== incomingSession.session_state ||
+    (currentSession.target_seconds ?? null) !== (incomingSession.target_seconds ?? null) ||
+    (currentSession.last_resumed_at_utc ?? null) !== (incomingSession.last_resumed_at_utc ?? null) ||
+    (currentSession.last_paused_at_utc ?? null) !== (incomingSession.last_paused_at_utc ?? null)
+  )
+}
+
+function normalizeIncomingRunningFocusSession(
+  current: ActiveFocusSession | null | undefined,
+  incoming: ActiveFocusSession | null | undefined,
+) {
+  const currentSession = current ?? null
+  const incomingSession = incoming ?? null
+  if (!currentSession || !incomingSession) {
+    return incomingSession
+  }
+
+  if (!isSessionRunningState(currentSession.session_state) || !isSessionRunningState(incomingSession.session_state)) {
+    return incomingSession
+  }
+
+  const sameLifecycle =
+    currentSession.id === incomingSession.id &&
+    currentSession.task_id === incomingSession.task_id &&
+    currentSession.timer_mode === incomingSession.timer_mode &&
+    (currentSession.last_resumed_at_utc ?? null) === (incomingSession.last_resumed_at_utc ?? null) &&
+    (currentSession.last_paused_at_utc ?? null) === (incomingSession.last_paused_at_utc ?? null)
+  if (!sameLifecycle) {
+    return incomingSession
+  }
+
+  return {
+    ...incomingSession,
+    elapsed_seconds_total: currentSession.elapsed_seconds_total,
+  } satisfies ActiveFocusSession
+}
+
+function normalizeTaskRuntimeState(state: unknown): 'idle' | 'working' | 'paused' | 'stopped' | null {
+  if (state === 'idle' || state === 'working' || state === 'paused' || state === 'stopped') {
+    return state
+  }
+
+  return null
+}
+
+function isTaskRuntimeActiveState(state: unknown) {
+  return state === 'working' || state === 'paused'
+}
+
+function resolveElapsedFromRuntimeTaskSnapshot(serverTask: TaskApiItem, mode: FocusTimerMode) {
+  if (mode === 'timer') {
+    const initial =
+      typeof serverTask.timer_initial_seconds === 'number' && Number.isFinite(serverTask.timer_initial_seconds)
+        ? Math.max(0, Math.floor(serverTask.timer_initial_seconds))
+        : null
+    const remaining =
+      typeof serverTask.timer_remaining_seconds === 'number' && Number.isFinite(serverTask.timer_remaining_seconds)
+        ? Math.max(0, Math.floor(serverTask.timer_remaining_seconds))
+        : null
+
+    if (initial !== null && remaining !== null) {
+      return Math.max(0, initial - remaining)
+    }
+
+    return 0
+  }
+
+  return typeof serverTask.stopwatch_elapsed_seconds === 'number' && Number.isFinite(serverTask.stopwatch_elapsed_seconds)
+    ? Math.max(0, Math.floor(serverTask.stopwatch_elapsed_seconds))
+    : 0
+}
+
+function pickRuntimeTaskSnapshot(serverTasks: TaskApiItem[]) {
+  const workingTask = serverTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'working')
+  if (workingTask) {
+    return workingTask
+  }
+
+  return serverTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'paused') ?? null
 }
 
 function adaptTaskApiItemToUi(
@@ -441,6 +541,8 @@ export function FocusDashboard({
   const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
   const processedTaskRealtimeEventIdsRef = useRef<string[]>([])
   const processedFocusRealtimeEventIdsRef = useRef<string[]>([])
+  const focusActiveEndpointMissingRef = useRef(false)
+  const hasLoggedMissingFocusActiveEndpointRef = useRef(false)
   const localOriginDeviceId = useMemo(() => getOrCreateOriginDeviceId(), [])
 
   useEffect(() => {
@@ -899,10 +1001,61 @@ export function FocusDashboard({
     })
   }
 
+  const applyRuntimeFromTaskSnapshot = (serverTask: TaskApiItem | null) => {
+    if (!serverTask || activeFocusSession) {
+      return
+    }
+
+    const runtimeState = normalizeTaskRuntimeState(serverTask.state)
+    if (!runtimeState) {
+      return
+    }
+
+    if (runtimeState === 'idle' || runtimeState === 'stopped') {
+      if (activeTask?.id === serverTask.id) {
+        setIsFocusRunning(false)
+      }
+      return
+    }
+
+    const nextMode: FocusTimerMode = serverTask.active_mode === 'timer' ? 'timer' : 'stopwatch'
+    const elapsedSeconds = resolveElapsedFromRuntimeTaskSnapshot(serverTask, nextMode)
+    alignActiveTaskState(serverTask.id)
+    setTimerMode(nextMode)
+    setSessionElapsedSeconds(elapsedSeconds)
+    setIsFocusRunning(runtimeState === 'working')
+  }
+
+  const applyRuntimeFromTaskCollection = (serverTasks: TaskApiItem[]) => {
+    if (activeFocusSession) {
+      return
+    }
+
+    const runtimeTask = pickRuntimeTaskSnapshot(serverTasks)
+    if (!runtimeTask) {
+      setIsFocusRunning(false)
+      return
+    }
+
+    applyRuntimeFromTaskSnapshot(runtimeTask)
+  }
+
   const applyFocusSessionEnvelope = (envelope: FocusSessionStateEnvelope) => {
-    applyAuthoritativeFocusSnapshot(envelope.data.server_now_utc, envelope.data.active_focus_session)
-    alignActiveTaskState(envelope.data.active_focus_session?.task_id ?? null)
-    return envelope
+    const normalizedActiveSession = normalizeIncomingRunningFocusSession(
+      activeFocusSession,
+      envelope.data.active_focus_session ?? null,
+    )
+    const normalizedEnvelope = {
+      ...envelope,
+      data: {
+        ...envelope.data,
+        active_focus_session: normalizedActiveSession,
+      },
+    } satisfies FocusSessionStateEnvelope
+
+    applyAuthoritativeFocusSnapshot(normalizedEnvelope.data.server_now_utc, normalizedEnvelope.data.active_focus_session)
+    alignActiveTaskState(normalizedEnvelope.data.active_focus_session?.task_id ?? null)
+    return normalizedEnvelope
   }
 
   const applyFocusSessionConflictSnapshot = (error: unknown) => {
@@ -931,16 +1084,24 @@ export function FocusDashboard({
 
       setTaskList((currentTasks) => {
         const currentById = new Map(currentTasks.map((task) => [task.id, task] as const))
+        const runtimePreferredActiveTaskId =
+          serverTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'working')?.id ??
+          serverTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'paused')?.id ??
+          null
         const preferredActiveTaskId =
           activeFocusSession?.task_id ??
+          runtimePreferredActiveTaskId ??
           currentTasks.find((task) => task.state === 'active')?.id ??
           currentTasks[0]?.id ??
           null
 
         const nextTasks = serverTasks.map((serverTask) => {
           const existingTask = currentById.get(serverTask.id)
+          const runtimeState = normalizeTaskRuntimeState(serverTask.state)
           const state =
-            serverTask.id === preferredActiveTaskId
+            runtimeState && isTaskRuntimeActiveState(runtimeState)
+              ? 'active'
+              : serverTask.id === preferredActiveTaskId
               ? 'active'
               : existingTask?.state === 'done'
                 ? 'done'
@@ -971,6 +1132,7 @@ export function FocusDashboard({
 
         return nextTasks
       })
+      applyRuntimeFromTaskCollection(serverTasks)
     } finally {
       tasksRefreshInFlightCountRef.current = Math.max(0, tasksRefreshInFlightCountRef.current - 1)
       if (isMountedRef.current) {
@@ -1030,7 +1192,15 @@ export function FocusDashboard({
       return true
     }
 
-    const refreshedBootstrap = await getAppBootstrap({ include: FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES })
+    let refreshedBootstrap: Awaited<ReturnType<typeof getAppBootstrap>>
+    try {
+      refreshedBootstrap = await getAppBootstrap({ include: FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES })
+    } catch (error) {
+      if (error instanceof ApiHttpError && error.status === 404) {
+        return false
+      }
+      throw error
+    }
     if (!refreshedBootstrap) {
       onSignOut?.()
       return false
@@ -1092,23 +1262,28 @@ export function FocusDashboard({
 
   const handleCreatedTimeEntryInvalidation = async (createdTimeEntryId?: string | null) => {
     if (typeof createdTimeEntryId !== 'string' || !createdTimeEntryId.trim()) {
-      return
+      return false
     }
 
     const normalizedId = createdTimeEntryId.trim()
     if (lastHandledCreatedTimeEntryIdRef.current === normalizedId) {
-      return
+      return true
     }
     lastHandledCreatedTimeEntryIdRef.current = normalizedId
 
     try {
-      await refreshBootstrapDerivedDataFromServer()
+      return await refreshBootstrapDerivedDataFromServer()
     } catch (error) {
       console.error('Failed to refresh bootstrap-derived data after time entry creation', { createdTimeEntryId }, error)
+      return false
     }
   }
 
   const syncActiveFocusSession = async () => {
+    if (focusActiveEndpointMissingRef.current) {
+      return
+    }
+
     if (isFocusSessionSyncInFlightRef.current) {
       return
     }
@@ -1121,8 +1296,36 @@ export function FocusDashboard({
         return
       }
 
-      applyFocusSessionEnvelope(snapshot)
+      const incomingActiveSession = normalizeIncomingRunningFocusSession(
+        activeFocusSession,
+        snapshot.data.active_focus_session ?? null,
+      )
+      const shouldApplySnapshot =
+        hasMeaningfulFocusSessionTransition(activeFocusSession, incomingActiveSession) ||
+        Boolean(snapshot.data.stopped_session_summary) ||
+        Boolean(snapshot.data.created_time_entry_id)
+
+      if (!shouldApplySnapshot) {
+        return
+      }
+
+      applyFocusSessionEnvelope({
+        ...snapshot,
+        data: {
+          ...snapshot.data,
+          active_focus_session: incomingActiveSession,
+        },
+      })
     } catch (error) {
+      if (error instanceof ApiHttpError && error.status === 404) {
+        focusActiveEndpointMissingRef.current = true
+        if (!hasLoggedMissingFocusActiveEndpointRef.current) {
+          hasLoggedMissingFocusActiveEndpointRef.current = true
+          console.warn('Focus runtime active endpoint unavailable; disabling active-session sync polling.')
+        }
+        return
+      }
+
       console.error('Failed to sync active focus session', error)
     } finally {
       isFocusSessionSyncInFlightRef.current = false
@@ -1146,7 +1349,7 @@ export function FocusDashboard({
       return
     }
 
-    const expectedUserId = bootstrapData?.user.id
+    const expectedUserId = bootstrapData?.user?.id
     if (expectedUserId && event.meta?.user_id && `${event.meta.user_id}` !== `${expectedUserId}`) {
       return
     }
@@ -1185,10 +1388,25 @@ export function FocusDashboard({
       return
     }
 
+    const normalizedIncomingActiveSession = normalizeIncomingRunningFocusSession(
+      activeFocusSession,
+      event.data.active_focus_session ?? null,
+    )
+    const shouldApplyRealtimeEnvelope =
+      hasMeaningfulFocusSessionTransition(activeFocusSession, normalizedIncomingActiveSession) ||
+      Boolean(event.data.stopped_session_summary) ||
+      Boolean(event.data.created_time_entry_id)
+    if (!shouldApplyRealtimeEnvelope) {
+      if (eventId) {
+        markFocusRealtimeEventProcessed(eventId)
+      }
+      return
+    }
+
     applyFocusSessionEnvelope({
       data: {
         server_now_utc: event.data.server_now_utc ?? '',
-        active_focus_session: event.data.active_focus_session ?? null,
+        active_focus_session: normalizedIncomingActiveSession,
         stopped_session_summary: event.data.stopped_session_summary ?? null,
         created_time_entry_id: event.data.created_time_entry_id ?? null,
       },
@@ -1225,7 +1443,7 @@ export function FocusDashboard({
   }
 
   const applyTaskcardsRealtimeEvent = (event: TaskcardsRealtimeEvent) => {
-    const expectedUserId = bootstrapData?.user.id
+    const expectedUserId = bootstrapData?.user?.id
     const incomingTask = event?.task
     const incomingTaskId =
       typeof incomingTask?.id === 'string' && incomingTask.id.trim()
@@ -1327,8 +1545,29 @@ export function FocusDashboard({
       incomingTask.alarm_time_local === null ||
       typeof incomingTask.timer_initial_seconds === 'number' ||
       incomingTask.timer_initial_seconds === null
+    const hasRuntimeTaskState =
+      normalizeTaskRuntimeState(incomingTask.state) !== null ||
+      incomingTask.active_mode === 'timer' ||
+      incomingTask.active_mode === 'stopwatch' ||
+      typeof incomingTask.timer_remaining_seconds === 'number' ||
+      typeof incomingTask.stopwatch_elapsed_seconds === 'number'
+    const incomingRuntimeState = normalizeTaskRuntimeState(incomingTask.state)
+    const isRunningRuntimeOnlyTick =
+      event.event === 'taskcard.updated' &&
+      !hasRenderableTaskMetadata &&
+      hasRuntimeTaskState &&
+      incomingRuntimeState === 'working'
 
-    if (event.event === 'taskcard.updated' && !hasRenderableTaskMetadata) {
+    // Runtime ticking while session is running should stay local and smooth in UI.
+    // Realtime should only drive control transitions (pause/resume/stop/switch/reset).
+    if (isRunningRuntimeOnlyTick) {
+      if (eventId) {
+        markTaskRealtimeEventProcessed(eventId)
+      }
+      return
+    }
+
+    if (event.event === 'taskcard.updated' && !hasRenderableTaskMetadata && !hasRuntimeTaskState) {
       scheduleTaskcardsRealtimeResync()
       if (eventId) {
         markTaskRealtimeEventProcessed(eventId)
@@ -1367,6 +1606,23 @@ export function FocusDashboard({
             typeof incomingTask.timer_initial_seconds === 'number' && Number.isFinite(incomingTask.timer_initial_seconds)
               ? Math.max(0, Math.floor(incomingTask.timer_initial_seconds))
               : null,
+          timer_remaining_seconds:
+            typeof incomingTask.timer_remaining_seconds === 'number' && Number.isFinite(incomingTask.timer_remaining_seconds)
+              ? Math.max(0, Math.floor(incomingTask.timer_remaining_seconds))
+              : null,
+          timer_started_at_utc:
+            typeof incomingTask.timer_started_at_utc === 'string' ? incomingTask.timer_started_at_utc : null,
+          stopwatch_elapsed_seconds:
+            typeof incomingTask.stopwatch_elapsed_seconds === 'number' && Number.isFinite(incomingTask.stopwatch_elapsed_seconds)
+              ? Math.max(0, Math.floor(incomingTask.stopwatch_elapsed_seconds))
+              : null,
+          stopwatch_started_at_utc:
+            typeof incomingTask.stopwatch_started_at_utc === 'string' ? incomingTask.stopwatch_started_at_utc : null,
+          active_mode:
+            incomingTask.active_mode === 'timer' || incomingTask.active_mode === 'stopwatch'
+              ? incomingTask.active_mode
+              : undefined,
+          state: normalizeTaskRuntimeState(incomingTask.state) ?? undefined,
           version: incomingVersion,
           created_at:
             typeof incomingTask.created_at === 'string' && incomingTask.created_at.trim()
@@ -1396,28 +1652,124 @@ export function FocusDashboard({
       return nextTasks
     })
 
+    const runtimeState = normalizeTaskRuntimeState(incomingTask.state)
+    if (event.event === 'taskcard.updated' && runtimeState) {
+      const runtimeSnapshot: TaskApiItem = {
+        id: incomingTaskId,
+        user_id: incomingTask.user_id ?? expectedUserId ?? '',
+        name:
+          typeof incomingTask.name === 'string' && incomingTask.name.trim()
+            ? incomingTask.name
+            : localTaskForUpsert?.title ?? 'Untitled task',
+        icon_tag:
+          typeof incomingTask.icon_tag === 'string'
+            ? incomingTask.icon_tag
+            : localTaskForUpsert
+              ? TASK_ICON_API_BY_KEY[localTaskForUpsert.iconTag]
+              : null,
+        color_tag:
+          typeof incomingTask.color_tag === 'string'
+            ? incomingTask.color_tag
+            : localTaskForUpsert
+              ? TASK_COLOR_HEX_BY_KEY[localTaskForUpsert.colorTag]
+              : null,
+        alarm_time_local:
+          typeof incomingTask.alarm_time_local === 'string' ? incomingTask.alarm_time_local : localTaskForUpsert?.alarmTime ?? null,
+        timer_initial_seconds:
+          typeof incomingTask.timer_initial_seconds === 'number' && Number.isFinite(incomingTask.timer_initial_seconds)
+            ? Math.max(0, Math.floor(incomingTask.timer_initial_seconds))
+            : localTaskForUpsert && typeof localTaskForUpsert.targetDurationMinutes === 'number'
+              ? Math.max(0, Math.round(localTaskForUpsert.targetDurationMinutes * 60))
+              : null,
+        timer_remaining_seconds:
+          typeof incomingTask.timer_remaining_seconds === 'number' && Number.isFinite(incomingTask.timer_remaining_seconds)
+            ? Math.max(0, Math.floor(incomingTask.timer_remaining_seconds))
+            : null,
+        timer_started_at_utc:
+          typeof incomingTask.timer_started_at_utc === 'string' ? incomingTask.timer_started_at_utc : null,
+        stopwatch_elapsed_seconds:
+          typeof incomingTask.stopwatch_elapsed_seconds === 'number' && Number.isFinite(incomingTask.stopwatch_elapsed_seconds)
+            ? Math.max(0, Math.floor(incomingTask.stopwatch_elapsed_seconds))
+            : null,
+        stopwatch_started_at_utc:
+          typeof incomingTask.stopwatch_started_at_utc === 'string' ? incomingTask.stopwatch_started_at_utc : null,
+        active_mode:
+          incomingTask.active_mode === 'timer' || incomingTask.active_mode === 'stopwatch'
+            ? incomingTask.active_mode
+            : undefined,
+        state: runtimeState,
+        target_duration_seconds: null,
+        version: incomingVersion,
+        created_at: typeof incomingTask.created_at === 'string' ? incomingTask.created_at : localTaskForUpsert?.createdAtUtc ?? '',
+        updated_at: typeof incomingTask.updated_at === 'string' ? incomingTask.updated_at : localTaskForUpsert?.updatedAtUtc ?? '',
+      }
+      applyRuntimeFromTaskSnapshot(runtimeSnapshot)
+    }
+
     if (eventId) {
       markTaskRealtimeEventProcessed(eventId)
     }
   }
 
-  useFocusRealtimeChannel({
-    userId: bootstrapData?.user.id ?? null,
-    enabled: Boolean(bootstrapData?.user.id),
+  const { connectionState: focusRealtimeConnectionState } = useFocusRealtimeChannel({
+    userId: bootstrapData?.user?.id ?? null,
+    enabled: Boolean(bootstrapData?.user?.id),
     onEvent: applyRealtimeFocusEvent,
     onReconnectSync: () => {
       void syncActiveFocusSession()
     },
   })
 
-  useTaskcardsRealtimeChannel({
-    userId: bootstrapData?.user.id ?? null,
-    enabled: Boolean(bootstrapData?.user.id),
+  const { connectionState: taskcardsRealtimeConnectionState } = useTaskcardsRealtimeChannel({
+    userId: bootstrapData?.user?.id ?? null,
+    enabled: Boolean(bootstrapData?.user?.id),
     onEvent: applyTaskcardsRealtimeEvent,
     onReconnectSync: () => {
       void refreshTasksFromServer()
     },
   })
+
+  const syncActiveFocusSessionRef = useRef(syncActiveFocusSession)
+  const refreshTasksFromServerRef = useRef(refreshTasksFromServer)
+  syncActiveFocusSessionRef.current = syncActiveFocusSession
+  refreshTasksFromServerRef.current = refreshTasksFromServer
+
+  useEffect(() => {
+    if (focusRealtimeConnectionState === 'connected') {
+      return
+    }
+
+    const pollingIntervalMs = isSessionRunningState(activeFocusSession?.session_state) ? 3200 : 5000
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
+      void syncActiveFocusSessionRef.current()
+    }, pollingIntervalMs)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [activeFocusSession?.id, activeFocusSession?.session_state, focusRealtimeConnectionState])
+
+  useEffect(() => {
+    if (taskcardsRealtimeConnectionState === 'connected') {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
+      void refreshTasksFromServerRef.current()
+    }, 2600)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [taskcardsRealtimeConnectionState])
 
   const getPreferredTimerModeForTask = (task: Task): FocusTimerMode =>
     task.targetDurationMinutes && task.targetDurationMinutes > 0 ? 'timer' : 'stopwatch'
@@ -1637,8 +1989,9 @@ export function FocusDashboard({
               return
             }
 
+            const createdTimeEntryId = response.data.created_time_entry_id ?? null
+            const didRefreshFromServer = await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
             applyFocusSessionEnvelope(response)
-            void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
 
             const completedSeconds =
               response.data.stopped_session_summary?.elapsed_seconds_final ??
@@ -1646,7 +1999,7 @@ export function FocusDashboard({
             setSessionElapsedSeconds(Math.max(0, completedSeconds))
             setIsFocusRunning(false)
             startTaskCooldown(activeFocusSession.task_id)
-            if (!response.data.created_time_entry_id) {
+            if (!createdTimeEntryId || !didRefreshFromServer) {
               commitCurrentFocusSession(completedSeconds)
             } else {
               setActiveFocusSessionMeta(null)
@@ -1911,14 +2264,18 @@ export function FocusDashboard({
         return
       }
 
-      if (elapsedBeforeSwitch > 0 && !response.data.created_time_entry_id) {
+      const createdTimeEntryId = response.data.created_time_entry_id ?? null
+      const didRefreshFromServer = createdTimeEntryId
+        ? await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
+        : false
+
+      if (elapsedBeforeSwitch > 0 && (!createdTimeEntryId || !didRefreshFromServer)) {
         runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(elapsedBeforeSwitch))
-      } else if (response.data.created_time_entry_id) {
+      } else if (createdTimeEntryId) {
         setActiveFocusSessionMeta(null)
       }
 
       applyFocusSessionEnvelope(response)
-      void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
       setSessionElapsedSeconds(0)
       setTimerMode(nextMode)
       if (previousSessionTaskId !== selectedTask.id) {
@@ -2136,15 +2493,18 @@ export function FocusDashboard({
       const stoppedElapsed =
         response.data.stopped_session_summary?.elapsed_seconds_final ??
         Math.max(0, Math.round(elapsedBeforeStop))
+      const createdTimeEntryId = response.data.created_time_entry_id ?? null
+      const didRefreshFromServer = createdTimeEntryId
+        ? await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
+        : false
 
       applyFocusSessionEnvelope(response)
-      void handleCreatedTimeEntryInvalidation(response.data.created_time_entry_id ?? null)
       setSessionElapsedSeconds(0)
       setIsFocusRunning(false)
       resetCountersAfterStop(activeSessionTaskId, activeSessionMode)
       startTaskCooldown(activeSessionTaskId)
 
-      if (stoppedElapsed > 0 && !response.data.created_time_entry_id) {
+      if (stoppedElapsed > 0 && (!createdTimeEntryId || !didRefreshFromServer)) {
         runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(stoppedElapsed))
       } else {
         setActiveFocusSessionMeta(null)

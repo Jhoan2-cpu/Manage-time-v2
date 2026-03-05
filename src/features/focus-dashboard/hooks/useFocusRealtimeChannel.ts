@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConnectionStatus } from 'laravel-echo'
 import type { FocusSessionStateEnvelope, StoppedFocusSessionSummary } from '../api'
 import { ensureCsrfCookie } from '../../../lib/api/http'
-import { disconnectReverbEchoClient, getOrCreateReverbEchoClient } from '../../../lib/realtime/reverbEcho'
+import { getOrCreateReverbEchoClient } from '../../../lib/realtime/reverbEcho'
 
 export type FocusRealtimeEventType = 'focus_session.updated' | 'focus_session.stopped'
 
@@ -72,6 +72,7 @@ export function useFocusRealtimeChannel({
 
     let isDisposed = false
     let cleanupConnectionListener: (() => void) | undefined
+    let echoInstance: ReturnType<typeof getOrCreateReverbEchoClient> | null = null
     const channelName = `user.${userId}.focus`
 
     ;(async () => {
@@ -86,6 +87,7 @@ export function useFocusRealtimeChannel({
           setConnectionState('failed')
           return
         }
+        echoInstance = echo
 
         setConnectionState(echo.connectionStatus())
         cleanupConnectionListener = echo.connector.onConnectionChange((status) => {
@@ -156,8 +158,13 @@ export function useFocusRealtimeChannel({
       isDisposed = true
       setConnectionState('idle')
       cleanupConnectionListener?.()
-
-      disconnectReverbEchoClient()
+      if (echoInstance) {
+        try {
+          echoInstance.leave(channelName)
+        } catch {
+          // noop
+        }
+      }
       didConnectOnceRef.current = false
     }
   }, [enabled, userId])

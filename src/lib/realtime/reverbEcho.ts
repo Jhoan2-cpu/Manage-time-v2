@@ -12,9 +12,14 @@ export type ReverbEchoClient = Echo<'reverb'>
 
 let echoSingleton: ReverbEchoClient | null = null
 let echoConfigSignature: string | null = null
+let isRealtimeDisabledForSession = false
 
 export function getOrCreateReverbEchoClient() {
   if (typeof window === 'undefined') {
+    return null
+  }
+
+  if (isRealtimeDisabledForSession) {
     return null
   }
 
@@ -91,6 +96,13 @@ export function getOrCreateReverbEchoClient() {
               responseBody = await response.text()
             }
 
+            if (response.status === 403) {
+              isRealtimeDisabledForSession = true
+              setTimeout(() => {
+                disconnectReverbEchoClient()
+              }, 0)
+            }
+
             callback(true, {
               status: response.status,
               body: responseBody,
@@ -124,6 +136,10 @@ export function disconnectReverbEchoClient() {
 
   echoSingleton = null
   echoConfigSignature = null
+}
+
+export function resetReverbEchoClientDisabledFlag() {
+  isRealtimeDisabledForSession = false
 }
 
 function resolveReverbConfig() {

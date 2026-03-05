@@ -162,22 +162,32 @@ export function DailyLogPanel({
         }
 
   const rowModels = useMemo(
-    () =>
-      entries.map((entry) => {
+    () => {
+      const duplicatedIdCounters = new Map<string, number>()
+      return entries.map((entry, index) => {
+        const baseId =
+          typeof entry.id === 'string' && entry.id.trim()
+            ? entry.id.trim()
+            : `row-${index + 1}`
+        const duplicateCount = (duplicatedIdCounters.get(baseId) ?? 0) + 1
+        duplicatedIdCounters.set(baseId, duplicateCount)
+        const uniqueRowId = duplicateCount === 1 ? baseId : `${baseId}#${duplicateCount}`
+
         const task = entry.taskId ? taskMap.get(entry.taskId) : undefined
         const styles = task ? taskLogColorStyles[task.colorTag] : logToneStyles[entry.tone ?? 'default']
         const taskIcon = task ? taskIconMap[task.iconTag] : undefined
         const activityLabel = task?.title ?? entry.activity ?? copy.activity
 
         return {
-          id: entry.id,
+          id: uniqueRowId,
           start: formatStartTimeWithSeconds(entry.start),
           duration: formatSecondsHms(parseDurationLabelToSeconds(entry.duration)),
           activityLabel,
           styles,
           taskIcon,
         }
-      }),
+      })
+    },
     [copy.activity, entries, taskMap],
   )
 
