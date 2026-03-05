@@ -380,6 +380,7 @@ export function FocusDashboard({
   const isFocusCommandInFlightRef = useRef(false)
   const isFocusSessionSyncInFlightRef = useRef(false)
   const tasksRefreshInFlightCountRef = useRef(0)
+  const taskcardsRealtimeResyncTimerRef = useRef<number | null>(null)
   const timerCompleteStopRequestKeyRef = useRef<string | null>(null)
   const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
   const processedTaskRealtimeEventIdsRef = useRef<string[]>([])
@@ -392,9 +393,24 @@ export function FocusDashboard({
       if (preferencesPatchTimerRef.current !== null) {
         window.clearTimeout(preferencesPatchTimerRef.current)
       }
+      if (taskcardsRealtimeResyncTimerRef.current !== null) {
+        window.clearTimeout(taskcardsRealtimeResyncTimerRef.current)
+        taskcardsRealtimeResyncTimerRef.current = null
+      }
       tasksRefreshInFlightCountRef.current = 0
     }
   }, [])
+
+  const scheduleTaskcardsRealtimeResync = () => {
+    if (taskcardsRealtimeResyncTimerRef.current !== null) {
+      return
+    }
+
+    taskcardsRealtimeResyncTimerRef.current = window.setTimeout(() => {
+      taskcardsRealtimeResyncTimerRef.current = null
+      void refreshTasksFromServer()
+    }, 120)
+  }
 
   useEffect(() => {
     latestPreferencesRef.current = bootstrapData?.preferences ?? null
@@ -1119,7 +1135,7 @@ export function FocusDashboard({
         return
       }
 
-      void refreshTasksFromServer()
+      scheduleTaskcardsRealtimeResync()
       if (eventId) {
         markTaskRealtimeEventProcessed(eventId)
       }
@@ -1147,7 +1163,7 @@ export function FocusDashboard({
 
     const localTaskForUpsert = taskList.find((task) => task.id === incomingTaskId)
     if (!localTaskForUpsert && (typeof incomingTask.name !== 'string' || !incomingTask.name.trim())) {
-      void refreshTasksFromServer()
+      scheduleTaskcardsRealtimeResync()
       if (eventId) {
         markTaskRealtimeEventProcessed(eventId)
       }
@@ -1162,10 +1178,11 @@ export function FocusDashboard({
       incomingTask.color_tag === null ||
       (typeof incomingTask.alarm_time_local === 'string' && incomingTask.alarm_time_local.trim().length > 0) ||
       incomingTask.alarm_time_local === null ||
-      typeof incomingTask.timer_initial_seconds === 'number'
+      typeof incomingTask.timer_initial_seconds === 'number' ||
+      incomingTask.timer_initial_seconds === null
 
     if (event.event === 'focus.task.updated' && !hasRenderableTaskMetadata) {
-      void refreshTasksFromServer()
+      scheduleTaskcardsRealtimeResync()
       if (eventId) {
         markTaskRealtimeEventProcessed(eventId)
       }

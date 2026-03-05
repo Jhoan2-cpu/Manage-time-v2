@@ -117,7 +117,13 @@ export function useTaskcardsRealtimeChannel({
 
     let isDisposed = false
     let cleanupConnectionListener: (() => void) | undefined
-    const channelNames = [`user.${userId}.focus.tasks`, `user.${userId}.taskcards`]
+    const canonicalChannelName = `user.${userId}.focus.tasks`
+    const legacyChannelName = `user.${userId}.taskcards`
+    const includeLegacyChannel =
+      `${import.meta.env.VITE_TASKCARDS_REALTIME_ENABLE_LEGACY_CHANNEL ?? ''}`.trim().toLowerCase() === 'true'
+    const channelNames = includeLegacyChannel
+      ? [canonicalChannelName, legacyChannelName]
+      : [canonicalChannelName]
     const eventBindings: Array<{ listenName: string; canonical: TaskcardsRealtimeEventType }> = [
       { listenName: '.focus.task.created', canonical: 'focus.task.created' },
       { listenName: '.focus.task.updated', canonical: 'focus.task.updated' },
