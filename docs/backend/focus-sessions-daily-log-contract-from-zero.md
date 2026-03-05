@@ -16,6 +16,14 @@ Fuera de alcance por ahora:
 - preferencias/configuracion de usuario
 - modulo historial avanzado (filtros/paginacion/reportes)
 
+## Estado de implementacion actual (2026-03-05)
+
+- este documento define el contrato objetivo (source of truth funcional)
+- segun validacion de backend:
+  - los endpoints runtime `/api/v1/focus-sessions/*` aun no estan montados en rutas productivas
+  - el canal realtime de sesiones `private-user.{userId}.focus` aun no esta habilitado
+- ya existe implementacion realtime para taskcards en canales de taskcards
+
 ---
 
 ## Source of truth (DB)
@@ -62,8 +70,10 @@ Transiciones canonicas por task:
 - `paused --reset--> idle`
 
 Regla de modo al hacer `play`:
-- si `timer_initial_seconds > 0`, iniciar por defecto en `timer`
-- si `timer_initial_seconds IS NULL` o `0`, iniciar por defecto en `stopwatch`
+- si request incluye `timer_mode` valido, ese valor manda
+- si request no incluye `timer_mode`, aplicar default:
+  - si `timer_initial_seconds > 0`, iniciar en `timer`
+  - si `timer_initial_seconds IS NULL` o `0`, iniciar en `stopwatch`
 
 Reglas de edicion de taskcard:
 - cuando `state IN (working, paused)`:
@@ -81,7 +91,7 @@ Reglas de edicion de taskcard:
 
 Efectos backend:
 1. transaccion + lock por usuario
-2. cerrar idle activo (si existe)
+2. si hay `idle_time_entries` activo, cerrarlo atomicamente (`ended_at_utc = now()`, `elapsed_seconds` calculado)
 3. abrir `focus_time_entries` activo (snapshot de task actual)
 4. actualizar `focus_tasks` del task objetivo:
    - `state = working`
@@ -93,6 +103,11 @@ Efectos backend:
 Notas:
 - `timer_target_snapshot_seconds` se llena solo en modo `timer`
 - en modo `stopwatch`, `timer_target_snapshot_seconds = NULL`
+- precedencia de target en modo `timer`:
+  - si request incluye `target_seconds` valido (`>= 1`), ese valor manda
+  - si no incluye `target_seconds`, usar `focus_tasks.timer_initial_seconds`
+  - si ambos faltan/invalidos en modo `timer`, responder `422`
+  - en modo `stopwatch`, ignorar `target_seconds`
 
 ## 2) Pause
 
@@ -142,23 +157,33 @@ Efectos backend:
    - sumar delta a `total_tracked_seconds`
    - incrementar `version`
 5. abrir `idle_time_entries` activo cuando aplique:
-   - mapeo sugerido:
-     - `manual` -> `break`
-     - `session_end` -> `session_end`
-     - `timer_completed` -> `break`
+   - abrir idle:
+     - `manual` -> `reason = break`
+     - `timer_completed` -> `reason = break`
+     - `idle_detected` -> `reason = user_idle`
+     - `session_end` -> `reason = session_end`
+   - no abrir idle:
+     - `task_switch` (porque `switch-task` es atomico y arranca la siguiente sesion sin idle intermedio)
+   - si ya existe idle activo, no crear duplicado (respetar invariantes DB)
 
 ## 5) Reset
 
 Efectos backend:
 1. transaccion + lock por usuario
-2. si existe `focus_time_entries` activo, cerrarlo con `stop_reason = session_end`
-3. actualizar `focus_tasks`:
+2. resolver `task_id` objetivo (obligatorio en request) y validar pertenencia al usuario
+3. si existe `focus_time_entries` activo:
+   - debe corresponder al mismo `task_id` objetivo
+   - si corresponde a otro task, responder `409 FOCUS_RUNTIME_CONFLICT`
+   - si corresponde al task objetivo, cerrarlo con `stop_reason = session_end`
+4. actualizar `focus_tasks` del task objetivo:
    - `state = idle`
    - `timer_remaining_seconds = timer_initial_seconds`
    - `stopwatch_elapsed_seconds = 0`
    - limpiar marcas `*_started_at_utc` y `*_ended_at_utc`
    - incrementar `version`
-4. abrir `idle_time_entries` activo con `reason = session_end`
+5. apertura de `idle_time_entries`:
+   - si reset cerro una sesion activa, abrir con `reason = session_end`
+   - si no habia sesion activa (por ejemplo task ya `stopped`), no abrir idle nuevo
 
 ## 6) Switch task (opcional recomendado)
 
@@ -174,6 +199,8 @@ Efectos backend (atomico):
 
 Namespace canonico:
 - `/api/v1/focus-sessions/*`
+- sin aliases en runtime (no exponer rutas duplicadas para este modulo)
+- nota: los aliases de TaskCards (`/api/v1/tasks`) no aplican aqui
 
 ## GET `/api/v1/focus-sessions/active`
 
@@ -208,6 +235,20 @@ Request:
 }
 ```
 
+Politica de conflicto en `start`:
+- si ya existe `focus_time_entries` activo, responder `409 ACTIVE_SESSION_CONFLICT`
+- si existe solo `idle_time_entries` activo, cerrarlo dentro de la misma transaccion y continuar `start`
+- no hacer switch automatico desde `start`
+- para cambiar de task con sesion activa, usar `POST /api/v1/focus-sessions/switch-task`
+
+Regla de `target_seconds` en `start`:
+- aplica solo cuando `timer_mode = timer`
+- precedencia: request `target_seconds` > `focus_tasks.timer_initial_seconds`
+- si no hay valor resoluble valido para timer, responder `422`
+
+Regla de precedencia de modo en `start`:
+- request `timer_mode` > default por `timer_initial_seconds`
+
 ## POST `/api/v1/focus-sessions/pause`
 
 Request:
@@ -232,18 +273,27 @@ Request:
 ```json
 {
   "expected_version": 8,
-  "stopped_reason": "manual"
+  "stop_reason": "manual"
 }
 ```
+
+Compatibilidad temporal (opcional):
+- backend puede aceptar `stopped_reason` como alias de entrada durante migracion
+- contrato canonico de salida y documentacion: `stop_reason`
 
 ## POST `/api/v1/focus-sessions/reset`
 
 Request:
 ```json
 {
+  "task_id": "101",
   "expected_version": 9
 }
 ```
+
+Regla de direccionamiento:
+- `task_id` es obligatorio para que reset sea deterministico en estados `paused/stopped`
+- `expected_version` valida `focus_tasks.version` del `task_id` enviado
 
 ## POST `/api/v1/focus-sessions/switch-task`
 
@@ -276,9 +326,18 @@ Uso:
 Canal privado sugerido:
 - `private-user.{userId}.focus`
 
+Convencion de nombres (Laravel Echo):
+- frontend se suscribe como canal privado `private-user.{userId}.focus`
+- en backend (`routes/channels.php`) se registra como `user.{userId}.focus`
+- ambos representan el mismo canal privado
+
 Eventos:
 - `.focus_session.updated`
 - `.focus_session.stopped`
+
+Convencion `listen()` vs payload:
+- en frontend Echo se escucha con prefijo punto: `listen('.focus_session.updated')`
+- en payload JSON, `type` no lleva punto: `"type": "focus_session.updated"`
 
 Payload base:
 ```json
@@ -308,7 +367,7 @@ Canal de taskcards (ya vigente):
 - `private-user.{userId}.focus.tasks`
 
 Cuando cambia runtime del task (state/mode/remaining/elapsed/version), emitir:
-- `focus.task.updated`
+- `taskcard.updated`
 
 ---
 
@@ -340,7 +399,7 @@ Trigger de refresco recomendado:
 Obligatorio en backend:
 - `DB::transaction` en cada comando runtime (`start/pause/resume/stop/reset/switch-task`)
 - lock por usuario (`SELECT ... FOR UPDATE`) para evitar carreras multi-dispositivo
-- control optimista por `expected_version`
+- control optimista por `expected_version` sobre `focus_tasks.version` (del task runtime afectado)
 - validacion de propiedad de task por `auth()->id()`
 
 No permitido:
@@ -373,6 +432,14 @@ No permitido:
 }
 ```
 
+409 especifico para `start` con sesion activa:
+```json
+{
+  "message": "Active session conflict.",
+  "code": "ACTIVE_SESSION_CONFLICT"
+}
+```
+
 422:
 ```json
 {
@@ -393,6 +460,6 @@ No permitido:
 - [ ] cierre FTE solo con `stop_reason` permitido
 - [ ] apertura/cierre ITE coherente con reglas de negocio
 - [ ] daily log derivado de FTE/ITE por timezone local
-- [ ] realtime en canal `user.{id}.focus` + `user.{id}.focus.tasks`
+- [ ] realtime en canal `private-user.{id}.focus` + `private-user.{id}.focus.tasks`
 - [ ] `event_id` + `origin_device_id` en eventos
 - [ ] transacciones + locks + versioning para evitar carreras

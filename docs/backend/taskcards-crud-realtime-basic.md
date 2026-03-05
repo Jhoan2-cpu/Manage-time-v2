@@ -246,9 +246,9 @@ Canal privado:
 - `private-user.{userId}.focus.tasks`
 
 Eventos:
-- `focus.task.created`
-- `focus.task.updated`
-- `focus.task.deleted`
+- `taskcard.created`
+- `taskcard.updated`
+- `taskcard.deleted`
 
 payload base:
 ```json
@@ -256,7 +256,7 @@ payload base:
   "event_id": "evt_01HTZKX6A34N9Q7M5FQ8K3JY2R",
   "origin_device_id": "web-7f3b91",
   "occurred_at_utc": "2026-03-04T15:30:00Z",
-  "event": "focus.task.updated",
+  "event": "taskcard.updated",
   "task": {
     "id": "101",
     "user_id": "12",
@@ -276,7 +276,7 @@ payload deleted:
   "event_id": "evt_01HTZKX6A34N9Q7M5FQ8K3JY2S",
   "origin_device_id": "web-7f3b91",
   "occurred_at_utc": "2026-03-04T15:40:00Z",
-  "event": "focus.task.deleted",
+  "event": "taskcard.deleted",
   "task": {
     "id": "101",
     "user_id": "12",
@@ -307,4 +307,3 @@ Reglas de seguridad:
 - create/update/delete en transaccion DB
 - update/delete con lock + check de version
 - emitir eventos realtime solo despues de commit
-

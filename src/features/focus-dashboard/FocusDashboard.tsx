@@ -30,6 +30,7 @@ import {
   deleteTask as deleteTaskApi,
   focusSessionCommand,
   getAppBootstrap,
+  getFocusDailyLog,
   getActiveFocusSession,
   getFocusSessionConflictFromApiError,
   getOrCreateOriginDeviceId,
@@ -42,6 +43,7 @@ import {
   type AppBootstrapInclude,
   type CreateTaskPayload,
   type FocusSessionStateEnvelope,
+  type FocusDailyLogData,
   type TaskApiItem,
   type UpdatePreferencesPayload,
   type UserPreferences,
@@ -55,7 +57,7 @@ import {
 import { buildUntrackedCreateTimeEntryPayloadFromSession } from './historyApiAdapter'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey, TaskIconKey } from './types'
 import { classNames } from './utils/classNames'
-import { formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
+import { formatSecondsCompact, formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
 import { useI18n } from '../../i18n'
 import { ApiHttpError } from '../../lib/api/http'
 import {
@@ -101,6 +103,7 @@ const FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES: AppBootstrapInclude[] = [
 ]
 const TASK_START_COOLDOWN_MS = 3000
 const TASKS_REALTIME_DEDUP_CAPACITY = 240
+const FOCUS_REALTIME_DEDUP_CAPACITY = 240
 const TASK_COLOR_HEX_BY_KEY: Record<TaskColorKey, string> = {
   blue: '#1A73E8',
   green: '#0F9D58',
@@ -216,6 +219,10 @@ function parseHexColorToRgb(value: string) {
   }
 }
 
+function isSessionRunningState(state: string | null | undefined) {
+  return state === 'running' || state === 'working'
+}
+
 function adaptTaskApiItemToUi(
   serverTask: TaskApiItem,
   options: {
@@ -269,6 +276,54 @@ function adaptTaskApiItemToUi(
         ? serverTask.updated_at
         : existingTask?.updatedAtUtc,
   }
+}
+
+function adaptFocusDailyLogToUiEntries(
+  dailyLog: FocusDailyLogData,
+  options: { timeZone: string; untrackedLabel: string },
+) {
+  const focusEntries: LogEntry[] = dailyLog.focus_time_entries.map((entry) => {
+    const startedAt = new Date(entry.started_at_utc)
+    const safeDate = Number.isFinite(startedAt.getTime()) ? startedAt : new Date()
+    const elapsedSeconds =
+      typeof entry.elapsed_seconds === 'number' && Number.isFinite(entry.elapsed_seconds)
+        ? Math.max(0, Math.floor(entry.elapsed_seconds))
+        : 0
+    const normalizedTaskId =
+      typeof entry.focus_task_id_nullable === 'string' && entry.focus_task_id_nullable.trim()
+        ? entry.focus_task_id_nullable.trim()
+        : undefined
+
+    return {
+      id: `focus-${entry.id}`,
+      date: formatLocalDateKey(safeDate, options.timeZone),
+      start: formatLogStartTime(safeDate, options.timeZone),
+      duration: formatLogDurationFromSeconds(elapsedSeconds),
+      taskId: normalizedTaskId,
+      activity: normalizedTaskId ? undefined : options.untrackedLabel,
+      tone: normalizedTaskId ? undefined : 'default',
+    } satisfies LogEntry
+  })
+
+  const idleEntries: LogEntry[] = dailyLog.idle_time_entries.map((entry) => {
+    const startedAt = new Date(entry.started_at_utc)
+    const safeDate = Number.isFinite(startedAt.getTime()) ? startedAt : new Date()
+    const elapsedSeconds =
+      typeof entry.elapsed_seconds === 'number' && Number.isFinite(entry.elapsed_seconds)
+        ? Math.max(0, Math.floor(entry.elapsed_seconds))
+        : 0
+
+    return {
+      id: `idle-${entry.id}`,
+      date: formatLocalDateKey(safeDate, options.timeZone),
+      start: formatLogStartTime(safeDate, options.timeZone),
+      duration: formatLogDurationFromSeconds(elapsedSeconds),
+      activity: options.untrackedLabel,
+      tone: 'faded',
+    } satisfies LogEntry
+  })
+
+  return sortLogEntriesByTime([...focusEntries, ...idleEntries])
 }
 
 export function FocusDashboard({
@@ -385,6 +440,7 @@ export function FocusDashboard({
   const timerCompleteStopRequestKeyRef = useRef<string | null>(null)
   const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
   const processedTaskRealtimeEventIdsRef = useRef<string[]>([])
+  const processedFocusRealtimeEventIdsRef = useRef<string[]>([])
   const localOriginDeviceId = useMemo(() => getOrCreateOriginDeviceId(), [])
 
   useEffect(() => {
@@ -814,7 +870,7 @@ export function FocusDashboard({
     editingTask &&
     activeFocusSession &&
     activeFocusSession.task_id === editingTask.id &&
-    activeFocusSession.session_state === 'running',
+    isSessionRunningState(activeFocusSession.session_state),
   )
 
   const alignActiveTaskState = (nextActiveTaskId: string | null) => {
@@ -924,6 +980,56 @@ export function FocusDashboard({
   }
 
   const refreshBootstrapDerivedDataFromServer = async () => {
+    const refreshDailyLogFromServer = async () => {
+      const dateLocal = toIsoDateStringInTimeZone(new Date(), effectiveTimeZone)
+
+      try {
+        const dailyLog = await getFocusDailyLog({
+          date: dateLocal,
+          time_zone_name: effectiveTimeZone,
+        })
+        if (!dailyLog) {
+          onSignOut?.()
+          return false
+        }
+
+        setDailyLogEntries(
+          adaptFocusDailyLogToUiEntries(dailyLog, {
+            timeZone: dailyLog.time_zone_name || effectiveTimeZone,
+            untrackedLabel: copy.untrackedTime,
+          }),
+        )
+
+        const trackedSeconds = dailyLog.focus_time_entries.reduce((total, entry) => {
+          if (typeof entry.elapsed_seconds !== 'number' || !Number.isFinite(entry.elapsed_seconds)) {
+            return total
+          }
+          return total + Math.max(0, Math.floor(entry.elapsed_seconds))
+        }, 0)
+
+        setDashboardStatsState((current) => ({
+          ...current,
+          sessions: dailyLog.focus_time_entries.length,
+          totalTracked: formatSecondsCompact(trackedSeconds),
+        }))
+
+        return true
+      } catch (error) {
+        if (error instanceof ApiHttpError && error.status === 404) {
+          return false
+        }
+
+        throw error
+      }
+    }
+
+    const didRefreshDailyLog = await refreshDailyLogFromServer()
+    if (didRefreshDailyLog) {
+      await Promise.all([refreshTasksFromServer(), syncActiveFocusSession()])
+      setSettingsHistoryReloadKey((current) => current + 1)
+      return true
+    }
+
     const refreshedBootstrap = await getAppBootstrap({ include: FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES })
     if (!refreshedBootstrap) {
       onSignOut?.()
@@ -1023,6 +1129,18 @@ export function FocusDashboard({
     }
   }
 
+  const hasProcessedFocusRealtimeEvent = (eventId: string) => {
+    return processedFocusRealtimeEventIdsRef.current.includes(eventId)
+  }
+
+  const markFocusRealtimeEventProcessed = (eventId: string) => {
+    const queue = processedFocusRealtimeEventIdsRef.current
+    queue.push(eventId)
+    if (queue.length > FOCUS_REALTIME_DEDUP_CAPACITY) {
+      queue.splice(0, queue.length - FOCUS_REALTIME_DEDUP_CAPACITY)
+    }
+  }
+
   const applyRealtimeFocusEvent = (event: FocusRealtimeEvent) => {
     if (!event || !event.data) {
       return
@@ -1030,6 +1148,25 @@ export function FocusDashboard({
 
     const expectedUserId = bootstrapData?.user.id
     if (expectedUserId && event.meta?.user_id && `${event.meta.user_id}` !== `${expectedUserId}`) {
+      return
+    }
+
+    const eventId =
+      typeof event.meta?.event_id === 'string' && event.meta.event_id.trim()
+        ? event.meta.event_id.trim()
+        : null
+    if (eventId && hasProcessedFocusRealtimeEvent(eventId)) {
+      return
+    }
+
+    const incomingOriginDeviceId =
+      typeof event.meta?.origin_device_id === 'string' && event.meta.origin_device_id.trim()
+        ? event.meta.origin_device_id.trim()
+        : null
+    if (incomingOriginDeviceId && incomingOriginDeviceId === localOriginDeviceId) {
+      if (eventId) {
+        markFocusRealtimeEventProcessed(eventId)
+      }
       return
     }
 
@@ -1042,6 +1179,9 @@ export function FocusDashboard({
       localVersion !== null &&
       incomingVersion < localVersion
     ) {
+      if (eventId) {
+        markFocusRealtimeEventProcessed(eventId)
+      }
       return
     }
 
@@ -1065,6 +1205,10 @@ export function FocusDashboard({
 
     if (event.data.created_time_entry_id) {
       void handleCreatedTimeEntryInvalidation(event.data.created_time_entry_id)
+    }
+
+    if (eventId) {
+      markFocusRealtimeEventProcessed(eventId)
     }
   }
 
@@ -1130,7 +1274,7 @@ export function FocusDashboard({
         : null
 
     if (incomingVersion === null) {
-      if (event.event === 'focus.task.deleted') {
+      if (event.event === 'taskcard.deleted') {
         applyTaskRemovalFromUi(incomingTaskId)
         if (eventId) {
           markTaskRealtimeEventProcessed(eventId)
@@ -1145,7 +1289,7 @@ export function FocusDashboard({
       return
     }
 
-    if (event.event === 'focus.task.deleted') {
+    if (event.event === 'taskcard.deleted') {
       const localTask = taskList.find((task) => task.id === incomingTaskId)
       const localVersion =
         localTask && typeof localTask.version === 'number' && Number.isFinite(localTask.version)
@@ -1184,7 +1328,7 @@ export function FocusDashboard({
       typeof incomingTask.timer_initial_seconds === 'number' ||
       incomingTask.timer_initial_seconds === null
 
-    if (event.event === 'focus.task.updated' && !hasRenderableTaskMetadata) {
+    if (event.event === 'taskcard.updated' && !hasRenderableTaskMetadata) {
       scheduleTaskcardsRealtimeResync()
       if (eventId) {
         markTaskRealtimeEventProcessed(eventId)
@@ -1259,7 +1403,7 @@ export function FocusDashboard({
 
   useFocusRealtimeChannel({
     userId: bootstrapData?.user.id ?? null,
-    enabled: false,
+    enabled: Boolean(bootstrapData?.user.id),
     onEvent: applyRealtimeFocusEvent,
     onReconnectSync: () => {
       void syncActiveFocusSession()
@@ -1485,7 +1629,7 @@ export function FocusDashboard({
           try {
             const response = await focusSessionCommand('stop', {
               expected_version: activeFocusSession.version,
-              stopped_reason: 'timer_complete',
+              stop_reason: 'timer_completed',
             })
 
             if (!response) {
@@ -1799,7 +1943,7 @@ export function FocusDashboard({
       return
     }
 
-    const isSessionCurrentlyRunning = activeFocusSession?.session_state === 'running' || isFocusRunning
+    const isSessionCurrentlyRunning = isSessionRunningState(activeFocusSession?.session_state) || isFocusRunning
     if (!isSessionCurrentlyRunning && isTaskCooldownActive(activeTask.id)) {
       return
     }
@@ -1823,7 +1967,7 @@ export function FocusDashboard({
         return
       }
 
-      if (activeFocusSession.session_state === 'running') {
+      if (isSessionRunningState(activeFocusSession.session_state)) {
         isFocusCommandInFlightRef.current = true
         try {
           const response = await focusSessionCommand('pause', {
@@ -1981,7 +2125,7 @@ export function FocusDashboard({
     try {
       const response = await focusSessionCommand('stop', {
         expected_version: activeFocusSession.version,
-        stopped_reason: 'user_stop',
+        stop_reason: 'manual',
       })
 
       if (!response) {

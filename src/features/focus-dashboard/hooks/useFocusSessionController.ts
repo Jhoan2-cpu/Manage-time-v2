@@ -48,9 +48,9 @@ export function useFocusSessionController({
   const localElapsedCompatRef = useRef(sessionElapsedSecondsLocal)
 
   const timerMode =
-    authoritativeFocusSession?.session_state === 'running' ? authoritativeFocusSession.timer_mode : timerModeLocal
+    isSessionRunning(authoritativeFocusSession?.session_state) ? authoritativeFocusSession.timer_mode : timerModeLocal
   const isFocusRunning = authoritativeFocusSession
-    ? authoritativeFocusSession.session_state === 'running'
+    ? isSessionRunning(authoritativeFocusSession.session_state)
     : isFocusRunningLocal
   const sessionElapsedSeconds = useMemo(
     () => computeDisplayElapsedSeconds(authoritativeFocusSession, serverClockOffsetMs, serverTickKey, sessionElapsedSecondsLocal),
@@ -92,7 +92,7 @@ export function useFocusSessionController({
     authoritativeFocusSession.task_id === activeTask.id &&
     authoritativeFocusSession.timer_mode === 'timer'
       // Running session should trust its own target; paused/idle can prefer the locally edited target.
-      ? authoritativeFocusSession.session_state === 'running'
+      ? isSessionRunning(authoritativeFocusSession.session_state)
         ? (authoritativeActiveTaskTargetSeconds ?? localActiveTaskTargetSeconds)
         : (localActiveTaskTargetSeconds ?? authoritativeActiveTaskTargetSeconds)
       : localActiveTaskTargetSeconds
@@ -202,7 +202,7 @@ export function useFocusSessionController({
   }, [activeTaskTargetSeconds, authoritativeFocusSession, timerModeLocal])
 
   useEffect(() => {
-    if (authoritativeFocusSession?.session_state !== 'running') {
+    if (!isSessionRunning(authoritativeFocusSession?.session_state)) {
       return
     }
 
@@ -227,7 +227,7 @@ export function useFocusSessionController({
 
     if (nextSession) {
       setTimerMode(nextSession.timer_mode)
-      setIsFocusRunning(nextSession.session_state === 'running')
+      setIsFocusRunning(isSessionRunning(nextSession.session_state))
       setSessionElapsedSeconds(Math.max(0, nextSession.elapsed_seconds_total))
     }
   }
@@ -318,7 +318,7 @@ function computeDisplayElapsedSeconds(
 
   const base = Math.max(0, authoritativeFocusSession.elapsed_seconds_total)
 
-  if (authoritativeFocusSession.session_state !== 'running' || !authoritativeFocusSession.last_resumed_at_utc) {
+  if (!isSessionRunning(authoritativeFocusSession.session_state) || !authoritativeFocusSession.last_resumed_at_utc) {
     return base
   }
 
@@ -330,4 +330,8 @@ function computeDisplayElapsedSeconds(
   const currentServerMs = Date.now() + serverClockOffsetMs
   const deltaSeconds = Math.max(0, Math.floor((currentServerMs - resumedAtMs) / 1000))
   return base + deltaSeconds
+}
+
+function isSessionRunning(state: ActiveFocusSession['session_state'] | null | undefined) {
+  return state === 'running' || state === 'working'
 }

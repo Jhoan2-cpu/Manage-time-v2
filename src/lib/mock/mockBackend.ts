@@ -508,7 +508,7 @@ export function mockFocusSessionCommand(
           timer_mode: current.timer_mode,
           elapsed_seconds_final: elapsed,
           target_seconds: current.target_seconds,
-          stopped_reason: `${payload.stopped_reason ?? 'user_stop'}`,
+          stopped_reason: `${payload.stop_reason ?? payload.stopped_reason ?? 'manual'}`,
         },
         created_time_entry_id: created ?? undefined,
       },

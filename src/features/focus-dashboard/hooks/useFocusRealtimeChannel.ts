@@ -14,8 +14,10 @@ export type FocusRealtimeEvent = {
   }
   meta: {
     workspace_id: string | null
-    user_id: string
-    emitted_at_utc: string
+    user_id: string | null
+    event_id: string | null
+    origin_device_id: string | null
+    emitted_at_utc: string | null
   }
 }
 
@@ -24,6 +26,23 @@ type UseFocusRealtimeChannelParams = {
   enabled: boolean
   onEvent: (event: FocusRealtimeEvent) => void
   onReconnectSync?: () => void
+}
+
+type RealtimeFocusPayload = {
+  type?: string
+  meta?: {
+    workspace_id?: string | null
+    user_id?: string | number | null
+    event_id?: string | null
+    origin_device_id?: string | null
+    emitted_at_utc?: string | null
+  }
+  data?: {
+    server_now_utc?: string | null
+    active_focus_session?: FocusSessionStateEnvelope['data']['active_focus_session']
+    stopped_session_summary?: StoppedFocusSessionSummary | null
+    created_time_entry_id?: string | null
+  }
 }
 
 export function useFocusRealtimeChannel({
@@ -100,18 +119,30 @@ export function useFocusRealtimeChannel({
             console.error('Realtime focus channel error', { channelName }, error)
           })
 
-        channel.listen('.focus_session.updated', (event: FocusRealtimeEvent) => {
-          if (isDisposed || !event || event.type !== 'focus_session.updated') {
+        channel.listen('.focus_session.updated', (rawEvent: unknown) => {
+          if (isDisposed) {
             return
           }
-          onEventRef.current(event)
+
+          const normalized = normalizeRealtimeFocusEvent(rawEvent, 'focus_session.updated')
+          if (!normalized) {
+            return
+          }
+
+          onEventRef.current(normalized)
         })
 
-        channel.listen('.focus_session.stopped', (event: FocusRealtimeEvent) => {
-          if (isDisposed || !event || event.type !== 'focus_session.stopped') {
+        channel.listen('.focus_session.stopped', (rawEvent: unknown) => {
+          if (isDisposed) {
             return
           }
-          onEventRef.current(event)
+
+          const normalized = normalizeRealtimeFocusEvent(rawEvent, 'focus_session.stopped')
+          if (!normalized) {
+            return
+          }
+
+          onEventRef.current(normalized)
         })
       } catch (error) {
         if (!isDisposed) {
@@ -134,4 +165,50 @@ export function useFocusRealtimeChannel({
   return {
     connectionState,
   }
+}
+
+function normalizeRealtimeFocusEvent(
+  rawEvent: unknown,
+  canonicalType: FocusRealtimeEventType,
+): FocusRealtimeEvent | null {
+  if (!rawEvent || typeof rawEvent !== 'object') {
+    return null
+  }
+
+  const payload = rawEvent as RealtimeFocusPayload
+  const meta = payload.meta && typeof payload.meta === 'object' ? payload.meta : null
+  const data = payload.data && typeof payload.data === 'object' ? payload.data : null
+
+  if (!data) {
+    return null
+  }
+
+  return {
+    type: canonicalType,
+    data: {
+      server_now_utc: normalizeString(payload.data?.server_now_utc) ?? '',
+      active_focus_session: (payload.data?.active_focus_session as FocusSessionStateEnvelope['data']['active_focus_session']) ?? null,
+      stopped_session_summary: payload.data?.stopped_session_summary ?? null,
+      created_time_entry_id: normalizeString(payload.data?.created_time_entry_id) ?? null,
+    },
+    meta: {
+      workspace_id: normalizeString(meta?.workspace_id) ?? null,
+      user_id: normalizeString(meta?.user_id) ?? null,
+      event_id: normalizeString(meta?.event_id) ?? null,
+      origin_device_id: normalizeString(meta?.origin_device_id) ?? null,
+      emitted_at_utc: normalizeString(meta?.emitted_at_utc) ?? null,
+    },
+  }
+}
+
+function normalizeString(value: unknown) {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `${Math.trunc(value)}`
+  }
+
+  return null
 }

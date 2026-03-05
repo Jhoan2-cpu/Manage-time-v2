@@ -4,9 +4,9 @@ import { ensureCsrfCookie } from '../../../lib/api/http'
 import { disconnectReverbEchoClient, getOrCreateReverbEchoClient } from '../../../lib/realtime/reverbEcho'
 
 export type TaskcardsRealtimeEventType =
-  | 'focus.task.created'
-  | 'focus.task.updated'
-  | 'focus.task.deleted'
+  | 'taskcard.created'
+  | 'taskcard.updated'
+  | 'taskcard.deleted'
 
 export type TaskcardsRealtimeEvent = {
   event_id?: string | null
@@ -125,13 +125,13 @@ export function useTaskcardsRealtimeChannel({
       ? [canonicalChannelName, legacyChannelName]
       : [canonicalChannelName]
     const eventBindings: Array<{ listenName: string; canonical: TaskcardsRealtimeEventType }> = [
-      { listenName: '.focus.task.created', canonical: 'focus.task.created' },
-      { listenName: '.focus.task.updated', canonical: 'focus.task.updated' },
-      { listenName: '.focus.task.deleted', canonical: 'focus.task.deleted' },
-      { listenName: '.taskcard.created', canonical: 'focus.task.created' },
-      { listenName: '.taskcard.updated', canonical: 'focus.task.updated' },
-      { listenName: '.taskcard.deleted', canonical: 'focus.task.deleted' },
-      { listenName: '.taskcard.state.changed', canonical: 'focus.task.updated' },
+      { listenName: '.focus.task.created', canonical: 'taskcard.created' },
+      { listenName: '.focus.task.updated', canonical: 'taskcard.updated' },
+      { listenName: '.focus.task.deleted', canonical: 'taskcard.deleted' },
+      { listenName: '.taskcard.created', canonical: 'taskcard.created' },
+      { listenName: '.taskcard.updated', canonical: 'taskcard.updated' },
+      { listenName: '.taskcard.deleted', canonical: 'taskcard.deleted' },
+      { listenName: '.taskcard.state.changed', canonical: 'taskcard.updated' },
     ]
 
     ;(async () => {

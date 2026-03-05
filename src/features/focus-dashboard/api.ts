@@ -87,7 +87,7 @@ export type AppBootstrapActiveFocusSession = {
   id: string
   task_id: string
   timer_mode: 'timer' | 'stopwatch'
-  session_state: 'running' | 'paused'
+  session_state: 'running' | 'working' | 'paused'
   target_seconds: number | null
   started_at_utc: string
   last_resumed_at_utc: string | null
@@ -168,9 +168,11 @@ type TaskEnvelope = {
   data: TaskApiItem
 }
 
+export type TaskVersionConflictCode = 'TASK_VERSION_CONFLICT' | 'VERSION_CONFLICT'
+
 export type TaskVersionConflictEnvelope = {
   message: string
-  code: 'VERSION_CONFLICT'
+  code: TaskVersionConflictCode
   data?: {
     current?: {
       id?: string
@@ -182,14 +184,22 @@ export type TaskVersionConflictEnvelope = {
 
 export type ActiveFocusSession = AppBootstrapActiveFocusSession
 
-export type FocusStoppedReason = 'user_stop' | 'timer_complete' | 'task_switch'
+export type FocusStoppedReason =
+  | 'manual'
+  | 'timer_completed'
+  | 'task_switch'
+  | 'session_end'
+  | 'idle_detected'
+  | 'user_stop'
+  | 'timer_complete'
 
 export type StoppedFocusSessionSummary = {
   task_id: string | null
   timer_mode: FocusTimerModeApi | null
   elapsed_seconds_final: number
   target_seconds: number | null
-  stopped_reason: FocusStoppedReason | null
+  stop_reason?: FocusStoppedReason | null
+  stopped_reason?: FocusStoppedReason | null
 }
 
 export type FocusSessionStateEnvelope = {
@@ -202,6 +212,8 @@ export type FocusSessionStateEnvelope = {
 }
 
 export type FocusSessionConflictCode =
+  | 'ACTIVE_SESSION_CONFLICT'
+  | 'FOCUS_RUNTIME_CONFLICT'
   | 'ACTIVE_SESSION_EXISTS'
   | 'NO_ACTIVE_SESSION'
   | 'VERSION_MISMATCH'
@@ -242,11 +254,51 @@ export type SwitchTaskFocusSessionPayload = {
 
 export type StopFocusSessionPayload = {
   expected_version: number
+  stop_reason?: FocusStoppedReason
   stopped_reason?: FocusStoppedReason
+}
+
+export type ResetFocusSessionPayload = {
+  expected_version: number
+  task_id: string
 }
 
 export type HeartbeatFocusSessionPayload = {
   expected_version: number
+}
+
+export type FocusDailyLogFocusEntry = {
+  id: string
+  user_id?: string
+  focus_task_id_nullable?: string | null
+  task_title_snapshot?: string | null
+  task_icon_snapshot?: string | null
+  task_color_snapshot?: string | null
+  mode_snapshot?: 'timer' | 'stopwatch' | null
+  started_at_utc: string
+  ended_at_utc: string | null
+  elapsed_seconds: number | null
+  stop_reason?: string | null
+}
+
+export type FocusDailyLogIdleEntry = {
+  id: string
+  user_id?: string
+  started_at_utc: string
+  ended_at_utc: string | null
+  elapsed_seconds: number | null
+  reason?: string | null
+}
+
+export type FocusDailyLogData = {
+  date: string
+  time_zone_name: string
+  focus_time_entries: FocusDailyLogFocusEntry[]
+  idle_time_entries: FocusDailyLogIdleEntry[]
+}
+
+type FocusDailyLogEnvelope = {
+  data: FocusDailyLogData
 }
 
 export type HistoryTaskRow = {
@@ -515,6 +567,9 @@ export async function startFocusSession(payload: StartFocusSessionPayload) {
   const { elapsed_seconds_seed: _elapsedSeed, ...networkPayload } = payload
   const response = await apiFetch('/api/v1/focus-sessions/start', {
     method: 'POST',
+    headers: {
+      'X-Origin-Device-Id': getOrCreateOriginDeviceId(),
+    },
     body: JSON.stringify(networkPayload),
   })
   if (response.status === 401) {
@@ -525,12 +580,13 @@ export async function startFocusSession(payload: StartFocusSessionPayload) {
 }
 
 export async function focusSessionCommand(
-  endpoint: 'pause' | 'resume' | 'switch-task' | 'stop' | 'heartbeat',
+  endpoint: 'pause' | 'resume' | 'switch-task' | 'stop' | 'reset' | 'heartbeat',
   payload:
     | PauseFocusSessionPayload
     | ResumeFocusSessionPayload
     | SwitchTaskFocusSessionPayload
     | StopFocusSessionPayload
+    | ResetFocusSessionPayload
     | HeartbeatFocusSessionPayload,
 ) {
   if (isMockBackendEnabled()) {
@@ -539,7 +595,7 @@ export async function focusSessionCommand(
   }
 
   await ensureCsrfCookie()
-  const networkPayload =
+  const networkPayloadBase =
     endpoint === 'switch-task'
       ? (() => {
         const {
@@ -549,8 +605,14 @@ export async function focusSessionCommand(
         return rest
       })()
       : payload
+  const networkPayload = endpoint === 'stop'
+    ? normalizeStopPayload(networkPayloadBase as StopFocusSessionPayload)
+    : networkPayloadBase
   const response = await apiFetch(`/api/v1/focus-sessions/${endpoint}`, {
     method: 'POST',
+    headers: {
+      'X-Origin-Device-Id': getOrCreateOriginDeviceId(),
+    },
     body: JSON.stringify(networkPayload),
   })
   if (response.status === 401) {
@@ -558,6 +620,59 @@ export async function focusSessionCommand(
   }
 
   return parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
+}
+
+export async function getFocusDailyLog(params: { date: string; time_zone_name: string }) {
+  if (isMockBackendEnabled()) {
+    const detail = mockGetHistoryDayDetail(params.date, 'asc')
+    if (!detail) {
+      return null
+    }
+
+    const focus_time_entries = detail.entries
+      .filter((entry) => entry.entry_type === 'focus' || entry.entry_type === 'manual_adjustment')
+      .map((entry) => ({
+        id: entry.id,
+        focus_task_id_nullable: entry.task_id,
+        task_title_snapshot: null,
+        task_icon_snapshot: null,
+        task_color_snapshot: null,
+        mode_snapshot: null,
+        started_at_utc: entry.started_at_utc,
+        ended_at_utc: entry.ended_at_utc,
+        elapsed_seconds: entry.duration_seconds,
+        stop_reason: null,
+      })) satisfies FocusDailyLogFocusEntry[]
+
+    const idle_time_entries = detail.entries
+      .filter((entry) => entry.entry_type === 'untracked')
+      .map((entry) => ({
+        id: entry.id,
+        started_at_utc: entry.started_at_utc,
+        ended_at_utc: entry.ended_at_utc,
+        elapsed_seconds: entry.duration_seconds,
+        reason: 'break',
+      })) satisfies FocusDailyLogIdleEntry[]
+
+    return {
+      date: detail.date_local,
+      time_zone_name: 'UTC',
+      focus_time_entries,
+      idle_time_entries,
+    } satisfies FocusDailyLogData
+  }
+
+  const search = new URLSearchParams({
+    date: params.date,
+    time_zone_name: params.time_zone_name,
+  })
+  const response = await apiFetch(`/api/v1/focus/daily-log?${search.toString()}`, { method: 'GET' })
+  if (response.status === 401) {
+    return null
+  }
+
+  const json = await parseJsonResponse<FocusDailyLogEnvelope>(response, 'Focus daily log lookup failed')
+  return json.data
 }
 
 export async function createTimeEntry(payload: CreateTimeEntryPayload) {
@@ -671,21 +786,18 @@ export function getFocusSessionConflictFromApiError(error: unknown) {
     return null
   }
 
-  const data = body.data
-  if (!data || typeof data !== 'object') {
-    return null
-  }
+  const data = body.data && typeof body.data === 'object' ? body.data : null
 
   return {
     message: typeof body.message === 'string' && body.message.trim() ? body.message : 'Focus session conflict.',
     code: body.code,
     data: {
       server_now_utc:
-        typeof (data as { server_now_utc?: unknown }).server_now_utc === 'string'
-          ? ((data as { server_now_utc: string }).server_now_utc)
+        typeof (data as { server_now_utc?: unknown } | null)?.server_now_utc === 'string'
+          ? (((data as { server_now_utc: string } | null)?.server_now_utc) ?? '')
           : '',
       active_focus_session:
-        ((data as { active_focus_session?: unknown }).active_focus_session as ActiveFocusSession | null | undefined) ??
+        (((data as { active_focus_session?: unknown } | null)?.active_focus_session) as ActiveFocusSession | null | undefined) ??
         null,
     },
   } satisfies FocusSessionConflictEnvelope
@@ -697,13 +809,13 @@ export function getTaskVersionConflictFromApiError(error: unknown) {
   }
 
   const body = error.body as Partial<TaskVersionConflictEnvelope> | null
-  if (!body || body.code !== 'VERSION_CONFLICT') {
+  if (!body || !isTaskVersionConflictCode(body.code)) {
     return null
   }
 
   return {
     message: typeof body.message === 'string' && body.message.trim() ? body.message : 'Version conflict.',
-    code: 'VERSION_CONFLICT' as const,
+    code: body.code,
     data: {
       current: {
         id:
@@ -755,10 +867,30 @@ export function getOrCreateOriginDeviceId() {
 
 function isFocusSessionConflictCode(value: unknown): value is FocusSessionConflictCode {
   return (
+    value === 'ACTIVE_SESSION_CONFLICT' ||
+    value === 'FOCUS_RUNTIME_CONFLICT' ||
     value === 'ACTIVE_SESSION_EXISTS' ||
     value === 'NO_ACTIVE_SESSION' ||
     value === 'VERSION_MISMATCH' ||
     value === 'SESSION_NOT_RUNNING' ||
     value === 'SESSION_NOT_PAUSED'
   )
+}
+
+function isTaskVersionConflictCode(value: unknown): value is TaskVersionConflictCode {
+  return value === 'TASK_VERSION_CONFLICT' || value === 'VERSION_CONFLICT'
+}
+
+function normalizeStopPayload(payload: StopFocusSessionPayload) {
+  const canonicalReason = payload.stop_reason ?? payload.stopped_reason
+  if (!canonicalReason) {
+    return {
+      expected_version: payload.expected_version,
+    }
+  }
+
+  return {
+    expected_version: payload.expected_version,
+    stop_reason: canonicalReason,
+  }
 }
