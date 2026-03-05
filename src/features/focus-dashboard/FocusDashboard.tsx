@@ -333,6 +333,7 @@ export function FocusDashboard({
   const [dashboardStatsState, setDashboardStatsState] = useState(bootstrapDashboardStats)
   const [settingsHistoryReloadKey, setSettingsHistoryReloadKey] = useState(0)
   const [isTasksLoading, setIsTasksLoading] = useState(false)
+  const [isDeleteTaskSubmitting, setIsDeleteTaskSubmitting] = useState(false)
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<PendingTaskSwitchConfirm>(null)
   const {
     isProfileModalOpen,
@@ -642,7 +643,7 @@ export function FocusDashboard({
     setTaskPendingSwitchConfirm((current) => (current?.task.id === deletedTaskId ? null : current))
   }
 
-  const handleCreateTaskPersist = async (payload: NewTaskPayload) => {
+  const handleCreateTaskPersist = async (payload: NewTaskPayload): Promise<boolean> => {
     const apiPayload = buildTasksApiPayloadFromModalPayload(payload)
     const editingTaskId = editingTask?.id ?? null
 
@@ -661,7 +662,7 @@ export function FocusDashboard({
         })
         if (!updatedTask) {
           onSignOut?.()
-          return
+          return false
         }
 
         setTaskList((currentTasks) =>
@@ -674,13 +675,13 @@ export function FocusDashboard({
               : task,
           ),
         )
-        return
+        return true
       }
 
       const createdTask = await createTaskApi(apiPayload)
       if (!createdTask) {
         onSignOut?.()
-        return
+        return false
       }
 
       setTaskList((currentTasks) => {
@@ -697,16 +698,17 @@ export function FocusDashboard({
 
         return currentTasks.map((task) => (task.id === uiTask.id ? uiTask : task))
       })
+      return true
     } catch (error) {
       if (error instanceof ApiHttpError) {
         if (error.status === 401) {
           onSignOut?.()
-          return
+          return false
         }
 
         if (error.status === 404 && editingTaskId) {
           applyTaskRemovalFromUi(editingTaskId)
-          return
+          return false
         }
 
         if (error.status === 409) {
@@ -717,11 +719,12 @@ export function FocusDashboard({
           } catch (refreshError) {
             console.error('Failed to refresh tasks after version conflict', refreshError)
           }
-          return
+          return false
         }
       }
 
       console.error('Failed to persist task mutation', { editingTaskId, apiPayload }, error)
+      return false
     }
   }
 
@@ -1527,7 +1530,7 @@ export function FocusDashboard({
   ])
 
   const handleConfirmDeleteTask = async () => {
-    if (!taskPendingDelete) {
+    if (!taskPendingDelete || isDeleteTaskSubmitting) {
       return
     }
 
@@ -1537,6 +1540,7 @@ export function FocusDashboard({
         ? Math.max(1, Math.floor(taskPendingDelete.version))
         : 1
 
+    setIsDeleteTaskSubmitting(true)
     try {
       const result = await deleteTaskApi(deletingTaskId, { ifVersion: deletingTaskVersion })
       if (!result) {
@@ -1570,6 +1574,10 @@ export function FocusDashboard({
       }
 
       console.error('Failed to delete task', { taskId: deletingTaskId }, error)
+    } finally {
+      if (isMountedRef.current) {
+        setIsDeleteTaskSubmitting(false)
+      }
     }
   }
   const startFocusSessionMeta = (task: Task) => {
@@ -2307,7 +2315,13 @@ export function FocusDashboard({
       />
       <DeleteTaskConfirmModal
         isOpen={taskPendingDelete !== null}
-        onClose={handleCloseDeleteTaskModal}
+        isSubmitting={isDeleteTaskSubmitting}
+        onClose={() => {
+          if (isDeleteTaskSubmitting) {
+            return
+          }
+          handleCloseDeleteTaskModal()
+        }}
         onConfirm={handleConfirmDeleteTask}
         task={taskPendingDelete ? localizeStaticTaskTitle(taskPendingDelete, locale) : null}
       />

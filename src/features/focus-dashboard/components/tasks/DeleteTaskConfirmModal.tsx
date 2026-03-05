@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTrashCan, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faTrashCan, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../../i18n'
 import type { Task } from '../../types'
 
 type DeleteTaskConfirmModalProps = {
   isOpen: boolean
   task: Task | null
+  isSubmitting?: boolean
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: () => void | Promise<void>
 }
 
-export function DeleteTaskConfirmModal({ isOpen, task, onClose, onConfirm }: DeleteTaskConfirmModalProps) {
+export function DeleteTaskConfirmModal({ isOpen, task, isSubmitting = false, onClose, onConfirm }: DeleteTaskConfirmModalProps) {
   const { locale } = useI18n()
   useEffect(() => {
     if (!isOpen) {
@@ -20,7 +21,7 @@ export function DeleteTaskConfirmModal({ isOpen, task, onClose, onConfirm }: Del
 
     const previousOverflow = document.body.style.overflow
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !isSubmitting) {
         onClose()
       }
     }
@@ -32,7 +33,7 @@ export function DeleteTaskConfirmModal({ isOpen, task, onClose, onConfirm }: Del
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, isSubmitting, onClose])
 
   if (!isOpen || !task) {
     return null
@@ -48,6 +49,7 @@ export function DeleteTaskConfirmModal({ isOpen, task, onClose, onConfirm }: Del
           note: 'Esta accion no se puede deshacer.',
           cancel: 'Cancelar',
           confirm: 'Eliminar',
+          submitting: 'Eliminando...',
         }
       : {
           title: 'Delete Task',
@@ -57,12 +59,18 @@ export function DeleteTaskConfirmModal({ isOpen, task, onClose, onConfirm }: Del
           note: 'This action cannot be undone.',
           cancel: 'Cancel',
           confirm: 'Delete',
+          submitting: 'Deleting...',
         }
 
   return (
     <div
       className="modal-overlay-animate fixed inset-0 z-[80] flex items-center justify-center bg-[#020a18]/82 px-4 backdrop-blur-[3px]"
-      onClick={onClose}
+      onClick={() => {
+        if (isSubmitting) {
+          return
+        }
+        onClose()
+      }}
     >
       <div
         aria-labelledby="delete-task-modal-title"
@@ -83,6 +91,7 @@ export function DeleteTaskConfirmModal({ isOpen, task, onClose, onConfirm }: Del
           <button
             aria-label={copy.close}
             className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
+            disabled={isSubmitting}
             onClick={onClose}
             type="button"
           >
@@ -101,18 +110,20 @@ export function DeleteTaskConfirmModal({ isOpen, task, onClose, onConfirm }: Del
         <footer className="flex items-center justify-end gap-2 border-t border-slate-800/80 px-5 py-4">
           <button
             className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
+            disabled={isSubmitting}
             onClick={onClose}
             type="button"
           >
             {copy.cancel}
           </button>
           <button
-            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
+            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-65"
+            disabled={isSubmitting}
             onClick={onConfirm}
             type="button"
           >
-            <FontAwesomeIcon icon={faTrashCan} />
-            {copy.confirm}
+            {isSubmitting ? <FontAwesomeIcon className="animate-spin" icon={faSpinner} /> : <FontAwesomeIcon icon={faTrashCan} />}
+            {isSubmitting ? copy.submitting : copy.confirm}
           </button>
         </footer>
       </div>

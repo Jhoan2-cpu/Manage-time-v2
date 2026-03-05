@@ -1,7 +1,7 @@
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCheck, faClock, faHourglassHalf, faTrashCan, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faCheck, faClock, faHourglassHalf, faSpinner, faTrashCan, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { useI18n } from '../../../../i18n'
 import { getTaskColorOptionLabel, getTaskIconOptionLabel, taskColorOptions, taskIconOptions } from '../../constants/taskOptions'
 import type { Task, TaskColorKey, TaskIconKey } from '../../types'
@@ -19,7 +19,7 @@ export type NewTaskPayload = {
 type NewTaskModalProps = {
   isOpen: boolean
   onClose: () => void
-  onCreateTask: (payload: NewTaskPayload) => void
+  onCreateTask: (payload: NewTaskPayload) => void | boolean | Promise<void | boolean>
   editingTask?: Task | null
   onRequestDeleteTask?: (task: Task) => void
   lockNonAlarmFields?: boolean
@@ -90,6 +90,7 @@ export function NewTaskModal({
   const [alarmMinuteInput, setAlarmMinuteInput] = useState('')
   const [alarmSecondInput, setAlarmSecondInput] = useState('')
   const [alarmPeriod, setAlarmPeriod] = useState<'AM' | 'PM'>('AM')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [colorGlowOrigin, setColorGlowOrigin] = useState<{ xPercent: number; yPercent: number }>({
     xPercent: 22,
     yPercent: 82,
@@ -99,6 +100,7 @@ export function NewTaskModal({
 
   useEffect(() => {
     if (!isOpen) {
+      setIsSubmitting(false)
       return
     }
 
@@ -142,7 +144,7 @@ export function NewTaskModal({
 
     const previousOverflow = document.body.style.overflow
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !isSubmitting) {
         onClose()
       }
     }
@@ -154,7 +156,7 @@ export function NewTaskModal({
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, isSubmitting, onClose])
 
   useEffect(() => {
     if (!isOpen) {
@@ -203,6 +205,8 @@ export function NewTaskModal({
           chooseColor: 'Elegir color {label}',
           delete: 'Eliminar',
           cancel: 'Cancelar',
+          savingChanges: 'Guardando...',
+          creatingTaskPending: 'Creando...',
           saveChanges: 'Guardar cambios',
           createTask: 'Crear tarea',
         }
@@ -232,12 +236,15 @@ export function NewTaskModal({
           chooseColor: 'Choose {label} color',
           delete: 'Delete',
           cancel: 'Cancel',
+          savingChanges: 'Saving...',
+          creatingTaskPending: 'Creating...',
           saveChanges: 'Save Changes',
           createTask: 'Create Task',
         }
 
   const isEditing = editingTask !== null
   const lockEditableTaskFields = Boolean(lockNonAlarmFields && isEditing && editingTask)
+  const isFormInteractionDisabled = isSubmitting
   const canSubmit = title.trim().length > 0
   const modalAccentRgb = modalAccentRgbByColor[colorTag]
   const softAccentBorder = `rgba(${modalAccentRgb},0.18)`
@@ -270,10 +277,10 @@ export function NewTaskModal({
     setColorTag(nextColorTag)
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!canSubmit) {
+    if (!canSubmit || isSubmitting) {
       return
     }
 
@@ -302,21 +309,36 @@ export function NewTaskModal({
     const resolvedTargetDurationMinutes =
       lockEditableTaskFields && editingTask ? editingTask.targetDurationMinutes : normalizedTargetDuration
 
-    onCreateTask({
-      title: resolvedTitle,
-      details: '',
-      colorTag: resolvedColorTag,
-      iconTag: resolvedIconTag,
-      targetDurationMinutes: resolvedTargetDurationMinutes,
-      alarmTime: normalizedAlarmTime,
-    })
-    onClose()
+    setIsSubmitting(true)
+    try {
+      const result = await onCreateTask({
+        title: resolvedTitle,
+        details: '',
+        colorTag: resolvedColorTag,
+        iconTag: resolvedIconTag,
+        targetDurationMinutes: resolvedTargetDurationMinutes,
+        alarmTime: normalizedAlarmTime,
+      })
+
+      if (result !== false) {
+        onClose()
+      }
+    } catch (error) {
+      console.error('Failed to persist task from modal submit', error)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <div
       className="modal-overlay-animate fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#020a18]/80 px-3 py-4 backdrop-blur-[3px] sm:items-center sm:px-4 sm:py-6"
-      onClick={onClose}
+      onClick={() => {
+        if (isSubmitting) {
+          return
+        }
+        onClose()
+      }}
     >
       <div
         aria-labelledby="new-task-modal-title"
@@ -362,6 +384,7 @@ export function NewTaskModal({
             <button
               aria-label={copy.closeModal}
               className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
+              disabled={isSubmitting}
               onClick={onClose}
               type="button"
             >
@@ -375,9 +398,9 @@ export function NewTaskModal({
                 {copy.taskLabel}
               </label>
               <input
-                autoFocus={!lockEditableTaskFields}
-                className={classNames(fieldClassName, lockEditableTaskFields && 'cursor-not-allowed opacity-70')}
-                disabled={lockEditableTaskFields}
+                autoFocus={!lockEditableTaskFields && !isSubmitting}
+                className={classNames(fieldClassName, (lockEditableTaskFields || isFormInteractionDisabled) && 'cursor-not-allowed opacity-70')}
+                disabled={lockEditableTaskFields || isFormInteractionDisabled}
                 id={titleId}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder={copy.taskPlaceholder}
@@ -406,7 +429,7 @@ export function NewTaskModal({
                 >
                   <div className="relative flex items-center gap-1">
                     <CompactTimeUnitInput
-                      disabled={lockEditableTaskFields}
+                      disabled={lockEditableTaskFields || isFormInteractionDisabled}
                       id={targetDurationHoursId}
                       onChange={setTargetDurationHoursInput}
                       placeholder="00"
@@ -416,7 +439,7 @@ export function NewTaskModal({
                     <TimeUnitSeparator />
                     <CompactTimeUnitInput
                       ariaLabel={copy.timerMinutesAria}
-                      disabled={lockEditableTaskFields}
+                      disabled={lockEditableTaskFields || isFormInteractionDisabled}
                       onChange={setTargetDurationMinutesInput}
                       placeholder="00"
                       unitLabel="MM"
@@ -425,7 +448,7 @@ export function NewTaskModal({
                     <TimeUnitSeparator />
                     <CompactTimeUnitInput
                       ariaLabel={copy.timerSecondsAria}
-                      disabled={lockEditableTaskFields}
+                      disabled={lockEditableTaskFields || isFormInteractionDisabled}
                       onChange={setTargetDurationSecondsInput}
                       placeholder="00"
                       unitLabel="SS"
@@ -455,6 +478,7 @@ export function NewTaskModal({
                   <div className="relative flex flex-wrap items-center gap-x-1 gap-y-2 md:flex-nowrap">
                     <CompactTimeUnitInput
                       id={alarmHourId}
+                      disabled={isFormInteractionDisabled}
                       onChange={setAlarmHourInput}
                       placeholder="08"
                       unitLabel="HH"
@@ -463,6 +487,7 @@ export function NewTaskModal({
                     <TimeUnitSeparator />
                     <CompactTimeUnitInput
                       ariaLabel={copy.alarmMinutesAria}
+                      disabled={isFormInteractionDisabled}
                       onChange={setAlarmMinuteInput}
                       placeholder="00"
                       unitLabel="MM"
@@ -471,6 +496,7 @@ export function NewTaskModal({
                     <TimeUnitSeparator />
                     <CompactTimeUnitInput
                       ariaLabel={copy.alarmSecondsAria}
+                      disabled={isFormInteractionDisabled}
                       onChange={setAlarmSecondInput}
                       placeholder="00"
                       unitLabel="SS"
@@ -478,6 +504,7 @@ export function NewTaskModal({
                     />
                     <CompactTimeSelectField
                       ariaLabel={copy.alarmPeriodAria}
+                      disabled={isFormInteractionDisabled}
                       onChange={(nextValue) => setAlarmPeriod(nextValue as 'AM' | 'PM')}
                       unitLabel="AM/PM"
                       value={alarmPeriod}
@@ -506,7 +533,7 @@ export function NewTaskModal({
                           ? modalIconSelectedClassByColor[colorTag]
                           : 'border-slate-700/80 bg-slate-800/70 text-slate-400 hover:border-slate-600 hover:text-slate-200',
                       )}
-                      disabled={lockEditableTaskFields}
+                      disabled={lockEditableTaskFields || isFormInteractionDisabled}
                       key={option.id}
                       onClick={() => setIconTag(option.id)}
                       title={optionLabel}
@@ -534,7 +561,7 @@ export function NewTaskModal({
                           option.swatchClassName,
                           isSelected && classNames('ring-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]', option.selectedRingClassName),
                         )}
-                      disabled={lockEditableTaskFields}
+                      disabled={lockEditableTaskFields || isFormInteractionDisabled}
                       key={option.id}
                       onClick={(event) => handleColorTagSelect(option.id, event.currentTarget)}
                       ref={(element) => {
@@ -559,6 +586,7 @@ export function NewTaskModal({
               {isEditing && editingTask && onRequestDeleteTask ? (
                 <button
                   className="inline-flex items-center gap-2 rounded-lg bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)] transition hover:bg-rose-500/15"
+                  disabled={isSubmitting}
                   onClick={() => {
                     onClose()
                     onRequestDeleteTask(editingTask)
@@ -574,17 +602,25 @@ export function NewTaskModal({
             <div className="flex items-center gap-2">
               <button
                 className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-slate-100"
+                disabled={isSubmitting}
                 onClick={onClose}
                 type="button"
               >
                 {copy.cancel}
               </button>
               <button
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!canSubmit}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!canSubmit || isSubmitting}
                 type="submit"
               >
-                {isEditing ? copy.saveChanges : copy.createTask}
+                {isSubmitting ? (
+                  <>
+                    <FontAwesomeIcon className="animate-spin" icon={faSpinner} />
+                    <span>{isEditing ? copy.savingChanges : copy.creatingTaskPending}</span>
+                  </>
+                ) : (
+                  <span>{isEditing ? copy.saveChanges : copy.createTask}</span>
+                )}
               </button>
             </div>
           </footer>
