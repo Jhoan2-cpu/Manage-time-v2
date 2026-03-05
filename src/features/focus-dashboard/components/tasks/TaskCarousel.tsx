@@ -12,6 +12,7 @@ type TaskCarouselProps = {
   sessionCountByTaskId: Record<string, number>
   taskCooldownEndsAtMsByTaskId?: Record<string, number>
   isFocusRunning?: boolean
+  isLoading?: boolean
   accentColorTag?: TaskColorKey
   effectiveTimeZone?: string
   onAddTask: () => void
@@ -76,6 +77,7 @@ export function TaskCarousel({
   sessionCountByTaskId,
   taskCooldownEndsAtMsByTaskId = {},
   isFocusRunning = false,
+  isLoading = false,
   accentColorTag = 'blue',
   effectiveTimeZone,
   onAddTask,
@@ -95,12 +97,14 @@ export function TaskCarousel({
         taskCarousel: 'Registro de tareas',
         tasks: 'tareas',
         addTask: 'Agregar tarea',
+        loading: 'Actualizando...',
         emptyState: 'Aun no hay tareas. Usa el boton Agregar tarea para crear la primera.',
       }
       : {
         taskCarousel: 'Task Carousel',
         tasks: 'tasks',
         addTask: 'Add Task',
+        loading: 'Refreshing...',
         emptyState: 'No tasks yet. Use the Add Task button to create your first task.',
       }
 
@@ -277,6 +281,12 @@ export function TaskCarousel({
               <span className="tabular-nums">{tasks.length}</span>
               <span>{copy.tasks}</span>
             </span>
+            {isLoading ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/55 px-2 py-0.5 text-[11px] font-medium text-slate-300">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-300" />
+                <span>{copy.loading}</span>
+              </span>
+            ) : null}
           </div>
           <button
             className="inline-flex items-center gap-1.5 rounded-xl border border-blue-400/35 bg-[#0a1833]/88 px-2.5 py-1.5 text-xs font-semibold text-blue-100 shadow-[0_8px_18px_rgba(2,8,24,0.45),inset_0_0_0_1px_rgba(59,130,246,0.18)] backdrop-blur transition hover:border-blue-300/55 hover:bg-[#112349] hover:text-white"
@@ -311,13 +321,34 @@ export function TaskCarousel({
             <div
               className={classNames(
                 'gap-4 pr-2',
-                tasks.length > 0 ? 'flex min-w-max snap-x snap-mandatory' : 'grid min-w-full',
+                tasks.length > 0 || isLoading ? 'flex min-w-max snap-x snap-mandatory' : 'grid min-w-full',
               )}
             >
               {tasks.length === 0 ? (
-                <div className="grid h-36 w-full place-items-center rounded-2xl bg-slate-900/20 px-4 text-center text-sm text-slate-400 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.28)]">
-                  {copy.emptyState}
-                </div>
+                isLoading ? (
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      className="h-36 w-[248px] rounded-2xl border border-slate-800/80 bg-slate-900/35 p-4 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.35)]"
+                      key={`task-skeleton-${index}`}
+                    >
+                      <div className="flex h-full animate-pulse flex-col justify-between">
+                        <div className="space-y-2.5">
+                          <div className="h-3 w-16 rounded bg-slate-700/60" />
+                          <div className="h-5 w-40 rounded bg-slate-700/70" />
+                          <div className="h-3 w-28 rounded bg-slate-800/70" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="h-8 w-8 rounded-xl bg-slate-700/60" />
+                          <div className="h-8 w-24 rounded-xl bg-slate-700/60" />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="grid h-36 w-full place-items-center rounded-2xl bg-slate-900/20 px-4 text-center text-sm text-slate-400 shadow-[inset_0_0_0_1px_rgba(30,41,59,0.28)]">
+                    {copy.emptyState}
+                  </div>
+                )
               ) : (
                 tasks.map((task) => (
                   <div className="snap-start" key={task.id}>

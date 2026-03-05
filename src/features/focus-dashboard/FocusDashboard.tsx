@@ -326,6 +326,7 @@ export function FocusDashboard({
   const [dailyLogEntries, setDailyLogEntries] = useState<LogEntry[]>(bootstrapInitialDailyLogEntries)
   const [dashboardStatsState, setDashboardStatsState] = useState(bootstrapDashboardStats)
   const [settingsHistoryReloadKey, setSettingsHistoryReloadKey] = useState(0)
+  const [isTasksLoading, setIsTasksLoading] = useState(false)
   const [taskPendingSwitchConfirm, setTaskPendingSwitchConfirm] = useState<PendingTaskSwitchConfirm>(null)
   const {
     isProfileModalOpen,
@@ -372,6 +373,7 @@ export function FocusDashboard({
   const isMountedRef = useRef(true)
   const isFocusCommandInFlightRef = useRef(false)
   const isFocusSessionSyncInFlightRef = useRef(false)
+  const tasksRefreshInFlightCountRef = useRef(0)
   const timerCompleteStopRequestKeyRef = useRef<string | null>(null)
   const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
   const processedTaskRealtimeEventIdsRef = useRef<string[]>([])
@@ -384,6 +386,7 @@ export function FocusDashboard({
       if (preferencesPatchTimerRef.current !== null) {
         window.clearTimeout(preferencesPatchTimerRef.current)
       }
+      tasksRefreshInFlightCountRef.current = 0
     }
   }, [])
 
@@ -831,55 +834,67 @@ export function FocusDashboard({
   }
 
   const refreshTasksFromServer = async () => {
-    const serverTasks = await getTasksApi()
-    if (!serverTasks) {
-      onSignOut?.()
-      return
+    tasksRefreshInFlightCountRef.current += 1
+    if (isMountedRef.current) {
+      setIsTasksLoading(true)
     }
 
-    setTaskList((currentTasks) => {
-      const currentById = new Map(currentTasks.map((task) => [task.id, task] as const))
-      const preferredActiveTaskId =
-        activeFocusSession?.task_id ??
-        currentTasks.find((task) => task.state === 'active')?.id ??
-        currentTasks[0]?.id ??
-        null
-
-      const nextTasks = serverTasks.map((serverTask) => {
-        const existingTask = currentById.get(serverTask.id)
-        const state =
-          serverTask.id === preferredActiveTaskId
-            ? 'active'
-            : existingTask?.state === 'done'
-              ? 'done'
-              : 'scheduled'
-
-        const adapted = adaptTaskApiItemToUi(serverTask, {
-          existingTask,
-          state,
-          localTargetDurationMinutes: existingTask?.targetDurationMinutes ?? null,
-        })
-        if (!existingTask) {
-          return adapted
-        }
-
-        return {
-          ...adapted,
-          state,
-          details: existingTask.details,
-          statusText: existingTask.statusText,
-          duration: existingTask.duration,
-          // Keep stable order from backend if present; fallback preserves mapped order.
-          id: adapted.id,
-        } satisfies Task
-      })
-
-      if (preferredActiveTaskId && nextTasks.every((task) => task.id !== preferredActiveTaskId) && nextTasks[0]) {
-        nextTasks[0] = { ...nextTasks[0], state: 'active' }
+    try {
+      const serverTasks = await getTasksApi()
+      if (!serverTasks) {
+        onSignOut?.()
+        return
       }
 
-      return nextTasks
-    })
+      setTaskList((currentTasks) => {
+        const currentById = new Map(currentTasks.map((task) => [task.id, task] as const))
+        const preferredActiveTaskId =
+          activeFocusSession?.task_id ??
+          currentTasks.find((task) => task.state === 'active')?.id ??
+          currentTasks[0]?.id ??
+          null
+
+        const nextTasks = serverTasks.map((serverTask) => {
+          const existingTask = currentById.get(serverTask.id)
+          const state =
+            serverTask.id === preferredActiveTaskId
+              ? 'active'
+              : existingTask?.state === 'done'
+                ? 'done'
+                : 'scheduled'
+
+          const adapted = adaptTaskApiItemToUi(serverTask, {
+            existingTask,
+            state,
+            localTargetDurationMinutes: existingTask?.targetDurationMinutes ?? null,
+          })
+          if (!existingTask) {
+            return adapted
+          }
+
+          return {
+            ...adapted,
+            state,
+            details: existingTask.details,
+            statusText: existingTask.statusText,
+            duration: existingTask.duration,
+            // Keep stable order from backend if present; fallback preserves mapped order.
+            id: adapted.id,
+          } satisfies Task
+        })
+
+        if (preferredActiveTaskId && nextTasks.every((task) => task.id !== preferredActiveTaskId) && nextTasks[0]) {
+          nextTasks[0] = { ...nextTasks[0], state: 'active' }
+        }
+
+        return nextTasks
+      })
+    } finally {
+      tasksRefreshInFlightCountRef.current = Math.max(0, tasksRefreshInFlightCountRef.current - 1)
+      if (isMountedRef.current) {
+        setIsTasksLoading(tasksRefreshInFlightCountRef.current > 0)
+      }
+    }
   }
 
   const refreshBootstrapDerivedDataFromServer = async () => {
@@ -2175,6 +2190,7 @@ export function FocusDashboard({
                       accentColorTag={activeWorkspaceAccentColor}
                       effectiveTimeZone={effectiveTimeZone}
                       isFocusRunning={isFocusRunning}
+                      isLoading={isTasksLoading}
                       onAddTask={handleAddTask}
                       onDeleteTask={handleRequestDeleteTask}
                       onEditTask={handleEditTask}
