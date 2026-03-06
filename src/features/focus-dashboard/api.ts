@@ -250,7 +250,6 @@ export type FocusSessionConflictEnvelope = {
 
 const AUTH_USER_ID_STORAGE_KEY = 'velor_auth_user_id'
 const FOCUS_RUNTIME_STORAGE_KEY_PREFIX = 'velor_focus_runtime_session:'
-let isFocusRuntimeEndpointKnownMissing = false
 
 export type StartFocusSessionPayload = {
   task_id: string
@@ -572,21 +571,17 @@ export async function getActiveFocusSession() {
     return data ? (data as FocusSessionStateEnvelope) : null
   }
 
-  if (isFocusRuntimeEndpointKnownMissing) {
-    return getLocalFocusRuntimeEnvelope()
-  }
-
   const response = await requestFocusRuntime('active', { method: 'GET' })
   if (!response) {
-    return getLocalFocusRuntimeEnvelope()
+    throw new ApiHttpError(
+      404,
+      { message: 'Focus runtime active endpoint is unavailable.' },
+      'Active focus session lookup failed',
+    )
   }
 
   if (response.status === 401) {
     return null
-  }
-
-  if (response.status >= 500) {
-    return getLocalFocusRuntimeEnvelope()
   }
 
   return parseJsonResponse<FocusSessionStateEnvelope>(response, 'Active focus session lookup failed')
@@ -658,7 +653,17 @@ export async function focusSessionCommand(
     },
     body: JSON.stringify(networkPayload),
   })
+  const requiresBackendPersistence =
+    endpoint === 'pause' || endpoint === 'resume' || endpoint === 'stop' || endpoint === 'reset'
   if (!response) {
+    if (requiresBackendPersistence) {
+      throw new ApiHttpError(
+        404,
+        { message: `Focus runtime endpoint "${endpoint}" is unavailable.` },
+        `Focus session ${endpoint} failed`,
+      )
+    }
+
     return runLocalFocusRuntimeCommand(endpoint, payload)
   }
 
@@ -666,7 +671,7 @@ export async function focusSessionCommand(
     return null
   }
 
-  if (response.status >= 500) {
+  if (response.status >= 500 && !requiresBackendPersistence) {
     return runLocalFocusRuntimeCommand(endpoint, payload)
   }
 
@@ -689,7 +694,6 @@ async function requestFocusRuntime(
     return aliasResponse
   }
 
-  isFocusRuntimeEndpointKnownMissing = true
   return null
 }
 

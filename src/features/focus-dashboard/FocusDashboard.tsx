@@ -1332,6 +1332,36 @@ export function FocusDashboard({
     }
   }
 
+  const ensureAuthoritativeSessionForCommand = async () => {
+    if (activeFocusSession) {
+      return activeFocusSession
+    }
+
+    const snapshot = await getActiveFocusSession()
+    if (!snapshot) {
+      onSignOut?.()
+      return null
+    }
+
+    const incomingActiveSession = normalizeIncomingRunningFocusSession(
+      activeFocusSession,
+      snapshot.data.active_focus_session ?? null,
+    )
+    if (!incomingActiveSession) {
+      return null
+    }
+
+    const hydratedEnvelope = applyFocusSessionEnvelope({
+      ...snapshot,
+      data: {
+        ...snapshot.data,
+        active_focus_session: incomingActiveSession,
+      },
+    })
+
+    return hydratedEnvelope.data.active_focus_session
+  }
+
   const hasProcessedFocusRealtimeEvent = (eventId: string) => {
     return processedFocusRealtimeEventIdsRef.current.includes(eventId)
   }
@@ -1704,6 +1734,9 @@ export function FocusDashboard({
         updated_at: typeof incomingTask.updated_at === 'string' ? incomingTask.updated_at : localTaskForUpsert?.updatedAtUtc ?? '',
       }
       applyRuntimeFromTaskSnapshot(runtimeSnapshot)
+      if ((runtimeState === 'working' || runtimeState === 'paused') && !activeFocusSession) {
+        void syncActiveFocusSession()
+      }
     }
 
     if (eventId) {
@@ -1713,7 +1746,7 @@ export function FocusDashboard({
 
   const { connectionState: focusRealtimeConnectionState } = useFocusRealtimeChannel({
     userId: bootstrapData?.user?.id ?? null,
-    enabled: Boolean(bootstrapData?.user?.id),
+    enabled: false,
     onEvent: applyRealtimeFocusEvent,
     onReconnectSync: () => {
       void syncActiveFocusSession()
@@ -1722,7 +1755,7 @@ export function FocusDashboard({
 
   const { connectionState: taskcardsRealtimeConnectionState } = useTaskcardsRealtimeChannel({
     userId: bootstrapData?.user?.id ?? null,
-    enabled: Boolean(bootstrapData?.user?.id),
+    enabled: false,
     onEvent: applyTaskcardsRealtimeEvent,
     onReconnectSync: () => {
       void refreshTasksFromServer()
@@ -1926,7 +1959,7 @@ export function FocusDashboard({
   }, [activeFocusSession, effectiveTimeZone, setActiveFocusSessionMeta])
 
   useEffect(() => {
-    if (!activeFocusSession) {
+    if (!activeFocusSession || !isSessionRunningState(activeFocusSession.session_state)) {
       return
     }
 
@@ -2318,17 +2351,80 @@ export function FocusDashboard({
       return
     }
 
-    if (activeFocusSession) {
-      if (activeFocusSession.task_id !== activeTask.id) {
-        alignActiveTaskState(activeFocusSession.task_id)
+    let activeSessionForCommand = activeFocusSession
+    if (!activeSessionForCommand && isSessionCurrentlyRunning) {
+      try {
+        activeSessionForCommand = await ensureAuthoritativeSessionForCommand()
+      } catch (error) {
+        const handled = await handleFocusSessionApiError(error)
+        if (!handled.handled) {
+          console.error('Failed to hydrate active focus session before runtime command', error)
+        }
         return
       }
 
-      if (isSessionRunningState(activeFocusSession.session_state)) {
+      if (!activeSessionForCommand) {
+        const fallbackExpectedVersion =
+          typeof activeTask.version === 'number' && Number.isFinite(activeTask.version)
+            ? Math.max(1, Math.floor(activeTask.version))
+            : null
+
+        if (isFocusRunning && fallbackExpectedVersion !== null) {
+          isFocusCommandInFlightRef.current = true
+          try {
+            const response = await focusSessionCommand('pause', {
+              expected_version: fallbackExpectedVersion,
+            })
+
+            if (!response) {
+              onSignOut?.()
+              return
+            }
+
+            applyFocusSessionEnvelope(response)
+            setIsFocusRunning(false)
+            startTaskCooldown(activeTask.id)
+            runNonBlockingFocusSideEffect(handleStartUntrackedSession)
+          } catch (error) {
+            const handled = await handleFocusSessionApiError(error)
+            if (!handled.handled) {
+              console.error(
+                'Failed to pause focus session using task version fallback',
+                { taskId: activeTask.id, fallbackExpectedVersion },
+                error,
+              )
+            }
+          } finally {
+            isFocusCommandInFlightRef.current = false
+          }
+          return
+        }
+
+        console.warn('No authoritative focus session available for runtime control command.')
+        return
+      }
+    }
+
+    if (activeSessionForCommand) {
+      if (activeSessionForCommand.task_id !== activeTask.id) {
+        alignActiveTaskState(activeSessionForCommand.task_id)
+        return
+      }
+
+      const activeTaskVersionForCommand =
+        typeof activeTask.version === 'number' && Number.isFinite(activeTask.version)
+          ? Math.max(1, Math.floor(activeTask.version))
+          : null
+      const resolveExpectedVersionForCommand = (sessionVersion: number) =>
+        activeTaskVersionForCommand !== null
+          ? Math.max(Math.max(1, Math.floor(sessionVersion)), activeTaskVersionForCommand)
+          : Math.max(1, Math.floor(sessionVersion))
+
+      if (isSessionRunningState(activeSessionForCommand.session_state)) {
         isFocusCommandInFlightRef.current = true
         try {
           const response = await focusSessionCommand('pause', {
-            expected_version: activeFocusSession.version,
+            expected_version: resolveExpectedVersionForCommand(activeSessionForCommand.version),
           })
 
           if (!response) {
@@ -2338,7 +2434,7 @@ export function FocusDashboard({
 
           applyFocusSessionEnvelope(response)
           setIsFocusRunning(false)
-          startTaskCooldown(activeFocusSession.task_id)
+          startTaskCooldown(activeSessionForCommand.task_id)
           runNonBlockingFocusSideEffect(handleStartUntrackedSession)
         } catch (error) {
           const handled = await handleFocusSessionApiError(error)
@@ -2352,7 +2448,7 @@ export function FocusDashboard({
       }
 
       const requestedMode = resolveTimerModeForTask(activeTask, requestedStartMode ?? timerMode)
-      if (requestedMode !== activeFocusSession.timer_mode) {
+      if (requestedMode !== activeSessionForCommand.timer_mode) {
         await activateTaskAndStartNewCount(activeTask, requestedMode)
         return
       }
@@ -2362,7 +2458,7 @@ export function FocusDashboard({
       isFocusCommandInFlightRef.current = true
       try {
         let response = await focusSessionCommand('resume', {
-          expected_version: activeFocusSession.version,
+          expected_version: resolveExpectedVersionForCommand(activeSessionForCommand.version),
         })
 
         if (!response) {
@@ -2398,9 +2494,40 @@ export function FocusDashboard({
           runNonBlockingFocusSideEffect(() => startFocusSessionMeta(activeTask))
         }
       } catch (error) {
-        const handled = await handleFocusSessionApiError(error)
+        let resumeError: unknown = error
+
+        if (error instanceof ApiHttpError && error.status === 409) {
+          try {
+            const refreshedSession = await ensureAuthoritativeSessionForCommand()
+            if (
+              refreshedSession &&
+              refreshedSession.task_id === activeTask.id &&
+              !isSessionRunningState(refreshedSession.session_state)
+            ) {
+              const retryResponse = await focusSessionCommand('resume', {
+                expected_version: resolveExpectedVersionForCommand(refreshedSession.version),
+              })
+              if (!retryResponse) {
+                onSignOut?.()
+                return
+              }
+
+              applyFocusSessionEnvelope(retryResponse)
+              setIsFocusRunning(true)
+
+              if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== activeTask.id) {
+                runNonBlockingFocusSideEffect(() => startFocusSessionMeta(activeTask))
+              }
+              return
+            }
+          } catch (retryError) {
+            resumeError = retryError
+          }
+        }
+
+        const handled = await handleFocusSessionApiError(resumeError)
         if (!handled.handled) {
-          console.error('Failed to resume focus session', error)
+          console.error('Failed to resume focus session', resumeError)
         }
       } finally {
         isFocusCommandInFlightRef.current = false
@@ -2465,23 +2592,32 @@ export function FocusDashboard({
       return
     }
 
-    if (!activeFocusSession) {
-      setSessionElapsedSeconds(0)
-      setIsFocusRunning(false)
-      resetCountersAfterStop(activeTask?.id, timerMode)
-      startTaskCooldown(activeTask?.id)
-      runNonBlockingFocusSideEffect(handleStartUntrackedSession)
+    let activeSessionForStop = activeFocusSession
+    if (!activeSessionForStop) {
+      try {
+        activeSessionForStop = await ensureAuthoritativeSessionForCommand()
+      } catch (error) {
+        const handled = await handleFocusSessionApiError(error)
+        if (!handled.handled) {
+          console.error('Failed to hydrate active focus session before stop command', error)
+        }
+        return
+      }
+    }
+
+    if (!activeSessionForStop) {
+      console.warn('Stop ignored because no active authoritative focus session is available.')
       return
     }
 
     const elapsedBeforeStop = sessionElapsedSeconds
-    const activeSessionTaskId = activeFocusSession.task_id
-    const activeSessionMode = activeFocusSession.timer_mode
+    const activeSessionTaskId = activeSessionForStop.task_id
+    const activeSessionMode = activeSessionForStop.timer_mode
 
     isFocusCommandInFlightRef.current = true
     try {
       const response = await focusSessionCommand('stop', {
-        expected_version: activeFocusSession.version,
+        expected_version: activeSessionForStop.version,
         stop_reason: 'manual',
       })
 
