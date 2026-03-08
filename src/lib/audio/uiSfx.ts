@@ -628,11 +628,12 @@ function shouldPlayTypingSfxForKey(event: KeyboardEvent) {
     return false
   }
 
-  if (event.key.length === 1) {
+  const key = typeof event.key === 'string' ? event.key : ''
+  if (key.length === 1) {
     return true
   }
 
-  return ['Backspace', 'Delete', 'Enter', 'Tab', ' '].includes(event.key)
+  return ['Backspace', 'Delete', 'Enter', 'Tab', ' '].includes(key)
 }
 
 function isEditableTarget(target: Element) {

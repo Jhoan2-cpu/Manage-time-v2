@@ -316,18 +316,20 @@ function resolveEntryDate(startedAtUtc: string, fallbackDate: string | undefined
 }
 
 function sortLogEntryByDateTimeLabel(a: LogEntry, b: LogEntry) {
-  const dateA = a.date ?? '9999-99-99'
-  const dateB = b.date ?? '9999-99-99'
+  const dateA = a.date ?? ''
+  const dateB = b.date ?? ''
   if (dateA !== dateB) {
+    // Oldest date first.
     return dateA.localeCompare(dateB)
   }
 
-  return parseStartLabelToMinutes(a.start) - parseStartLabelToMinutes(b.start)
+  // Oldest time first.
+  return parseStartLabelToSecondsOfDay(a.start) - parseStartLabelToSecondsOfDay(b.start)
 }
 
-function parseStartLabelToMinutes(label: string) {
+function parseStartLabelToSecondsOfDay(label: string) {
   if (typeof label !== 'string') {
-    return Number.MAX_SAFE_INTEGER
+    return Number.NEGATIVE_INFINITY
   }
 
   const normalizedLabel = label
@@ -338,32 +340,34 @@ function parseStartLabelToMinutes(label: string) {
     .replace(/\b(p)\s*m\b/i, 'PM')
     .toUpperCase()
 
-  const withMeridiemMatch = normalizedLabel.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)$/i)
+  const withMeridiemMatch = normalizedLabel.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)$/i)
   if (withMeridiemMatch) {
     const rawHours = Number(withMeridiemMatch[1])
     const minutes = Number(withMeridiemMatch[2])
-    const meridiem = withMeridiemMatch[3].toUpperCase()
-    if (!Number.isFinite(rawHours) || !Number.isFinite(minutes)) {
-      return Number.MAX_SAFE_INTEGER
+    const seconds = Number(withMeridiemMatch[3] ?? '0')
+    const meridiem = withMeridiemMatch[4].toUpperCase()
+    if (!Number.isFinite(rawHours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return Number.NEGATIVE_INFINITY
     }
 
     const normalizedHours = rawHours % 12
     const hour24 = meridiem === 'PM' ? normalizedHours + 12 : normalizedHours
-    return hour24 * 60 + minutes
+    return hour24 * 3600 + minutes * 60 + seconds
   }
 
-  const twentyFourHourMatch = normalizedLabel.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  const twentyFourHourMatch = normalizedLabel.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
   if (!twentyFourHourMatch) {
-    return Number.MAX_SAFE_INTEGER
+    return Number.NEGATIVE_INFINITY
   }
 
   const hours = Number(twentyFourHourMatch[1])
   const minutes = Number(twentyFourHourMatch[2])
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return Number.MAX_SAFE_INTEGER
+  const seconds = Number(twentyFourHourMatch[3] ?? '0')
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return Number.NEGATIVE_INFINITY
   }
 
-  return hours * 60 + minutes
+  return hours * 3600 + minutes * 60 + seconds
 }
 
 function normalizeEntryType(value: AppBootstrapDailyLogEntry['entry_type']) {

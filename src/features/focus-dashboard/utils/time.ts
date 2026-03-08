@@ -1,5 +1,35 @@
 import { getCurrentIntlLocaleTag } from '../../../i18n'
 
+export const ELAPSED_SECONDS_ROUND_UP_THRESHOLD_MS = 780
+
+export function roundElapsedMillisecondsToSeconds(
+  elapsedMs: number,
+  thresholdMs = ELAPSED_SECONDS_ROUND_UP_THRESHOLD_MS,
+) {
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+    return 0
+  }
+
+  const boundedThreshold = Math.max(0, Math.min(999, Math.floor(thresholdMs)))
+  const safeElapsedMs = Math.max(0, elapsedMs)
+  const wholeSeconds = Math.floor(safeElapsedMs / 1000)
+  const remainingMs = safeElapsedMs - wholeSeconds * 1000
+  return wholeSeconds + (remainingMs >= boundedThreshold ? 1 : 0)
+}
+
+export function roundElapsedSecondsBetweenMs(
+  startedAtMs: number,
+  endedAtMs: number,
+  thresholdMs = ELAPSED_SECONDS_ROUND_UP_THRESHOLD_MS,
+) {
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs)) {
+    return 0
+  }
+
+  const elapsedMs = Math.max(0, endedAtMs - startedAtMs)
+  return roundElapsedMillisecondsToSeconds(elapsedMs, thresholdMs)
+}
+
 export function formatUtcOffset(minutesOffset: number) {
   const sign = minutesOffset <= 0 ? '+' : '-'
   const absoluteOffset = Math.abs(minutesOffset)

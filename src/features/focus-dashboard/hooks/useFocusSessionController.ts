@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActiveFocusSession } from '../api'
 import type { FocusTimerMode, Task } from '../types'
-import { formatSecondsHms } from '../utils/time'
+import { formatSecondsHms, parseDurationLabelToSeconds, roundElapsedSecondsBetweenMs } from '../utils/time'
 
 type ActiveUntrackedSession = {
   startedAtMs: number
@@ -69,6 +69,7 @@ export function useFocusSessionController({
       : timerMode === 'timer'
         ? activeTaskElapsedSnapshot.timer
         : activeTaskElapsedSnapshot.stopwatch
+  const safeSelectedModeElapsedSeconds = normalizeNonNegativeSeconds(selectedModeElapsedSeconds)
 
   const activeTaskHasLiveSession = Boolean(
     activeTask &&
@@ -78,7 +79,7 @@ export function useFocusSessionController({
   )
 
   const localActiveTaskTargetSeconds =
-    (activeTask?.targetDurationMinutes ?? 0) > 0 ? Math.round((activeTask?.targetDurationMinutes ?? 0) * 60) : null
+    (activeTask?.targetDurationMinutes ?? 0) > 0 ? Math.floor((activeTask?.targetDurationMinutes ?? 0) * 60) : null
   const authoritativeActiveTaskTargetSeconds =
     authoritativeFocusSession &&
       activeTask &&
@@ -99,25 +100,38 @@ export function useFocusSessionController({
 
   const timerProgressPercent =
     timerMode === 'timer' && activeTaskTargetSeconds
-      ? Math.max(0, Math.min(100, (selectedModeElapsedSeconds / activeTaskTargetSeconds) * 100))
+      ? Math.max(0, Math.min(100, (safeSelectedModeElapsedSeconds / activeTaskTargetSeconds) * 100))
       : null
 
   const timerDisplaySeconds =
     timerMode === 'timer' && activeTaskTargetSeconds
-      ? Math.max(0, activeTaskTargetSeconds - selectedModeElapsedSeconds)
-      : selectedModeElapsedSeconds
+      ? Math.max(0, activeTaskTargetSeconds - safeSelectedModeElapsedSeconds)
+      : safeSelectedModeElapsedSeconds
   const timerDisplayLabel = useMemo(() => formatSecondsHms(timerDisplaySeconds), [timerDisplaySeconds])
 
   const isTimerComplete = Boolean(
     timerMode === 'timer' && activeTaskTargetSeconds && selectedModeElapsedSeconds >= activeTaskTargetSeconds,
   )
 
+  const liveTrackedDeltaSeconds = useMemo(() => {
+    if (!activeTaskHasLiveSession || !isFocusRunning || !activeTask) {
+      return 0
+    }
+
+    return normalizeNonNegativeSeconds(sessionElapsedSeconds)
+  }, [activeTask, activeTaskHasLiveSession, isFocusRunning, sessionElapsedSeconds])
+
   const activeTaskTotalTimeLabel = useMemo(
     () =>
       activeTask
-        ? formatSecondsHms((loggedSecondsByTaskId[activeTask.id] ?? 0) + (activeTaskHasLiveSession ? sessionElapsedSeconds : 0))
+        ? (() => {
+            const trackedFromTask = parseDurationLabelToSeconds(activeTask.duration)
+            const trackedFromDailyLog = loggedSecondsByTaskId[activeTask.id] ?? 0
+            const trackedBaseSeconds = Math.max(trackedFromTask, trackedFromDailyLog)
+            return formatSecondsHms(trackedBaseSeconds + liveTrackedDeltaSeconds)
+          })()
         : '00:00:00',
-    [activeTask, activeTaskHasLiveSession, loggedSecondsByTaskId, sessionElapsedSeconds],
+    [activeTask, liveTrackedDeltaSeconds, loggedSecondsByTaskId],
   )
 
   useEffect(() => {
@@ -206,9 +220,10 @@ export function useFocusSessionController({
       return
     }
 
+    const SERVER_TICK_INTERVAL_MS = 100
     const intervalId = window.setInterval(() => {
       setServerTickKey((current) => current + 1)
-    }, 1000)
+    }, SERVER_TICK_INTERVAL_MS)
 
     return () => {
       window.clearInterval(intervalId)
@@ -228,8 +243,12 @@ export function useFocusSessionController({
     if (nextSession) {
       setTimerMode(nextSession.timer_mode)
       setIsFocusRunning(isSessionRunning(nextSession.session_state))
-      setSessionElapsedSeconds(Math.max(0, nextSession.elapsed_seconds_total))
+      setSessionElapsedSeconds(normalizeNonNegativeSeconds(nextSession.elapsed_seconds_total))
+      return
     }
+
+    // If backend explicitly reports no active focus session, local runtime must not stay "running".
+    setIsFocusRunning(false)
   }
 
   const resetElapsedSnapshotsForTaskModes = (taskId: string, modes: FocusTimerMode[]) => {
@@ -259,6 +278,34 @@ export function useFocusSessionController({
     })
   }
 
+  const seedElapsedSnapshotForTaskMode = (
+    taskId: string | null | undefined,
+    mode: FocusTimerMode,
+    elapsedSeconds: number,
+  ) => {
+    if (!taskId) {
+      return
+    }
+
+    const normalizedElapsedSeconds = normalizeNonNegativeSeconds(elapsedSeconds)
+    setElapsedSnapshotsByTaskId((current) => {
+      const previous = current[taskId] ?? { stopwatch: 0, timer: 0 }
+      const next =
+        mode === 'timer'
+          ? { ...previous, timer: Math.max(previous.timer, normalizedElapsedSeconds) }
+          : { ...previous, stopwatch: Math.max(previous.stopwatch, normalizedElapsedSeconds) }
+
+      if (next.stopwatch === previous.stopwatch && next.timer === previous.timer) {
+        return current
+      }
+
+      return {
+        ...current,
+        [taskId]: next,
+      }
+    })
+  }
+
   return {
     isFocusRunning,
     setIsFocusRunning,
@@ -278,6 +325,7 @@ export function useFocusSessionController({
     activeTaskTargetSeconds,
     elapsedSnapshotsByTaskId,
     resetElapsedSnapshotsForTaskModes,
+    seedElapsedSnapshotForTaskMode,
     timerProgressPercent,
     timerDisplayLabel,
     isTimerComplete,
@@ -290,11 +338,17 @@ function normalizePositiveSeconds(value: number | null) {
     return null
   }
 
-  return Math.round(value)
+  return Math.floor(value)
 }
 
 function getServerOffsetMs(serverNowUtc: string | null | undefined) {
   if (typeof serverNowUtc !== 'string' || !serverNowUtc.trim()) {
+    return 0
+  }
+
+  // If backend timestamp is second-precision only, offset introduces up-to-999ms jitter.
+  // In that case prefer local clock continuity for smooth first-second transitions.
+  if (!/\.\d+(?:Z|[+-]\d{2}:\d{2})$/i.test(serverNowUtc.trim())) {
     return 0
   }
 
@@ -313,25 +367,46 @@ function computeDisplayElapsedSeconds(
   localFallbackElapsedSeconds: number,
 ) {
   if (!authoritativeFocusSession) {
-    return Math.max(0, localFallbackElapsedSeconds)
+    return normalizeNonNegativeSeconds(localFallbackElapsedSeconds)
   }
 
-  const base = Math.max(0, authoritativeFocusSession.elapsed_seconds_total)
+  const base = normalizeNonNegativeSeconds(authoritativeFocusSession.elapsed_seconds_total)
 
-  if (!isSessionRunning(authoritativeFocusSession.session_state) || !authoritativeFocusSession.last_resumed_at_utc) {
+  if (!isSessionRunning(authoritativeFocusSession.session_state)) {
     return base
   }
 
-  const resumedAtMs = Date.parse(authoritativeFocusSession.last_resumed_at_utc)
+  const runningAnchorUtc = authoritativeFocusSession.last_resumed_at_utc ?? authoritativeFocusSession.started_at_utc
+  if (!runningAnchorUtc) {
+    return base
+  }
+
+  const resumedAtMs = Date.parse(runningAnchorUtc)
   if (!Number.isFinite(resumedAtMs)) {
     return base
   }
 
-  const currentServerMs = Date.now() + serverClockOffsetMs
-  const deltaSeconds = Math.max(0, Math.floor((currentServerMs - resumedAtMs) / 1000))
-  return base + deltaSeconds
+  const safeServerClockOffsetMs = Number.isFinite(serverClockOffsetMs) ? serverClockOffsetMs : 0
+  const currentServerMs = Date.now() + safeServerClockOffsetMs
+  const deltaSeconds = roundElapsedSecondsBetweenMs(resumedAtMs, currentServerMs)
+  return normalizeNonNegativeSeconds(base + deltaSeconds)
 }
 
 function isSessionRunning(state: ActiveFocusSession['session_state'] | null | undefined) {
   return state === 'running' || state === 'working'
+}
+
+function normalizeNonNegativeSeconds(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value))
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value)
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.floor(parsed))
+    }
+  }
+
+  return 0
 }

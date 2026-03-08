@@ -18,6 +18,8 @@ type FocusOnlyTimerPanelProps = {
   totalTaskTimeLabel: string
   mode: FocusTimerMode
   stopwatchLabel: string
+  timerMillisecondsLabel: string
+  showMillisecondsDebug: boolean
   timerDraftParts: TimerDraftParts
   canEditTimerTarget: boolean
   isTimerCompletionVisual: boolean
@@ -32,11 +34,13 @@ type FocusOnlyTimerPanelProps = {
   onTimerFieldChange: (field: keyof TimerDraftParts, value: string) => void
   canStopFocus: boolean
   onStopFocus: () => void
+  onResetAfterTimerAlarm: () => void
   canToggleFocus: boolean
   onToggleFocusClick: () => void
   toggleFocusAriaLabel: string
   toggleFocusIcon: IconDefinition
   isRunning: boolean
+  isTimerAlarmActive: boolean
   playButtonGlowStyle: CSSProperties
   accentTimeGlowClassName: string
   accentDividerClassName: string
@@ -45,6 +49,7 @@ type FocusOnlyTimerPanelProps = {
   accentPlayIconClassName: string
   copyTotalTaskTime: string
   copyStopFocus: string
+  copyResetTimer: string
 }
 
 export function FocusOnlyTimerPanel({
@@ -53,6 +58,8 @@ export function FocusOnlyTimerPanel({
   totalTaskTimeLabel,
   mode,
   stopwatchLabel,
+  timerMillisecondsLabel,
+  showMillisecondsDebug,
   timerDraftParts,
   canEditTimerTarget,
   isTimerCompletionVisual,
@@ -67,11 +74,13 @@ export function FocusOnlyTimerPanel({
   onTimerFieldChange,
   canStopFocus,
   onStopFocus,
+  onResetAfterTimerAlarm,
   canToggleFocus,
   onToggleFocusClick,
   toggleFocusAriaLabel,
   toggleFocusIcon,
   isRunning,
+  isTimerAlarmActive,
   playButtonGlowStyle,
   accentTimeGlowClassName,
   accentDividerClassName,
@@ -80,6 +89,7 @@ export function FocusOnlyTimerPanel({
   accentPlayIconClassName,
   copyTotalTaskTime,
   copyStopFocus,
+  copyResetTimer,
 }: FocusOnlyTimerPanelProps) {
   const progressDegrees = renderProgressPercent * 3.6
 
@@ -197,6 +207,16 @@ export function FocusOnlyTimerPanel({
                             <span className="mt-1 text-[10px] font-semibold tracking-[0.2em] text-slate-400 sm:text-[11px]">SS</span>
                           </div>
                         </div>
+                        {showMillisecondsDebug ? (
+                          <p
+                            className={classNames(
+                              'mt-1.5 font-mono text-[18px] font-semibold tracking-[0.1em] text-slate-300/90 sm:text-[22px]',
+                              accentTimeGlowClassName,
+                            )}
+                          >
+                            .{timerMillisecondsLabel}
+                          </p>
+                        ) : null}
                       </div>
                       <p className="mt-2.5 line-clamp-2 max-w-[84%] bg-slate-200/8 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300 sm:mt-3 sm:text-[11px]">
                         {taskTitle}
@@ -226,11 +246,14 @@ export function FocusOnlyTimerPanel({
           accentPlayButtonClassName={accentPlayButtonClassName}
           accentPlayIconClassName={accentPlayIconClassName}
           accentTotalValueClassName={accentTotalValueClassName}
+          isTimerAlarmActive={isTimerAlarmActive}
           canStopFocus={canStopFocus}
           canToggleFocus={canToggleFocus}
+          copyResetTimer={copyResetTimer}
           copyStopFocus={copyStopFocus}
           copyTotalTaskTime={copyTotalTaskTime}
           isRunning={isRunning}
+          onResetAfterTimerAlarm={onResetAfterTimerAlarm}
           onStopFocus={onStopFocus}
           onToggleFocusClick={onToggleFocusClick}
           playButtonGlowStyle={playButtonGlowStyle}

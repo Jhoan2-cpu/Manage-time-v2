@@ -25,6 +25,7 @@ type TimerPanelProps = {
   timeLabel: string
   onToggleFocus: (mode: FocusTimerMode, requestedStartTargetSeconds?: number) => void
   onStopFocus: () => void
+  onResetAfterTimerAlarm: () => void
   onChangeMode: (mode: FocusTimerMode) => void
   onUpdateTimerTargetSeconds?: (targetSeconds: number) => void
   timerTargetSeconds?: number | null
@@ -41,10 +42,14 @@ type TimerPanelProps = {
   isFocusOnlyMode?: boolean
 }
 
+const SHOW_STOPWATCH_MILLISECONDS_DEBUG =
+  `${import.meta.env.VITE_SHOW_STOPWATCH_MILLISECONDS_DEBUG ?? 'true'}`.toLowerCase() === 'true'
+
 export function TimerPanel({
   timeLabel,
   onToggleFocus,
   onStopFocus,
+  onResetAfterTimerAlarm,
   onChangeMode,
   onUpdateTimerTargetSeconds,
   timerTargetSeconds = null,
@@ -69,6 +74,7 @@ export function TimerPanel({
         noTaskSelected: 'Sin tarea seleccionada',
         totalTaskTime: 'Tiempo total de tarea:',
         stopFocus: 'Detener enfoque',
+        resetTimer: 'Reiniciar temporizador',
         pauseFocus: 'Pausar enfoque',
         resumeFocus: 'Reanudar enfoque',
         startFocus: 'Iniciar enfoque',
@@ -79,6 +85,7 @@ export function TimerPanel({
         noTaskSelected: 'No Task Selected',
         totalTaskTime: 'Total Task Time:',
         stopFocus: 'Stop focus',
+        resetTimer: 'Reset timer',
         pauseFocus: 'Pause focus',
         resumeFocus: 'Resume focus',
         startFocus: 'Start focus',
@@ -94,8 +101,26 @@ export function TimerPanel({
   const [hasManualTimerDraftChange, setHasManualTimerDraftChange] = useState(false)
   const timerFieldsRef = useRef<HTMLDivElement>(null)
   const progressAnimationFrameRef = useRef<number | null>(null)
+  const stopwatchAnimationFrameRef = useRef<number | null>(null)
+  const stopwatchAnchorMsRef = useRef<number | null>(null)
+  const timerAnimationFrameRef = useRef<number | null>(null)
+  const timerAnchorMsRef = useRef<number | null>(null)
+  const previousRunningRef = useRef(isRunning)
+  const previousModeRef = useRef(mode)
+  const previousTaskIdRef = useRef<string | null>(activeTask?.id ?? null)
+  const previousTimerRunningRef = useRef(isRunning)
+  const previousTimerModeRef = useRef(mode)
+  const previousTimerTaskIdRef = useRef<string | null>(activeTask?.id ?? null)
+  const previousTimerWholeSecondsRef = useRef<number | null>(null)
+  const previousTimerMillisecondsRef = useRef<number | null>(null)
+  const previousTimerWholeSecondsUiRef = useRef<number | null>(null)
+  const timerFirstSecondDiagnosticUntilMsRef = useRef(0)
+  const lastTimerBacktrackLogAtMsRef = useRef(0)
   const progressAnchorRef = useRef({ percent: 0, startedAtMs: 0 })
   const [smoothedProgressPercent, setSmoothedProgressPercent] = useState(0)
+  const [stopwatchWholeSeconds, setStopwatchWholeSeconds] = useState(() => parseStopwatchLabelToSeconds(stopwatchLabel))
+  const [stopwatchMilliseconds, setStopwatchMilliseconds] = useState(0)
+  const [timerMilliseconds, setTimerMilliseconds] = useState(0)
   const playButtonGlowStyle = { '--timer-play-glow-rgb': playGlowRgb } as CSSProperties
   const toggleFocusAriaLabel = isRunning ? copy.pauseFocus : hasActiveSession ? copy.resumeFocus : copy.startFocus
   const toggleFocusIcon = isRunning ? faPause : faPlay
@@ -122,6 +147,13 @@ export function TimerPanel({
   const timerMarkerStyle = {
     boxShadow: `0 0 14px rgba(255,255,255,0.98), 0 0 34px rgba(${playGlowRgb},0.92), 0 0 62px rgba(${playGlowRgb},0.62)`,
   } as CSSProperties
+  const stopwatchDisplayLabel =
+    mode === 'stopwatch' && SHOW_STOPWATCH_MILLISECONDS_DEBUG
+      ? `${formatSecondsHms(isRunning ? stopwatchWholeSeconds : parseStopwatchLabelToSeconds(stopwatchLabel))}.${String(Math.max(0, Math.min(999, isRunning ? stopwatchMilliseconds : 0))).padStart(3, '0')}`
+      : stopwatchLabel
+  const timerMillisecondsLabel = String(
+    Math.max(0, Math.min(999, mode === 'timer' && isRunning ? timerMilliseconds : 0)),
+  ).padStart(3, '0')
 
   const canSwitchToStopwatch = !isRunning && Boolean(activeTask)
   const canSwitchToTimer = !isRunning && Boolean(activeTask) && canUseTimerMode
@@ -154,6 +186,217 @@ export function TimerPanel({
       setHasManualTimerDraftChange(false)
     }
   }, [isTimerFieldsFocused, stopwatchLabel])
+
+  useEffect(() => {
+    if (!SHOW_STOPWATCH_MILLISECONDS_DEBUG) {
+      stopwatchAnchorMsRef.current = null
+      setStopwatchWholeSeconds(parseStopwatchLabelToSeconds(stopwatchLabel))
+      setStopwatchMilliseconds(0)
+      previousRunningRef.current = isRunning
+      previousModeRef.current = mode
+      previousTaskIdRef.current = activeTask?.id ?? null
+      return
+    }
+
+    const activeTaskId = activeTask?.id ?? null
+    const wholeSeconds = parseStopwatchLabelToSeconds(stopwatchLabel)
+    if (mode !== 'stopwatch' || !isRunning) {
+      stopwatchAnchorMsRef.current = null
+      setStopwatchWholeSeconds(wholeSeconds)
+      setStopwatchMilliseconds(0)
+      previousRunningRef.current = isRunning
+      previousModeRef.current = mode
+      previousTaskIdRef.current = activeTaskId
+      return
+    }
+
+    const shouldSetAnchor =
+      !previousRunningRef.current ||
+      previousModeRef.current !== 'stopwatch' ||
+      previousTaskIdRef.current !== activeTaskId ||
+      stopwatchAnchorMsRef.current === null
+
+    if (shouldSetAnchor) {
+      stopwatchAnchorMsRef.current = performance.now() - wholeSeconds * 1000
+      setStopwatchWholeSeconds(wholeSeconds)
+    } else if (stopwatchAnchorMsRef.current !== null) {
+      const derivedWholeSeconds = Math.max(0, Math.floor((performance.now() - stopwatchAnchorMsRef.current) / 1000))
+      if (Math.abs(wholeSeconds - derivedWholeSeconds) >= 2) {
+        stopwatchAnchorMsRef.current = performance.now() - wholeSeconds * 1000
+        setStopwatchWholeSeconds(wholeSeconds)
+      }
+    }
+
+    previousRunningRef.current = isRunning
+    previousModeRef.current = mode
+    previousTaskIdRef.current = activeTaskId
+  }, [activeTask?.id, isRunning, mode, stopwatchLabel])
+
+  useEffect(() => {
+    if (stopwatchAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(stopwatchAnimationFrameRef.current)
+      stopwatchAnimationFrameRef.current = null
+    }
+
+    if (!SHOW_STOPWATCH_MILLISECONDS_DEBUG || mode !== 'stopwatch' || !isRunning) {
+      return
+    }
+
+    const animate = () => {
+      const anchorMs = stopwatchAnchorMsRef.current
+      if (anchorMs === null) {
+        setStopwatchWholeSeconds(parseStopwatchLabelToSeconds(stopwatchLabel))
+        setStopwatchMilliseconds(0)
+      } else {
+        const elapsedMs = Math.max(0, performance.now() - anchorMs)
+        setStopwatchWholeSeconds(Math.floor(elapsedMs / 1000))
+        setStopwatchMilliseconds(Math.floor(elapsedMs % 1000))
+      }
+      stopwatchAnimationFrameRef.current = window.requestAnimationFrame(animate)
+    }
+
+    stopwatchAnimationFrameRef.current = window.requestAnimationFrame(animate)
+    return () => {
+      if (stopwatchAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(stopwatchAnimationFrameRef.current)
+        stopwatchAnimationFrameRef.current = null
+      }
+    }
+  }, [isRunning, mode, stopwatchLabel])
+
+  useEffect(() => {
+    if (!SHOW_STOPWATCH_MILLISECONDS_DEBUG) {
+      timerAnchorMsRef.current = null
+      setTimerMilliseconds(0)
+      previousTimerRunningRef.current = isRunning
+      previousTimerModeRef.current = mode
+      previousTimerTaskIdRef.current = activeTask?.id ?? null
+      previousTimerWholeSecondsRef.current = null
+      previousTimerMillisecondsRef.current = null
+      previousTimerWholeSecondsUiRef.current = null
+      timerFirstSecondDiagnosticUntilMsRef.current = 0
+      return
+    }
+
+    const activeTaskId = activeTask?.id ?? null
+    const wholeSeconds = parseStopwatchLabelToSeconds(stopwatchLabel)
+    if (mode !== 'timer' || !isRunning) {
+      timerAnchorMsRef.current = null
+      setTimerMilliseconds(0)
+      previousTimerRunningRef.current = isRunning
+      previousTimerModeRef.current = mode
+      previousTimerTaskIdRef.current = activeTaskId
+      previousTimerWholeSecondsRef.current = wholeSeconds
+      previousTimerMillisecondsRef.current = null
+      previousTimerWholeSecondsUiRef.current = null
+      timerFirstSecondDiagnosticUntilMsRef.current = 0
+      return
+    }
+
+    const shouldSetAnchor =
+      !previousTimerRunningRef.current ||
+      previousTimerModeRef.current !== 'timer' ||
+      previousTimerTaskIdRef.current !== activeTaskId ||
+      timerAnchorMsRef.current === null
+
+    if (shouldSetAnchor) {
+      const nowMs = performance.now()
+      timerAnchorMsRef.current = nowMs + wholeSeconds * 1000
+      timerFirstSecondDiagnosticUntilMsRef.current = nowMs + 1500
+      previousTimerMillisecondsRef.current = null
+      previousTimerWholeSecondsUiRef.current = wholeSeconds
+      console.log('[timerpanel:timer-ms] anchor set', {
+        taskId: activeTaskId,
+        wholeSeconds,
+        reason: 'start_or_resume_or_task_change',
+        nowMs,
+        anchorMs: timerAnchorMsRef.current,
+      })
+    } else if (timerAnchorMsRef.current !== null) {
+      const remainingMs = Math.max(0, timerAnchorMsRef.current - performance.now())
+      const derivedWholeSeconds = Math.max(0, Math.ceil(remainingMs / 1000))
+      if (Math.abs(wholeSeconds - derivedWholeSeconds) >= 2) {
+        const nowMs = performance.now()
+        timerAnchorMsRef.current = nowMs + wholeSeconds * 1000
+        console.log('[timerpanel:timer-ms] anchor resync', {
+          taskId: activeTaskId,
+          wholeSeconds,
+          derivedWholeSeconds,
+          nowMs,
+          anchorMs: timerAnchorMsRef.current,
+        })
+      }
+    }
+
+    previousTimerWholeSecondsRef.current = wholeSeconds
+    previousTimerRunningRef.current = isRunning
+    previousTimerModeRef.current = mode
+    previousTimerTaskIdRef.current = activeTaskId
+  }, [activeTask?.id, isRunning, mode, stopwatchLabel])
+
+  useEffect(() => {
+    if (timerAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(timerAnimationFrameRef.current)
+      timerAnimationFrameRef.current = null
+    }
+
+    if (!SHOW_STOPWATCH_MILLISECONDS_DEBUG || mode !== 'timer' || !isRunning) {
+      return
+    }
+
+    const animate = () => {
+      const anchorMs = timerAnchorMsRef.current
+      if (anchorMs === null) {
+        setTimerMilliseconds(0)
+      } else {
+        const nowMs = performance.now()
+        const wholeSecondsUi = parseStopwatchLabelToSeconds(stopwatchLabel)
+        const remainingMs = Math.max(0, anchorMs - nowMs)
+        // Countdown milliseconds should start at 999 (not 000) right after resume/start.
+        const remainingMsCeil = Math.max(0, Math.ceil(remainingMs))
+        let nextMilliseconds = remainingMsCeil > 0 ? (remainingMsCeil - 1) % 1000 : 0
+        const previousMs = previousTimerMillisecondsRef.current
+        const previousWholeSecondsUi = previousTimerWholeSecondsUiRef.current
+        const isWithinFirstSecondAfterResume = nowMs <= timerFirstSecondDiagnosticUntilMsRef.current
+        const didMillisecondBacktrackWithinSameUiSecond =
+          previousMs !== null &&
+          previousWholeSecondsUi !== null &&
+          previousWholeSecondsUi === wholeSecondsUi &&
+          nextMilliseconds > previousMs
+        if (isWithinFirstSecondAfterResume && didMillisecondBacktrackWithinSameUiSecond) {
+          if (nowMs - lastTimerBacktrackLogAtMsRef.current > 120) {
+            console.log('[timerpanel:timer-ms] first-second-backtrack', {
+              taskId: activeTask?.id ?? null,
+              wholeSecondsUi,
+              previousMs,
+              nextMs: nextMilliseconds,
+              remainingMs,
+              anchorMs,
+              nowMs,
+            })
+            lastTimerBacktrackLogAtMsRef.current = nowMs
+          }
+        }
+
+        if (didMillisecondBacktrackWithinSameUiSecond && previousMs !== null) {
+          // Keep countdown monotonic while the authoritative whole-second value catches up.
+          nextMilliseconds = Math.max(0, previousMs - 1)
+        }
+        previousTimerMillisecondsRef.current = nextMilliseconds
+        previousTimerWholeSecondsUiRef.current = wholeSecondsUi
+        setTimerMilliseconds(nextMilliseconds)
+      }
+      timerAnimationFrameRef.current = window.requestAnimationFrame(animate)
+    }
+
+    timerAnimationFrameRef.current = window.requestAnimationFrame(animate)
+    return () => {
+      if (timerAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(timerAnimationFrameRef.current)
+        timerAnimationFrameRef.current = null
+      }
+    }
+  }, [isRunning, mode, stopwatchLabel])
 
   useEffect(() => {
     progressAnchorRef.current = {
@@ -274,7 +517,7 @@ export function TimerPanel({
 
   if (isFocusOnlyMode) {
     return (
-      <FocusOnlyTimerPanel
+        <FocusOnlyTimerPanel
         accentDividerClassName={accents.dividerClassName}
         accentPlayButtonClassName={accents.playButtonClassName}
         accentPlayIconClassName={accents.playIconClassName}
@@ -284,21 +527,26 @@ export function TimerPanel({
         canEditTimerTarget={canEditTimerTarget}
         canStopFocus={canStopFocus}
         canToggleFocus={canToggleFocus}
+        copyResetTimer={copy.resetTimer}
         copyStopFocus={copy.stopFocus}
         copyTotalTaskTime={copy.totalTaskTime}
         isRunning={isRunning}
+        isTimerAlarmActive={isTimerAlarmActive}
         isTimerCompletionVisual={isTimerCompletionVisual}
-        mode={mode}
-        onStopFocus={onStopFocus}
+          mode={mode}
+          onResetAfterTimerAlarm={onResetAfterTimerAlarm}
+          onStopFocus={onStopFocus}
         onTimerFieldBlur={handleTimerFieldBlur}
         onTimerFieldChange={handleTimerFieldChange}
         onTimerFieldFocus={handleTimerFieldFocus}
         onTimerFieldKeyDown={handleTimerFieldKeyDown}
         onToggleFocusClick={handleToggleFocusClick}
         playButtonGlowStyle={playButtonGlowStyle}
-        renderProgressPercent={renderProgressPercent}
-        stopwatchLabel={stopwatchLabel}
-        taskTitle={taskTitle}
+          renderProgressPercent={renderProgressPercent}
+          stopwatchLabel={stopwatchDisplayLabel}
+          timerMillisecondsLabel={timerMillisecondsLabel}
+          showMillisecondsDebug={SHOW_STOPWATCH_MILLISECONDS_DEBUG}
+          taskTitle={taskTitle}
         timerCompletePulseStyle={timerCompletePulseStyle}
         timerDraftParts={timerDraftParts}
         timerFieldsRef={timerFieldsRef}
@@ -373,7 +621,7 @@ export function TimerPanel({
                     accents.timeGlowClassName,
                   )}
                 >
-                  {stopwatchLabel}
+                  {stopwatchDisplayLabel}
                 </p>
               </div>
 
@@ -474,6 +722,16 @@ export function TimerPanel({
                             <span className={timerUnitLabelClassName}>SS</span>
                           </div>
                         </div>
+                        {SHOW_STOPWATCH_MILLISECONDS_DEBUG ? (
+                          <p
+                            className={classNames(
+                              'mt-1.5 font-mono text-[18px] font-semibold tracking-[0.1em] text-slate-300/90 sm:text-[22px]',
+                              accents.timeGlowClassName,
+                            )}
+                          >
+                            .{timerMillisecondsLabel}
+                          </p>
+                        ) : null}
                       </div>
                       <p className={timerTaskTitleClassName}>
                         {taskTitle}
@@ -514,9 +772,12 @@ export function TimerPanel({
             accentTotalValueClassName={accents.totalValueClassName}
             canStopFocus={canStopFocus}
             canToggleFocus={canToggleFocus}
+            copyResetTimer={copy.resetTimer}
             copyStopFocus={copy.stopFocus}
             copyTotalTaskTime={copy.totalTaskTime}
             isRunning={isRunning}
+            isTimerAlarmActive={isTimerAlarmActive}
+            onResetAfterTimerAlarm={onResetAfterTimerAlarm}
             onStopFocus={onStopFocus}
             onToggleFocusClick={handleToggleFocusClick}
             playButtonGlowStyle={playButtonGlowStyle}
@@ -529,4 +790,16 @@ export function TimerPanel({
       </div>
     </>
   )
+}
+
+function parseStopwatchLabelToSeconds(label: string) {
+  const [hours, minutes, seconds] = normalizeStopwatchLabel(label)
+    .split(':')
+    .map((value) => Number.parseInt(value, 10))
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return 0
+  }
+
+  return Math.max(0, hours * 3600 + minutes * 60 + seconds)
 }

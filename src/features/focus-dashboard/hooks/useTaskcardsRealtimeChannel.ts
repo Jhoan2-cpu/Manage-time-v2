@@ -28,7 +28,7 @@ export type TaskcardsRealtimeEvent = {
     stopwatch_elapsed_seconds?: number | null
     stopwatch_started_at_utc?: string | null
     active_mode?: 'timer' | 'stopwatch' | null
-    state?: 'idle' | 'working' | 'paused' | 'stopped' | null
+    state?: 'idle' | 'working' | 'paused' | null
     version?: number
     created_at?: string
     updated_at?: string
@@ -383,7 +383,7 @@ function normalizeTaskPayload(payload: RealtimeTaskPayload): TaskcardsRealtimeEv
           ? 'stopwatch'
           : null,
     state:
-      payload.state === 'idle' || payload.state === 'working' || payload.state === 'paused' || payload.state === 'stopped'
+      payload.state === 'idle' || payload.state === 'working' || payload.state === 'paused'
         ? payload.state
         : null,
     version: normalizeVersion(payload.version),

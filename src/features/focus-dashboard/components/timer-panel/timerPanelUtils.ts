@@ -51,5 +51,5 @@ export function parseTimerDraftPartsToSeconds(parts: TimerDraftParts) {
     return null
   }
 
-  return Math.min(Math.round(totalSeconds), 24 * 60 * 60)
+  return Math.min(Math.floor(totalSeconds), 24 * 60 * 60)
 }

@@ -19,12 +19,12 @@ type AppBootstrapStatus = 'idle' | 'loading' | 'ready' | 'error'
 let isAppBootstrapEndpointKnownMissing = false
 
 const APP_BOOTSTRAP_INCLUDES: AppBootstrapInclude[] = [
-  'tasks',
   'preferences',
   'daily_log',
   'dashboard_stats',
   'active_focus_session',
 ]
+const AUTH_ONLY_MODE = `${import.meta.env.VITE_AUTH_ONLY_MODE ?? ''}`.trim().toLowerCase() === 'true'
 
 function detectBrowserTimeZone() {
   try {
@@ -130,6 +130,14 @@ function App() {
   }, [setLocale])
 
   useEffect(() => {
+    if (AUTH_ONLY_MODE) {
+      setAppBootstrapStatus('idle')
+      setAppBootstrapData(null)
+      setAppBootstrapError(null)
+      setAppBootstrapUserId(null)
+      return
+    }
+
     if (authStatus !== 'authenticated' || !sessionUserId) {
       setAppBootstrapStatus((current) => (current === 'idle' ? current : 'idle'))
       setAppBootstrapData(null)
@@ -182,7 +190,6 @@ function App() {
           forceGuestToLoginRef.current()
           return
         }
-
         setAppBootstrapData(bootstrap)
         setAppBootstrapStatus('ready')
         setAppBootstrapError(null)
@@ -336,6 +343,16 @@ function App() {
   }
 
   if (authStatus !== 'authenticated' || !sessionUser) {
+    if (route === 'auth-callback') {
+      return (
+        <div className="grid min-h-[100svh] place-items-center bg-[#040b17] text-slate-200">
+          <div className="rounded-2xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm">
+            {locale === 'es' ? 'Procesando autenticacion...' : 'Processing authentication...'}
+          </div>
+        </div>
+      )
+    }
+
     if (route === 'register') {
       return (
         <RegisterPage
@@ -374,6 +391,43 @@ function App() {
         onOpenLogin={goToApp}
         onOpenRegister={goToApp}
       />
+    )
+  }
+
+  if (AUTH_ONLY_MODE) {
+    return (
+      <div className="grid min-h-[100svh] place-items-center bg-[#040b17] px-4 text-slate-100">
+        <div className="w-full max-w-xl rounded-2xl border border-slate-700/60 bg-slate-900/40 p-6 shadow-[0_18px_40px_rgba(1,8,22,0.35)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300/80">
+            {locale === 'es' ? 'Modulo activo' : 'Active module'}
+          </p>
+          <h2 className="mt-2 text-xl font-semibold">
+            {locale === 'es' ? 'Autenticacion lista' : 'Authentication ready'}
+          </h2>
+          <p className="mt-3 text-sm text-slate-300/90">
+            {locale === 'es'
+              ? 'Este entorno esta en modo solo autenticacion. Dashboard y runtime quedan deshabilitados por ahora.'
+              : 'This environment is in authentication-only mode. Dashboard and runtime are currently disabled.'}
+          </p>
+          <div className="mt-5 rounded-xl border border-slate-700/70 bg-slate-950/40 p-4 text-sm text-slate-300">
+            <p>
+              <span className="font-semibold text-slate-100">User:</span> {sessionUser.displayName}
+            </p>
+            <p className="mt-1">
+              <span className="font-semibold text-slate-100">Email:</span> {sessionUser.email}
+            </p>
+          </div>
+          <div className="mt-5">
+            <button
+              className="inline-flex items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800/80"
+              onClick={handleSignOut}
+              type="button"
+            >
+              {locale === 'es' ? 'Cerrar sesion' : 'Sign out'}
+            </button>
+          </div>
+        </div>
+      </div>
     )
   }
 

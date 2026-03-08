@@ -7,5 +7,5 @@ export type AppSessionUser = {
   locale: AppLocale
 }
 
-export type AppRoute = 'home' | 'login' | 'register' | 'app'
+export type AppRoute = 'home' | 'login' | 'register' | 'auth-callback' | 'app'
 export type AuthStatus = 'loading' | 'guest' | 'authenticated'

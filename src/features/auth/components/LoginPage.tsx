@@ -32,6 +32,10 @@ export function LoginPage({ onLogin, onLoginWithGoogle, onOpenRegister, onClose 
       return
     }
 
+    console.warn('[auth-debug] Google OAuth returned auth_error=google on /login.', {
+      search: window.location.search,
+      path: window.location.pathname,
+    })
     setErrorMessage(locale === 'es' ? 'Error al iniciar sesión con Google.' : 'Google sign-in failed.')
     if (window.location.pathname === '/login') {
       window.history.replaceState(null, '', '/login')

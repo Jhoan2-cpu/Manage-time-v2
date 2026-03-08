@@ -9,7 +9,7 @@ export function getBrowserPath() {
 }
 
 export function isKnownPath(pathname: string) {
-  return pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/app'
+  return pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/auth/callback' || pathname === '/app'
 }
 
 export function resolveRoute(pathname: string): AppRoute {
@@ -23,6 +23,10 @@ export function resolveRoute(pathname: string): AppRoute {
 
   if (pathname === '/app') {
     return 'app'
+  }
+
+  if (pathname === '/auth/callback') {
+    return 'auth-callback'
   }
 
   return 'home'

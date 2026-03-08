@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getBrowserAppLocale } from '../../../i18n'
 import type { AppLocale } from '../../../i18n/messages'
+import { hasAuthTokens } from '../../../lib/api/authTokens'
 import {
+  consumeGoogleCallbackAuthTokens,
   loginAuth,
   loginWithGoogleRedirect,
   logoutAuth,
@@ -11,6 +13,8 @@ import {
 import type { AppRoute, AppSessionUser, AuthStatus } from '../types'
 import { getBrowserPath, isKnownPath, navigateTo, resolveRoute } from '../utils/routing'
 import { mapAuthApiUserToSessionUser } from '../utils/sessionUser'
+
+const isAuthDebugEnabled = `${import.meta.env.VITE_AUTH_DEBUG ?? ''}`.toLowerCase() === 'true'
 
 type RegisterFormPayload = {
   displayName: string
@@ -57,9 +61,34 @@ export function useAuthModule({
 
     const bootstrapAuthSession = async () => {
       setAuthStatus('loading')
+      const isGoogleCallbackPath = typeof window !== 'undefined' && window.location.pathname === '/auth/callback'
+      authDebug('info', 'bootstrapAuthSession start', {
+        currentPath: typeof window !== 'undefined' ? window.location.pathname : null,
+        isGoogleCallbackPath,
+      })
 
       try {
+        if (isGoogleCallbackPath) {
+          const consumed = consumeGoogleCallbackAuthTokens()
+          const hasStoredTokens = hasAuthTokens()
+          authDebug('info', 'consumeGoogleCallbackAuthTokens result', { consumed, hasStoredTokens })
+          if (!consumed) {
+            if (hasStoredTokens) {
+              authDebug('info', 'Google callback second-pass detected; using previously persisted tokens')
+            } else {
+            setSessionUser(null)
+            setAuthStatus('guest')
+            if (typeof window !== 'undefined') {
+              window.history.replaceState(null, '', '/login?auth_error=google')
+            }
+            setCurrentPath('/login')
+            return
+            }
+          }
+        }
+
         const user = await bootstrapMeAuthOnce()
+        authDebug('info', 'bootstrap meAuth result', { hasUser: Boolean(user) })
         if (didCancel) {
           return
         }
@@ -67,6 +96,10 @@ export function useAuthModule({
         if (!user) {
           setSessionUser(null)
           setAuthStatus('guest')
+          if (isGoogleCallbackPath && typeof window !== 'undefined') {
+            window.history.replaceState(null, '', '/login?auth_error=google')
+            setCurrentPath('/login')
+          }
           return
         }
 
@@ -74,13 +107,23 @@ export function useAuthModule({
         setSessionUser(nextUser)
         setLocale(nextUser.locale)
         setAuthStatus('authenticated')
+        authDebug('info', 'bootstrap authenticated', { userId: nextUser.id, locale: nextUser.locale })
+        if (isGoogleCallbackPath) {
+          navigateTo('/app', true)
+          setCurrentPath('/app')
+        }
       } catch {
         if (didCancel) {
           return
         }
 
+        authDebug('error', 'bootstrapAuthSession failed')
         setSessionUser(null)
         setAuthStatus('guest')
+        if (isGoogleCallbackPath && typeof window !== 'undefined') {
+          window.history.replaceState(null, '', '/login?auth_error=google')
+          setCurrentPath('/login')
+        }
       }
     }
 
@@ -108,6 +151,17 @@ export function useAuthModule({
 
   useEffect(() => {
     if (authStatus === 'loading') {
+      return
+    }
+
+    if (route === 'auth-callback') {
+      if (authStatus === 'authenticated') {
+        navigateTo('/app', true)
+        setCurrentPath('/app')
+      } else {
+        navigateTo('/login', true)
+        setCurrentPath('/login')
+      }
       return
     }
 
@@ -150,6 +204,7 @@ export function useAuthModule({
   }
 
   const handleLogin = async ({ email, password }: { email: string; password: string }) => {
+    authDebug('info', 'handleLogin submit', { email })
     const result = await loginAuth({ email, password })
     const nextUser = mapAuthApiUserToSessionUser(result.data.user, fallbackDisplayName)
 
@@ -170,6 +225,7 @@ export function useAuthModule({
     passwordConfirmation,
     timeZoneName,
   }: RegisterFormPayload) => {
+    authDebug('info', 'handleRegister submit', { email })
     const result = await registerAuth({
       display_name: displayName.trim(),
       email,
@@ -191,11 +247,13 @@ export function useAuthModule({
   }
 
   const handleGoogleAuth = () => {
-    loginWithGoogleRedirect()
+    authDebug('info', 'handleGoogleAuth click')
+    loginWithGoogleRedirect('login')
   }
 
   const handleGoogleRegisterAuth = () => {
-    loginWithGoogleRedirect()
+    authDebug('info', 'handleGoogleRegisterAuth click')
+    loginWithGoogleRedirect('register')
   }
 
   const forceGuestToLogin = () => {
@@ -241,4 +299,22 @@ export function useAuthModule({
     goToRegister,
     forceGuestToLogin,
   }
+}
+
+function authDebug(level: 'info' | 'warn' | 'error', message: string, data?: unknown) {
+  if (!isAuthDebugEnabled) {
+    return
+  }
+
+  if (level === 'error') {
+    console.error(`[auth-debug] ${message}`, data ?? '')
+    return
+  }
+
+  if (level === 'warn') {
+    console.warn(`[auth-debug] ${message}`, data ?? '')
+    return
+  }
+
+  console.info(`[auth-debug] ${message}`, data ?? '')
 }

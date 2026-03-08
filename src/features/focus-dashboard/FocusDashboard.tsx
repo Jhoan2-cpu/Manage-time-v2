@@ -45,6 +45,8 @@ import {
   type CreateTaskPayload,
   type FocusSessionStateEnvelope,
   type FocusDailyLogData,
+  type FocusDailyLogFocusEntry,
+  type FocusDailyLogIdleEntry,
   type TaskApiItem,
   type UpdatePreferencesPayload,
   type UserPreferences,
@@ -53,12 +55,17 @@ import {
   adaptBootstrapDashboardStatsToUi,
   adaptBootstrapDailyLogToUiEntries,
   adaptBootstrapTasksToUi,
-  adaptTaskItemToUi,
 } from './bootstrapAdapter'
 import { buildUntrackedCreateTimeEntryPayloadFromSession } from './historyApiAdapter'
 import type { FocusTimerMode, LogEntry, Task, TaskColorKey, TaskIconKey } from './types'
 import { classNames } from './utils/classNames'
-import { formatSecondsCompact, formatSecondsHms, parseDurationLabelToSeconds, toIsoDateStringInTimeZone } from './utils/time'
+import {
+  formatSecondsCompact,
+  formatSecondsHms,
+  parseDurationLabelToSeconds,
+  roundElapsedSecondsBetweenMs,
+  toIsoDateStringInTimeZone,
+} from './utils/time'
 import { useI18n } from '../../i18n'
 import { ApiHttpError } from '../../lib/api/http'
 import {
@@ -93,11 +100,20 @@ const fallbackDashboardStats = {
   focusTime: '0m 00s',
   totalTracked: '0m 00s',
 }
+
+// Current phase runs TaskCards over plain HTTP without runtime sync polling.
+const ENABLE_FOCUS_RUNTIME_HTTP_SYNC =
+  `${import.meta.env.VITE_ENABLE_FOCUS_RUNTIME_SYNC ?? 'false'}`.toLowerCase() === 'true'
+const ENABLE_TASKS_BACKGROUND_POLLING =
+  `${import.meta.env.VITE_ENABLE_TASKS_BACKGROUND_POLLING ?? 'false'}`.toLowerCase() === 'true'
+const ENABLE_FOCUS_RUNTIME_HEARTBEAT =
+  `${import.meta.env.VITE_ENABLE_FOCUS_RUNTIME_HEARTBEAT ?? 'false'}`.toLowerCase() === 'true'
+const ENABLE_UNTRACKED_TIME_ENTRIES_PERSIST =
+  `${import.meta.env.VITE_ENABLE_TIME_ENTRIES_PERSIST ?? 'false'}`.toLowerCase() === 'true'
 const emptyFallbackTasks: Task[] = []
 const emptyFallbackLogEntries: LogEntry[] = []
 
 const FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES: AppBootstrapInclude[] = [
-  'tasks',
   'daily_log',
   'dashboard_stats',
   'active_focus_session',
@@ -224,6 +240,43 @@ function isSessionRunningState(state: string | null | undefined) {
   return state === 'running' || state === 'working'
 }
 
+function parseIsoTimestampToMsSafe(value: string | null | undefined) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null
+  }
+
+  const parsed = Date.parse(value)
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  return parsed
+}
+
+function hasIsoTimestampSubseconds(value: string | null | undefined) {
+  return typeof value === 'string' && /\.\d+(?:Z|[+-]\d{2}:\d{2})$/i.test(value.trim())
+}
+
+function areLifecycleTimestampsEquivalent(
+  currentValue: string | null | undefined,
+  incomingValue: string | null | undefined,
+) {
+  const left = currentValue ?? null
+  const right = incomingValue ?? null
+  if (left === right) {
+    return true
+  }
+
+  const leftMs = parseIsoTimestampToMsSafe(left)
+  const rightMs = parseIsoTimestampToMsSafe(right)
+  if (leftMs === null || rightMs === null) {
+    return false
+  }
+
+  // Backend can normalize to second precision; treat same-second instants as the same lifecycle edge.
+  return Math.floor(leftMs / 1000) === Math.floor(rightMs / 1000)
+}
+
 function hasMeaningfulFocusSessionTransition(
   current: ActiveFocusSession | null | undefined,
   incoming: ActiveFocusSession | null | undefined,
@@ -267,31 +320,56 @@ function normalizeIncomingRunningFocusSession(
     currentSession.id === incomingSession.id &&
     currentSession.task_id === incomingSession.task_id &&
     currentSession.timer_mode === incomingSession.timer_mode &&
-    (currentSession.last_resumed_at_utc ?? null) === (incomingSession.last_resumed_at_utc ?? null) &&
-    (currentSession.last_paused_at_utc ?? null) === (incomingSession.last_paused_at_utc ?? null)
+    areLifecycleTimestampsEquivalent(currentSession.last_resumed_at_utc ?? null, incomingSession.last_resumed_at_utc ?? null) &&
+    areLifecycleTimestampsEquivalent(currentSession.last_paused_at_utc ?? null, incomingSession.last_paused_at_utc ?? null)
   if (!sameLifecycle) {
     return incomingSession
   }
 
+  const shouldKeepCurrentResumedAt =
+    hasIsoTimestampSubseconds(currentSession.last_resumed_at_utc ?? null) &&
+    areLifecycleTimestampsEquivalent(currentSession.last_resumed_at_utc ?? null, incomingSession.last_resumed_at_utc ?? null)
+  const shouldKeepCurrentPausedAt =
+    hasIsoTimestampSubseconds(currentSession.last_paused_at_utc ?? null) &&
+    areLifecycleTimestampsEquivalent(currentSession.last_paused_at_utc ?? null, incomingSession.last_paused_at_utc ?? null)
+
   return {
     ...incomingSession,
+    last_resumed_at_utc: shouldKeepCurrentResumedAt
+      ? (currentSession.last_resumed_at_utc ?? incomingSession.last_resumed_at_utc)
+      : incomingSession.last_resumed_at_utc,
+    last_paused_at_utc: shouldKeepCurrentPausedAt
+      ? (currentSession.last_paused_at_utc ?? incomingSession.last_paused_at_utc)
+      : incomingSession.last_paused_at_utc,
     elapsed_seconds_total: currentSession.elapsed_seconds_total,
   } satisfies ActiveFocusSession
 }
 
-function normalizeTaskRuntimeState(state: unknown): 'idle' | 'working' | 'paused' | 'stopped' | null {
-  if (state === 'idle' || state === 'working' || state === 'paused' || state === 'stopped') {
+function normalizeTaskRuntimeState(state: unknown): 'idle' | 'working' | 'paused' | null {
+  if (state === 'idle' || state === 'working' || state === 'paused') {
     return state
   }
 
   return null
 }
 
-function isTaskRuntimeActiveState(state: unknown) {
-  return state === 'working' || state === 'paused'
-}
-
 function resolveElapsedFromRuntimeTaskSnapshot(serverTask: TaskApiItem, mode: FocusTimerMode) {
+  const runtimeState = normalizeTaskRuntimeState(serverTask.state)
+  const isWorking = runtimeState === 'working'
+
+  const parseUtcToMs = (value: string | null | undefined) => {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null
+    }
+
+    const parsed = Date.parse(value)
+    if (!Number.isFinite(parsed)) {
+      return null
+    }
+
+    return parsed
+  }
+
   if (mode === 'timer') {
     const initial =
       typeof serverTask.timer_initial_seconds === 'number' && Number.isFinite(serverTask.timer_initial_seconds)
@@ -303,15 +381,110 @@ function resolveElapsedFromRuntimeTaskSnapshot(serverTask: TaskApiItem, mode: Fo
         : null
 
     if (initial !== null && remaining !== null) {
-      return Math.max(0, initial - remaining)
+      const snapshotElapsed = Math.max(0, initial - remaining)
+      if (!isWorking) {
+        return snapshotElapsed
+      }
+
+      const startedAtMs = parseUtcToMs(serverTask.timer_started_at_utc ?? null)
+      if (startedAtMs === null) {
+        return snapshotElapsed
+      }
+
+      const elapsedSinceLoad = roundElapsedSecondsBetweenMs(startedAtMs, Date.now())
+      return Math.min(initial, snapshotElapsed + elapsedSinceLoad)
     }
 
     return 0
   }
 
+  const snapshotElapsed =
+    typeof serverTask.stopwatch_elapsed_seconds === 'number' && Number.isFinite(serverTask.stopwatch_elapsed_seconds)
+      ? Math.max(0, Math.floor(serverTask.stopwatch_elapsed_seconds))
+      : 0
+
+  if (!isWorking) {
+    return snapshotElapsed
+  }
+
+  const startedAtMs = parseUtcToMs(serverTask.stopwatch_started_at_utc ?? null)
+  if (startedAtMs === null) {
+    return snapshotElapsed
+  }
+
+  const elapsedSinceLoad = roundElapsedSecondsBetweenMs(startedAtMs, Date.now())
+  return snapshotElapsed + elapsedSinceLoad
+}
+
+function resolveElapsedBaseFromRuntimeTaskSnapshot(serverTask: TaskApiItem, mode: FocusTimerMode) {
+  if (mode === 'timer') {
+    const initial =
+      typeof serverTask.timer_initial_seconds === 'number' && Number.isFinite(serverTask.timer_initial_seconds)
+        ? Math.max(0, Math.floor(serverTask.timer_initial_seconds))
+        : typeof serverTask.target_duration_seconds === 'number' && Number.isFinite(serverTask.target_duration_seconds)
+          ? Math.max(0, Math.floor(serverTask.target_duration_seconds))
+          : 0
+    const remaining =
+      typeof serverTask.timer_remaining_seconds === 'number' && Number.isFinite(serverTask.timer_remaining_seconds)
+        ? Math.max(0, Math.floor(serverTask.timer_remaining_seconds))
+        : initial
+    return Math.max(0, initial - remaining)
+  }
+
   return typeof serverTask.stopwatch_elapsed_seconds === 'number' && Number.isFinite(serverTask.stopwatch_elapsed_seconds)
     ? Math.max(0, Math.floor(serverTask.stopwatch_elapsed_seconds))
     : 0
+}
+
+function buildDerivedFocusSessionFromTask(serverTask: TaskApiItem): ActiveFocusSession | null {
+  const runtimeState = normalizeTaskRuntimeState(serverTask.state)
+  if (!runtimeState || runtimeState === 'idle') {
+    return null
+  }
+
+  const timerMode: FocusTimerMode = serverTask.active_mode === 'timer' ? 'timer' : 'stopwatch'
+  const elapsedBase = resolveElapsedBaseFromRuntimeTaskSnapshot(serverTask, timerMode)
+
+  const startedAtUtc =
+    timerMode === 'timer'
+      ? (typeof serverTask.timer_started_at_utc === 'string' && serverTask.timer_started_at_utc.trim()
+        ? serverTask.timer_started_at_utc
+        : (typeof serverTask.updated_at === 'string' && serverTask.updated_at.trim() ? serverTask.updated_at : new Date().toISOString()))
+      : (typeof serverTask.stopwatch_started_at_utc === 'string' && serverTask.stopwatch_started_at_utc.trim()
+        ? serverTask.stopwatch_started_at_utc
+        : (typeof serverTask.updated_at === 'string' && serverTask.updated_at.trim() ? serverTask.updated_at : new Date().toISOString()))
+
+  const targetSeconds =
+    timerMode === 'timer'
+      ? (typeof serverTask.timer_initial_seconds === 'number' && Number.isFinite(serverTask.timer_initial_seconds)
+        ? Math.max(0, Math.floor(serverTask.timer_initial_seconds))
+        : typeof serverTask.target_duration_seconds === 'number' && Number.isFinite(serverTask.target_duration_seconds)
+          ? Math.max(0, Math.floor(serverTask.target_duration_seconds))
+          : null)
+      : null
+
+  const version =
+    typeof serverTask.version === 'number' && Number.isFinite(serverTask.version)
+      ? Math.max(1, Math.floor(serverTask.version))
+      : 1
+
+  return {
+    id: `task-runtime:${serverTask.id}`,
+    task_id: serverTask.id,
+    timer_mode: timerMode,
+    session_state: runtimeState,
+    target_seconds: targetSeconds,
+    started_at_utc: startedAtUtc,
+    last_resumed_at_utc: runtimeState === 'working' ? startedAtUtc : null,
+    last_paused_at_utc:
+      runtimeState === 'paused'
+        ? (timerMode === 'timer'
+          ? (typeof serverTask.timer_ended_at_utc === 'string' ? serverTask.timer_ended_at_utc : null)
+          : (typeof serverTask.stopwatch_ended_at_utc === 'string' ? serverTask.stopwatch_ended_at_utc : null))
+        : null,
+    elapsed_seconds_total: elapsedBase,
+    version,
+  } satisfies ActiveFocusSession
 }
 
 function pickRuntimeTaskSnapshot(serverTasks: TaskApiItem[]) {
@@ -320,7 +493,7 @@ function pickRuntimeTaskSnapshot(serverTasks: TaskApiItem[]) {
     return workingTask
   }
 
-  return serverTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'paused') ?? null
+  return null
 }
 
 function adaptTaskApiItemToUi(
@@ -342,6 +515,15 @@ function adaptTaskApiItemToUi(
     normalizedTimerInitialSecondsRaw !== null
       ? Math.max(0, Math.floor(normalizedTimerInitialSecondsRaw))
       : null
+  const normalizedTotalTrackedSeconds =
+    typeof serverTask.total_tracked_seconds === 'number' && Number.isFinite(serverTask.total_tracked_seconds)
+      ? Math.max(0, Math.floor(serverTask.total_tracked_seconds))
+      : null
+  const existingTrackedSeconds = existingTask ? parseDurationLabelToSeconds(existingTask.duration) : 0
+  const resolvedTrackedSeconds =
+    normalizedTotalTrackedSeconds !== null
+      ? Math.max(normalizedTotalTrackedSeconds, existingTrackedSeconds)
+      : existingTrackedSeconds
 
   return {
     id: serverTask.id,
@@ -352,7 +534,7 @@ function adaptTaskApiItemToUi(
         : existingTask?.title ?? 'Untitled task',
     details: existingTask?.details ?? '',
     statusText: existingTask?.statusText ?? '',
-    duration: existingTask?.duration ?? '00:00:00',
+    duration: formatSecondsHms(resolvedTrackedSeconds),
     state: options.state ?? existingTask?.state ?? 'scheduled',
     colorTag: normalizeTaskApiColorToUi(serverTask.color_tag, existingTask?.colorTag ?? 'blue'),
     iconTag: normalizeTaskApiIconToUi(serverTask.icon_tag, existingTask?.iconTag ?? 'briefcase'),
@@ -376,6 +558,37 @@ function adaptTaskApiItemToUi(
         ? serverTask.updated_at
         : existingTask?.updatedAtUtc,
   }
+}
+
+function parseIsoTimestampToMs(value: string | null | undefined) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return Number.NEGATIVE_INFINITY
+  }
+
+  const parsed = Date.parse(value)
+  if (!Number.isFinite(parsed)) {
+    return Number.NEGATIVE_INFINITY
+  }
+
+  return parsed
+}
+
+function getTaskApiRecencyMs(task: TaskApiItem) {
+  return Math.max(
+    parseIsoTimestampToMs(task.updated_at ?? null),
+    parseIsoTimestampToMs(task.created_at ?? null),
+  )
+}
+
+function sortTaskApiItemsByRecencyDesc(tasks: TaskApiItem[]) {
+  return [...tasks].sort((left, right) => {
+    const recencyDiff = getTaskApiRecencyMs(right) - getTaskApiRecencyMs(left)
+    if (recencyDiff !== 0) {
+      return recencyDiff
+    }
+
+    return right.id.localeCompare(left.id)
+  })
 }
 
 function adaptFocusDailyLogToUiEntries(
@@ -424,6 +637,209 @@ function adaptFocusDailyLogToUiEntries(
   })
 
   return sortLogEntriesByTime([...focusEntries, ...idleEntries])
+}
+
+function normalizeRuntimeDateLocal(value: unknown) {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const normalized = value.trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null
+}
+
+function normalizeRuntimeIdentifier(value: unknown) {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `${Math.trunc(value)}`
+  }
+  return null
+}
+
+function normalizeRuntimeModeSnapshot(value: unknown) {
+  return value === 'timer' || value === 'stopwatch' ? value : null
+}
+
+function normalizeRuntimeUtcTimestamp(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null
+  }
+  return value.trim()
+}
+
+function normalizeRuntimeElapsedSeconds(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null
+  }
+  return Math.max(0, Math.floor(value))
+}
+
+function normalizeFocusTimeEntryFromDailyLogTodayEntry(entry: unknown): FocusDailyLogFocusEntry | null {
+  if (!entry || typeof entry !== 'object') {
+    return null
+  }
+  const source = entry as {
+    time_entry_id?: unknown
+    task_id?: unknown
+    activity_title?: unknown
+    activity_icon?: unknown
+    activity_color?: unknown
+    mode?: unknown
+    started_at_utc?: unknown
+    ended_at_utc?: unknown
+    duration_seconds?: unknown
+  }
+
+  const id = normalizeRuntimeIdentifier(source.time_entry_id)
+  const startedAtUtc = normalizeRuntimeUtcTimestamp(source.started_at_utc)
+  if (!id || !startedAtUtc) {
+    return null
+  }
+
+  return {
+    id,
+    focus_task_id_nullable: normalizeRuntimeIdentifier(source.task_id),
+    task_title_snapshot: typeof source.activity_title === 'string' ? source.activity_title : null,
+    task_icon_snapshot: typeof source.activity_icon === 'string' ? source.activity_icon : null,
+    task_color_snapshot: typeof source.activity_color === 'string' ? source.activity_color : null,
+    mode_snapshot: normalizeRuntimeModeSnapshot(source.mode),
+    started_at_utc: startedAtUtc,
+    ended_at_utc: normalizeRuntimeUtcTimestamp(source.ended_at_utc),
+    elapsed_seconds: normalizeRuntimeElapsedSeconds(source.duration_seconds),
+  }
+}
+
+function normalizeFocusTimeEntryFromRuntimeDailyLog(entry: unknown): FocusDailyLogFocusEntry | null {
+  if (!entry || typeof entry !== 'object') {
+    return null
+  }
+  const source = entry as {
+    id?: unknown
+    focus_task_id_nullable?: unknown
+    task_title_snapshot?: unknown
+    task_icon_snapshot?: unknown
+    task_color_snapshot?: unknown
+    mode_snapshot?: unknown
+    started_at_utc?: unknown
+    ended_at_utc?: unknown
+    elapsed_seconds?: unknown
+    stop_reason?: unknown
+  }
+
+  const id = normalizeRuntimeIdentifier(source.id)
+  const startedAtUtc = normalizeRuntimeUtcTimestamp(source.started_at_utc)
+  if (!id || !startedAtUtc) {
+    return null
+  }
+
+  return {
+    id,
+    focus_task_id_nullable: normalizeRuntimeIdentifier(source.focus_task_id_nullable),
+    task_title_snapshot: typeof source.task_title_snapshot === 'string' ? source.task_title_snapshot : null,
+    task_icon_snapshot: typeof source.task_icon_snapshot === 'string' ? source.task_icon_snapshot : null,
+    task_color_snapshot: typeof source.task_color_snapshot === 'string' ? source.task_color_snapshot : null,
+    mode_snapshot: normalizeRuntimeModeSnapshot(source.mode_snapshot),
+    started_at_utc: startedAtUtc,
+    ended_at_utc: normalizeRuntimeUtcTimestamp(source.ended_at_utc),
+    elapsed_seconds: normalizeRuntimeElapsedSeconds(source.elapsed_seconds),
+    stop_reason: typeof source.stop_reason === 'string' ? source.stop_reason : null,
+  }
+}
+
+function normalizeIdleTimeEntryFromRuntimeDailyLog(entry: unknown): FocusDailyLogIdleEntry | null {
+  if (!entry || typeof entry !== 'object') {
+    return null
+  }
+  const source = entry as {
+    id?: unknown
+    started_at_utc?: unknown
+    ended_at_utc?: unknown
+    elapsed_seconds?: unknown
+    reason?: unknown
+  }
+  const id = normalizeRuntimeIdentifier(source.id)
+  const startedAtUtc = normalizeRuntimeUtcTimestamp(source.started_at_utc)
+  if (!id || !startedAtUtc) {
+    return null
+  }
+
+  return {
+    id,
+    started_at_utc: startedAtUtc,
+    ended_at_utc: normalizeRuntimeUtcTimestamp(source.ended_at_utc),
+    elapsed_seconds: normalizeRuntimeElapsedSeconds(source.elapsed_seconds),
+    reason: typeof source.reason === 'string' ? source.reason : null,
+  }
+}
+
+type RuntimeDailyLogTodayNormalized = {
+  dailyLog: FocusDailyLogData
+  trackedSeconds: number | null
+}
+
+function normalizeRuntimeDailyLogTodayPayload(payload: unknown): RuntimeDailyLogTodayNormalized | null {
+  if (!payload || typeof payload !== 'object') {
+    return null
+  }
+
+  const source = payload as {
+    date_local?: unknown
+    date?: unknown
+    time_zone_name?: unknown
+    entries?: unknown
+    focus_time_entries?: unknown
+    idle_time_entries?: unknown
+    tracked_seconds?: unknown
+  }
+
+  const timeZoneName =
+    typeof source.time_zone_name === 'string' && source.time_zone_name.trim()
+      ? source.time_zone_name.trim()
+      : 'UTC'
+  const dateLocal =
+    normalizeRuntimeDateLocal(source.date_local) ??
+    normalizeRuntimeDateLocal(source.date) ??
+    toIsoDateStringInTimeZone(new Date(), timeZoneName)
+
+  if (Array.isArray(source.entries)) {
+    const focusEntries = source.entries
+      .map((entry) => normalizeFocusTimeEntryFromDailyLogTodayEntry(entry))
+      .filter((entry): entry is FocusDailyLogFocusEntry => entry !== null)
+
+    return {
+      dailyLog: {
+        date: dateLocal,
+        time_zone_name: timeZoneName,
+        focus_time_entries: focusEntries,
+        idle_time_entries: [],
+      },
+      trackedSeconds: normalizeRuntimeElapsedSeconds(source.tracked_seconds),
+    }
+  }
+
+  if (Array.isArray(source.focus_time_entries)) {
+    const focusEntries = source.focus_time_entries
+      .map((entry) => normalizeFocusTimeEntryFromRuntimeDailyLog(entry))
+      .filter((entry): entry is FocusDailyLogFocusEntry => entry !== null)
+    const idleEntries = Array.isArray(source.idle_time_entries)
+      ? source.idle_time_entries
+        .map((entry) => normalizeIdleTimeEntryFromRuntimeDailyLog(entry))
+        .filter((entry): entry is FocusDailyLogIdleEntry => entry !== null)
+      : []
+
+    return {
+      dailyLog: {
+        date: dateLocal,
+        time_zone_name: timeZoneName,
+        focus_time_entries: focusEntries,
+        idle_time_entries: idleEntries,
+      },
+      trackedSeconds: normalizeRuntimeElapsedSeconds(source.tracked_seconds),
+    }
+  }
+
+  return null
 }
 
 export function FocusDashboard({
@@ -536,13 +952,18 @@ export function FocusDashboard({
   const isFocusCommandInFlightRef = useRef(false)
   const isFocusSessionSyncInFlightRef = useRef(false)
   const tasksRefreshInFlightCountRef = useRef(0)
+  const tasksRefreshRequestInFlightRef = useRef<Promise<void> | null>(null)
+  const latestServerTasksByIdRef = useRef<Record<string, TaskApiItem>>({})
   const taskcardsRealtimeResyncTimerRef = useRef<number | null>(null)
   const timerCompleteStopRequestKeyRef = useRef<string | null>(null)
   const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
+  const shouldAwaitBackendUntrackedCloseRef = useRef(false)
   const processedTaskRealtimeEventIdsRef = useRef<string[]>([])
   const processedFocusRealtimeEventIdsRef = useRef<string[]>([])
   const focusActiveEndpointMissingRef = useRef(false)
   const hasLoggedMissingFocusActiveEndpointRef = useRef(false)
+  const timeEntriesEndpointMissingRef = useRef(false)
+  const hasLoggedMissingTimeEntriesEndpointRef = useRef(false)
   const localOriginDeviceId = useMemo(() => getOrCreateOriginDeviceId(), [])
 
   useEffect(() => {
@@ -557,6 +978,7 @@ export function FocusDashboard({
         taskcardsRealtimeResyncTimerRef.current = null
       }
       tasksRefreshInFlightCountRef.current = 0
+      tasksRefreshRequestInFlightRef.current = null
     }
   }, [])
 
@@ -574,6 +996,14 @@ export function FocusDashboard({
   useEffect(() => {
     latestPreferencesRef.current = bootstrapData?.preferences ?? null
   }, [bootstrapData?.preferences])
+
+  useEffect(() => {
+    console.log("===================================");
+    console.log('[daily-log:ui] entries updated', {
+      count: dailyLogEntries.length,
+      entries: dailyLogEntries,
+    })
+  }, [dailyLogEntries])
 
   useEffect(() => {
     setDailyLogEntries(bootstrapInitialDailyLogEntries)
@@ -675,6 +1105,22 @@ export function FocusDashboard({
     }))
   }
 
+  const clearTaskCooldown = (taskId: string | null | undefined) => {
+    if (!taskId) {
+      return
+    }
+
+    setTaskCooldownEndsAtByTaskId((current) => {
+      if (!(taskId in current)) {
+        return current
+      }
+
+      const next = { ...current }
+      delete next[taskId]
+      return next
+    })
+  }
+
   const isTaskCooldownActive = (taskId: string | null | undefined) => {
     if (!taskId) {
       return false
@@ -748,7 +1194,7 @@ export function FocusDashboard({
       typeof payload.targetDurationMinutes === 'number' && Number.isFinite(payload.targetDurationMinutes)
         ? Math.max(0, Math.round(payload.targetDurationMinutes * 60))
         : 0
-    const normalizedTimerInitialSeconds = timerInitialSeconds > 0 ? Math.min(timerInitialSeconds, 24 * 60 * 60) : null
+    const normalizedTimerInitialSeconds = timerInitialSeconds > 0 ? Math.min(timerInitialSeconds, 24 * 60 * 60) : 0
 
     return {
       name: payload.title.trim(),
@@ -815,8 +1261,8 @@ export function FocusDashboard({
         const updatedTask = await updateTaskApi(editingTaskId, {
           ...apiPayload,
           if_version: ifVersion,
-          timer_initial_seconds: apiPayload.timer_initial_seconds ?? null,
-          target_duration_seconds: apiPayload.target_duration_seconds ?? null,
+          timer_initial_seconds: apiPayload.timer_initial_seconds ?? 0,
+          target_duration_seconds: apiPayload.target_duration_seconds ?? 0,
         })
         if (!updatedTask) {
           onSignOut?.()
@@ -827,9 +1273,9 @@ export function FocusDashboard({
           currentTasks.map((task) =>
             task.id === editingTaskId
               ? adaptTaskApiItemToUi(updatedTask, {
-                  existingTask: task,
-                  state: task.state,
-                })
+                existingTask: task,
+                state: task.state,
+              })
               : task,
           ),
         )
@@ -881,6 +1327,10 @@ export function FocusDashboard({
         }
       }
 
+      if (error instanceof ApiHttpError) {
+        console.error('Failed to persist task mutation', { editingTaskId, apiPayload, status: error.status, body: error.body }, error)
+        return false
+      }
       console.error('Failed to persist task mutation', { editingTaskId, apiPayload }, error)
       return false
     }
@@ -953,6 +1403,7 @@ export function FocusDashboard({
     activeTaskTargetSeconds,
     elapsedSnapshotsByTaskId,
     resetElapsedSnapshotsForTaskModes,
+    seedElapsedSnapshotForTaskMode,
     timerProgressPercent,
     timerDisplayLabel,
     isTimerComplete,
@@ -1001,8 +1452,61 @@ export function FocusDashboard({
     })
   }
 
+  const syncTaskVersionFromRuntimeEnvelope = (envelope: FocusSessionStateEnvelope) => {
+    const runtimeTask = ((envelope.data as { task?: unknown } | null)?.task ?? null) as
+      | Partial<TaskApiItem>
+      | null
+    if (!runtimeTask || typeof runtimeTask !== 'object') {
+      return
+    }
+
+    const runtimeTaskId = typeof runtimeTask.id === 'string' && runtimeTask.id.trim() ? runtimeTask.id : null
+    const runtimeTaskVersion =
+      typeof runtimeTask.version === 'number' && Number.isFinite(runtimeTask.version)
+        ? Math.max(1, Math.floor(runtimeTask.version))
+        : null
+    const runtimeState = normalizeTaskRuntimeState(runtimeTask.state)
+    if (!runtimeTaskId || runtimeTaskVersion === null) {
+      return
+    }
+
+    setTaskList((currentTasks) => {
+      if (currentTasks.length === 0 || !currentTasks.some((task) => task.id === runtimeTaskId)) {
+        return currentTasks
+      }
+
+      let changed = false
+      const nextTasks = currentTasks.map((task) => {
+        if (task.id === runtimeTaskId) {
+          const nextState =
+            runtimeState === 'working'
+              ? 'active'
+              : task.state
+          if (task.version !== runtimeTaskVersion || task.state !== nextState) {
+            changed = true
+            return {
+              ...task,
+              version: runtimeTaskVersion,
+              state: nextState,
+            }
+          }
+          return task
+        }
+
+        if (runtimeState === 'working' && task.state === 'active') {
+          changed = true
+          return { ...task, state: 'scheduled' }
+        }
+
+        return task
+      })
+
+      return changed ? nextTasks : currentTasks
+    })
+  }
+
   const applyRuntimeFromTaskSnapshot = (serverTask: TaskApiItem | null) => {
-    if (!serverTask || activeFocusSession) {
+    if (!serverTask) {
       return
     }
 
@@ -1011,25 +1515,64 @@ export function FocusDashboard({
       return
     }
 
-    if (runtimeState === 'idle' || runtimeState === 'stopped') {
+    const nextMode: FocusTimerMode = serverTask.active_mode === 'timer' ? 'timer' : 'stopwatch'
+    const elapsedSeconds = resolveElapsedFromRuntimeTaskSnapshot(serverTask, nextMode)
+    const localSeedFromSnapshot =
+      nextMode === 'timer'
+        ? elapsedSnapshotsByTaskId[serverTask.id]?.timer ?? 0
+        : elapsedSnapshotsByTaskId[serverTask.id]?.stopwatch ?? 0
+    const localSeedFromActiveTask =
+      activeTask?.id === serverTask.id ? Math.max(0, Math.floor(sessionElapsedSeconds)) : 0
+    const safeElapsedSeconds = Math.max(elapsedSeconds, localSeedFromSnapshot, localSeedFromActiveTask)
+    seedElapsedSnapshotForTaskMode(serverTask.id, nextMode, safeElapsedSeconds)
+
+    if (runtimeState === 'idle') {
       if (activeTask?.id === serverTask.id) {
         setIsFocusRunning(false)
       }
       return
     }
 
-    const nextMode: FocusTimerMode = serverTask.active_mode === 'timer' ? 'timer' : 'stopwatch'
-    const elapsedSeconds = resolveElapsedFromRuntimeTaskSnapshot(serverTask, nextMode)
+    // Paused snapshots should not steal active-card focus in TimerPanel,
+    // but they must hydrate elapsed seed for reload continuity.
+    if (runtimeState === 'paused') {
+      if (activeTask?.id === serverTask.id) {
+        setTimerMode(nextMode)
+        setSessionElapsedSeconds(safeElapsedSeconds)
+        setIsFocusRunning(false)
+      }
+      return
+    }
+
+    const derivedSession = buildDerivedFocusSessionFromTask(serverTask)
+
     alignActiveTaskState(serverTask.id)
-    setTimerMode(nextMode)
-    setSessionElapsedSeconds(elapsedSeconds)
-    setIsFocusRunning(runtimeState === 'working')
+    if (derivedSession) {
+      const normalizedElapsedTotal =
+        nextMode === 'timer' && typeof derivedSession.target_seconds === 'number' && Number.isFinite(derivedSession.target_seconds)
+          ? Math.max(0, Math.min(Math.floor(derivedSession.target_seconds), Math.floor(safeElapsedSeconds)))
+          : Math.max(0, Math.floor(safeElapsedSeconds))
+      const snapshotObservedAtUtc = new Date().toISOString()
+      applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? new Date().toISOString(), {
+        ...derivedSession,
+        elapsed_seconds_total: Math.max(derivedSession.elapsed_seconds_total, normalizedElapsedTotal),
+        // For runtime rehydration from /focus/tasks, treat elapsed as a current snapshot
+        // and anchor future ticking from "now" to avoid double-counting from task started_at_utc.
+        last_resumed_at_utc: snapshotObservedAtUtc,
+      })
+    } else {
+      setTimerMode(nextMode)
+      setSessionElapsedSeconds(safeElapsedSeconds)
+      setIsFocusRunning(runtimeState === 'working')
+    }
   }
 
   const applyRuntimeFromTaskCollection = (serverTasks: TaskApiItem[]) => {
-    if (activeFocusSession) {
-      return
-    }
+    serverTasks.forEach((serverTask) => {
+      if (normalizeTaskRuntimeState(serverTask.state) !== 'idle') {
+        applyRuntimeFromTaskSnapshot(serverTask)
+      }
+    })
 
     const runtimeTask = pickRuntimeTaskSnapshot(serverTasks)
     if (!runtimeTask) {
@@ -1041,6 +1584,7 @@ export function FocusDashboard({
   }
 
   const applyFocusSessionEnvelope = (envelope: FocusSessionStateEnvelope) => {
+    syncTaskVersionFromRuntimeEnvelope(envelope)
     const normalizedActiveSession = normalizeIncomingRunningFocusSession(
       activeFocusSession,
       envelope.data.active_focus_session ?? null,
@@ -1052,6 +1596,58 @@ export function FocusDashboard({
         active_focus_session: normalizedActiveSession,
       },
     } satisfies FocusSessionStateEnvelope
+
+    const runtimeDailyLogRaw = (normalizedEnvelope.data as { daily_log_today?: unknown }).daily_log_today
+    if (runtimeDailyLogRaw !== undefined) {
+      console.log('[daily-log:pause] daily_log_today payload', runtimeDailyLogRaw)
+    }
+    const runtimeDailyLogPayload = normalizeRuntimeDailyLogTodayPayload(runtimeDailyLogRaw)
+    if (runtimeDailyLogPayload) {
+      const runtimeDailyLog = runtimeDailyLogPayload.dailyLog
+      const rawDailyLog = runtimeDailyLogRaw as {
+        tracked_seconds?: unknown
+        untracked_seconds?: unknown
+        total_seconds?: unknown
+      } | null
+      const timeZoneForDailyLog =
+        typeof runtimeDailyLog.time_zone_name === 'string' && runtimeDailyLog.time_zone_name.trim()
+          ? runtimeDailyLog.time_zone_name.trim()
+          : effectiveTimeZone
+      console.log('[daily-log:pause] normalized', {
+        date_local: runtimeDailyLog.date,
+        time_zone_name: runtimeDailyLog.time_zone_name,
+        focus_entries_count: runtimeDailyLog.focus_time_entries.length,
+        idle_entries_count: runtimeDailyLog.idle_time_entries.length,
+        tracked_seconds: runtimeDailyLogPayload.trackedSeconds,
+        untracked_seconds:
+          typeof rawDailyLog?.untracked_seconds === 'number' && Number.isFinite(rawDailyLog.untracked_seconds)
+            ? Math.max(0, Math.floor(rawDailyLog.untracked_seconds))
+            : null,
+        total_seconds:
+          typeof rawDailyLog?.total_seconds === 'number' && Number.isFinite(rawDailyLog.total_seconds)
+            ? Math.max(0, Math.floor(rawDailyLog.total_seconds))
+            : null,
+      })
+      setDailyLogEntries(
+        adaptFocusDailyLogToUiEntries(runtimeDailyLog, {
+          timeZone: timeZoneForDailyLog,
+          untrackedLabel: copy.untrackedTime,
+        }),
+      )
+      const trackedSeconds =
+        runtimeDailyLogPayload.trackedSeconds ??
+        runtimeDailyLog.focus_time_entries.reduce((total, entry) => {
+          if (typeof entry.elapsed_seconds !== 'number' || !Number.isFinite(entry.elapsed_seconds)) {
+            return total
+          }
+          return total + Math.max(0, Math.floor(entry.elapsed_seconds))
+        }, 0)
+      setDashboardStatsState((current) => ({
+        ...current,
+        sessions: runtimeDailyLog.focus_time_entries.length,
+        totalTracked: formatSecondsCompact(trackedSeconds),
+      }))
+    }
 
     applyAuthoritativeFocusSnapshot(normalizedEnvelope.data.server_now_utc, normalizedEnvelope.data.active_focus_session)
     alignActiveTaskState(normalizedEnvelope.data.active_focus_session?.task_id ?? null)
@@ -1070,75 +1666,89 @@ export function FocusDashboard({
   }
 
   const refreshTasksFromServer = async () => {
-    tasksRefreshInFlightCountRef.current += 1
-    if (isMountedRef.current) {
-      setIsTasksLoading(true)
+    if (tasksRefreshRequestInFlightRef.current) {
+      return tasksRefreshRequestInFlightRef.current
     }
 
-    try {
-      const serverTasks = await getTasksApi()
-      if (!serverTasks) {
-        onSignOut?.()
-        return
+    const request = (async () => {
+      tasksRefreshInFlightCountRef.current += 1
+      if (isMountedRef.current) {
+        setIsTasksLoading(true)
       }
 
-      setTaskList((currentTasks) => {
-        const currentById = new Map(currentTasks.map((task) => [task.id, task] as const))
-        const runtimePreferredActiveTaskId =
-          serverTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'working')?.id ??
-          serverTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'paused')?.id ??
-          null
-        const preferredActiveTaskId =
-          activeFocusSession?.task_id ??
-          runtimePreferredActiveTaskId ??
-          currentTasks.find((task) => task.state === 'active')?.id ??
-          currentTasks[0]?.id ??
-          null
+      try {
+        const serverTasks = await getTasksApi()
+        if (!serverTasks) {
+          onSignOut?.()
+          return
+        }
+        const sortedServerTasks = sortTaskApiItemsByRecencyDesc(serverTasks)
+        latestServerTasksByIdRef.current = Object.fromEntries(sortedServerTasks.map((task) => [task.id, task]))
 
-        const nextTasks = serverTasks.map((serverTask) => {
-          const existingTask = currentById.get(serverTask.id)
-          const runtimeState = normalizeTaskRuntimeState(serverTask.state)
-          const state =
-            runtimeState && isTaskRuntimeActiveState(runtimeState)
-              ? 'active'
-              : serverTask.id === preferredActiveTaskId
-              ? 'active'
-              : existingTask?.state === 'done'
-                ? 'done'
-                : 'scheduled'
+        setTaskList((currentTasks) => {
+          const currentById = new Map(currentTasks.map((task) => [task.id, task] as const))
+          const currentActiveTaskId = currentTasks.find((task) => task.state === 'active')?.id ?? null
+          const runtimeWorkingTaskId =
+            sortedServerTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'working')?.id ?? null
+          const runtimePausedTaskId =
+            sortedServerTasks.find((task) => normalizeTaskRuntimeState(task.state) === 'paused')?.id ?? null
+          const preferredActiveTaskId =
+            runtimeWorkingTaskId ??
+            currentActiveTaskId ??
+            activeFocusSession?.task_id ??
+            sortedServerTasks[0]?.id ??
+            null
 
-        const adapted = adaptTaskApiItemToUi(serverTask, {
-          existingTask,
-          state,
-        })
-          if (!existingTask) {
-            return adapted
+          const nextTasks = sortedServerTasks.map((serverTask) => {
+            const existingTask = currentById.get(serverTask.id)
+            const runtimeState = normalizeTaskRuntimeState(serverTask.state)
+            const state =
+              runtimeState === 'working'
+                ? 'active'
+                : serverTask.id === preferredActiveTaskId
+                  ? 'active'
+                  : existingTask?.state === 'done'
+                    ? 'done'
+                    : 'scheduled'
+
+            const adapted = adaptTaskApiItemToUi(serverTask, {
+              existingTask,
+              state,
+            })
+            if (!existingTask) {
+              return adapted
+            }
+
+            return {
+              ...adapted,
+              state,
+              details: existingTask.details,
+              statusText: existingTask.statusText,
+              // Keep stable order from backend if present; fallback preserves mapped order.
+              id: adapted.id,
+            } satisfies Task
+          })
+
+          if (preferredActiveTaskId && nextTasks.every((task) => task.id !== preferredActiveTaskId) && nextTasks[0]) {
+            nextTasks[0] = { ...nextTasks[0], state: 'active' }
           }
 
-          return {
-            ...adapted,
-            state,
-            details: existingTask.details,
-            statusText: existingTask.statusText,
-            duration: existingTask.duration,
-            // Keep stable order from backend if present; fallback preserves mapped order.
-            id: adapted.id,
-          } satisfies Task
+          return nextTasks
         })
-
-        if (preferredActiveTaskId && nextTasks.every((task) => task.id !== preferredActiveTaskId) && nextTasks[0]) {
-          nextTasks[0] = { ...nextTasks[0], state: 'active' }
+        applyRuntimeFromTaskCollection(sortedServerTasks)
+      } finally {
+        tasksRefreshInFlightCountRef.current = Math.max(0, tasksRefreshInFlightCountRef.current - 1)
+        if (isMountedRef.current) {
+          setIsTasksLoading(tasksRefreshInFlightCountRef.current > 0)
         }
-
-        return nextTasks
-      })
-      applyRuntimeFromTaskCollection(serverTasks)
-    } finally {
-      tasksRefreshInFlightCountRef.current = Math.max(0, tasksRefreshInFlightCountRef.current - 1)
-      if (isMountedRef.current) {
-        setIsTasksLoading(tasksRefreshInFlightCountRef.current > 0)
       }
-    }
+    })()
+
+    tasksRefreshRequestInFlightRef.current = request.finally(() => {
+      tasksRefreshRequestInFlightRef.current = null
+    })
+
+    return tasksRefreshRequestInFlightRef.current
   }
 
   const refreshBootstrapDerivedDataFromServer = async () => {
@@ -1155,6 +1765,7 @@ export function FocusDashboard({
           return false
         }
 
+        console.log('[daily-log:get] response', dailyLog)
         setDailyLogEntries(
           adaptFocusDailyLogToUiEntries(dailyLog, {
             timeZone: dailyLog.time_zone_name || effectiveTimeZone,
@@ -1217,47 +1828,29 @@ export function FocusDashboard({
 
     applyAuthoritativeFocusSnapshot(refreshedBootstrap.server_now_utc, refreshedBootstrap.active_focus_session)
     alignActiveTaskState(refreshedBootstrap.active_focus_session?.task_id ?? null)
-
-    setTaskList((currentTasks) => {
-      const currentById = new Map(currentTasks.map((task) => [task.id, task] as const))
-      const preferredActiveTaskId =
-        refreshedBootstrap.active_focus_session?.task_id ??
-        currentTasks.find((task) => task.state === 'active')?.id ??
-        currentTasks[0]?.id ??
-        null
-
-      const nextTasks = refreshedBootstrap.tasks.map((serverTask) => {
-        const existingTask = currentById.get(serverTask.id)
-        const state =
-          serverTask.id === preferredActiveTaskId
-            ? 'active'
-            : existingTask?.state === 'done'
-              ? 'done'
-              : 'scheduled'
-
-        const adapted = adaptTaskItemToUi(serverTask, { state })
-        if (!existingTask) {
-          return adapted
-        }
-
-        return {
-          ...adapted,
-          state,
-          details: existingTask.details,
-          statusText: existingTask.statusText,
-          duration: existingTask.duration,
-        } satisfies Task
-      })
-
-      if (preferredActiveTaskId && nextTasks.every((task) => task.id !== preferredActiveTaskId) && nextTasks[0]) {
-        nextTasks[0] = { ...nextTasks[0], state: 'active' }
-      }
-
-      return nextTasks
-    })
+    await refreshTasksFromServer()
 
     setSettingsHistoryReloadKey((current) => current + 1)
     return true
+  }
+
+  const ensureDailyLogSnapshotFromPauseResponse = async (response: FocusSessionStateEnvelope) => {
+    const dailyLogTodayRaw = (response.data as { daily_log_today?: unknown }).daily_log_today
+    const hasUsableDailyLogToday = normalizeRuntimeDailyLogTodayPayload(dailyLogTodayRaw) !== null
+    if (hasUsableDailyLogToday) {
+      return true
+    }
+
+    console.warn('[daily-log:pause] pause response missing/invalid daily_log_today, refreshing from server', {
+      daily_log_today: dailyLogTodayRaw ?? null,
+    })
+
+    try {
+      return await refreshBootstrapDerivedDataFromServer()
+    } catch (error) {
+      console.error('Failed to hydrate daily log after pause response without daily_log_today', error)
+      return false
+    }
   }
 
   const handleCreatedTimeEntryInvalidation = async (createdTimeEntryId?: string | null) => {
@@ -1280,6 +1873,10 @@ export function FocusDashboard({
   }
 
   const syncActiveFocusSession = async () => {
+    if (!ENABLE_FOCUS_RUNTIME_HTTP_SYNC) {
+      return
+    }
+
     if (focusActiveEndpointMissingRef.current) {
       return
     }
@@ -1445,7 +2042,7 @@ export function FocusDashboard({
     if (event.type === 'focus_session.stopped') {
       const finalElapsed = event.data.stopped_session_summary?.elapsed_seconds_final
       if (typeof finalElapsed === 'number' && Number.isFinite(finalElapsed)) {
-        setSessionElapsedSeconds(Math.max(0, Math.round(finalElapsed)))
+        setSessionElapsedSeconds(Math.max(0, Math.floor(finalElapsed)))
       }
       setIsFocusRunning(false)
       setActiveFocusSessionMeta(null)
@@ -1768,6 +2365,10 @@ export function FocusDashboard({
   refreshTasksFromServerRef.current = refreshTasksFromServer
 
   useEffect(() => {
+    if (!ENABLE_FOCUS_RUNTIME_HTTP_SYNC) {
+      return
+    }
+
     if (focusRealtimeConnectionState === 'connected') {
       return
     }
@@ -1787,6 +2388,10 @@ export function FocusDashboard({
   }, [activeFocusSession?.id, activeFocusSession?.session_state, focusRealtimeConnectionState])
 
   useEffect(() => {
+    if (!ENABLE_TASKS_BACKGROUND_POLLING) {
+      return
+    }
+
     if (taskcardsRealtimeConnectionState === 'connected') {
       return
     }
@@ -1807,6 +2412,28 @@ export function FocusDashboard({
   const getPreferredTimerModeForTask = (task: Task): FocusTimerMode =>
     task.targetDurationMinutes && task.targetDurationMinutes > 0 ? 'timer' : 'stopwatch'
 
+  const previousDisplayedTaskIdRef = useRef<string | null>(activeTask?.id ?? null)
+  useEffect(() => {
+    const currentTaskId = activeTask?.id ?? null
+    if (currentTaskId === previousDisplayedTaskIdRef.current) {
+      return
+    }
+
+    previousDisplayedTaskIdRef.current = currentTaskId
+
+    if (!activeTask) {
+      return
+    }
+
+    // Default TimePanel mode by selected task only when there is no authoritative session running/paused.
+    if (activeFocusSession || isFocusRunning) {
+      return
+    }
+
+    const preferredMode = getPreferredTimerModeForTask(activeTask)
+    setTimerMode(preferredMode)
+  }, [activeFocusSession, activeTask, isFocusRunning, setTimerMode])
+
   const getTargetSecondsForStart = (task: Task, mode: FocusTimerMode) => {
     if (mode !== 'timer') {
       return null
@@ -1825,13 +2452,54 @@ export function FocusDashboard({
     const seededFromSnapshot = mode === 'timer' ? snapshotByMode?.timer : snapshotByMode?.stopwatch
     const seededFromLiveSession =
       activeFocusSession &&
-      activeFocusSession.task_id === task.id &&
-      activeFocusSession.timer_mode === mode
+        activeFocusSession.task_id === task.id &&
+        activeFocusSession.timer_mode === mode
         ? sessionElapsedSeconds
         : null
 
     const baseValue = seededFromLiveSession ?? seededFromSnapshot ?? 0
-    return Math.max(0, Math.round(baseValue))
+    return Math.max(0, Math.floor(baseValue))
+  }
+  const getElapsedSecondsAtClientEvent = (
+    session: ActiveFocusSession | null | undefined,
+    eventAtUtc: string,
+    fallbackElapsedSeconds: number,
+  ) => {
+    const fallback = Math.max(0, Math.floor(fallbackElapsedSeconds))
+    if (!session) {
+      return fallback
+    }
+
+    const baseElapsedSeconds =
+      typeof session.elapsed_seconds_total === 'number' && Number.isFinite(session.elapsed_seconds_total)
+        ? Math.max(0, Math.floor(session.elapsed_seconds_total))
+        : 0
+    if (!isSessionRunningState(session.session_state)) {
+      return Math.max(baseElapsedSeconds, fallback)
+    }
+
+    const runningAnchorUtc = session.last_resumed_at_utc ?? session.started_at_utc
+    if (typeof runningAnchorUtc !== 'string' || !runningAnchorUtc.trim()) {
+      return Math.max(baseElapsedSeconds, fallback)
+    }
+
+    const eventAtMs = Date.parse(eventAtUtc)
+    const runningAnchorMs = Date.parse(runningAnchorUtc)
+    if (!Number.isFinite(eventAtMs) || !Number.isFinite(runningAnchorMs)) {
+      return Math.max(baseElapsedSeconds, fallback)
+    }
+
+    const deltaSeconds = roundElapsedSecondsBetweenMs(runningAnchorMs, eventAtMs)
+    const elapsedAtEvent = Math.max(baseElapsedSeconds + deltaSeconds, fallback)
+    if (
+      session.timer_mode === 'timer' &&
+      typeof session.target_seconds === 'number' &&
+      Number.isFinite(session.target_seconds)
+    ) {
+      return Math.max(0, Math.min(Math.max(0, Math.floor(session.target_seconds)), elapsedAtEvent))
+    }
+
+    return elapsedAtEvent
   }
 
   const resetCountersAfterStop = (taskId: string | null | undefined, sessionMode?: FocusTimerMode | null) => {
@@ -1845,6 +2513,129 @@ export function FocusDashboard({
     }
 
     resetElapsedSnapshotsForTaskModes(taskId, Array.from(modes))
+  }
+
+  const getTaskTrackedSecondsSnapshot = (taskId: string | null | undefined) => {
+    if (!taskId) {
+      return 0
+    }
+
+    const snapshotTask = taskList.find((task) => task.id === taskId)
+    if (!snapshotTask) {
+      return 0
+    }
+
+    return parseDurationLabelToSeconds(snapshotTask.duration)
+  }
+
+  const getLiveTrackedDeltaSecondsForTask = (
+    taskId: string | null | undefined,
+    options: {
+      session?: ActiveFocusSession | null
+      elapsedSeconds?: number
+      includeLocalFallback?: boolean
+    } = {},
+  ) => {
+    if (!taskId) {
+      return 0
+    }
+
+    const normalizedElapsedSeconds =
+      typeof options.elapsedSeconds === 'number' && Number.isFinite(options.elapsedSeconds)
+        ? Math.max(0, Math.floor(options.elapsedSeconds))
+        : Math.max(0, Math.floor(sessionElapsedSeconds))
+
+    const session = options.session ?? activeFocusSession
+    if (session && session.task_id === taskId && isSessionRunningState(session.session_state)) {
+      return normalizedElapsedSeconds
+    }
+
+    if (options.includeLocalFallback) {
+      return normalizedElapsedSeconds
+    }
+
+    return 0
+  }
+
+  const getOptimisticTrackedSecondsAfterFreeze = (
+    taskId: string | null | undefined,
+    options: {
+      session?: ActiveFocusSession | null
+      elapsedSeconds?: number
+      includeLocalFallback?: boolean
+    } = {},
+  ) => {
+    if (!taskId) {
+      return 0
+    }
+
+    const trackedBeforeFreezeSeconds = getTaskTrackedSecondsSnapshot(taskId)
+    const normalizedElapsedSeconds =
+      typeof options.elapsedSeconds === 'number' && Number.isFinite(options.elapsedSeconds)
+        ? Math.max(0, Math.floor(options.elapsedSeconds))
+        : Math.max(0, Math.floor(sessionElapsedSeconds))
+    const liveTrackedDeltaSeconds = getLiveTrackedDeltaSecondsForTask(taskId, {
+      session: options.session,
+      elapsedSeconds: normalizedElapsedSeconds,
+      includeLocalFallback: options.includeLocalFallback ?? false,
+    })
+
+    return Math.max(
+      trackedBeforeFreezeSeconds,
+      trackedBeforeFreezeSeconds + liveTrackedDeltaSeconds,
+      normalizedElapsedSeconds,
+    )
+  }
+
+  const ensureTaskTrackedDurationAtLeast = (taskId: string | null | undefined, minimumTrackedSeconds: number) => {
+    if (!taskId || !Number.isFinite(minimumTrackedSeconds)) {
+      return
+    }
+
+    const normalizedMinimumTrackedSeconds = Math.max(0, Math.floor(minimumTrackedSeconds))
+    setTaskList((currentTasks) => {
+      let changed = false
+      const nextTasks = currentTasks.map((task) => {
+        if (task.id !== taskId) {
+          return task
+        }
+
+        const currentTrackedSeconds = parseDurationLabelToSeconds(task.duration)
+        if (currentTrackedSeconds >= normalizedMinimumTrackedSeconds) {
+          return task
+        }
+
+        changed = true
+        return {
+          ...task,
+          duration: formatSecondsHms(normalizedMinimumTrackedSeconds),
+        }
+      })
+
+      return changed ? nextTasks : currentTasks
+    })
+  }
+
+  const syncTaskVersionFromConflict = (taskId: string | null | undefined, version: number | null | undefined) => {
+    if (!taskId || typeof version !== 'number' || !Number.isFinite(version)) {
+      return
+    }
+
+    const normalizedVersion = Math.max(1, Math.floor(version))
+    setTaskList((currentTasks) =>
+      currentTasks.map((task) => (task.id === taskId ? { ...task, version: normalizedVersion } : task)),
+    )
+
+    const snapshot = latestServerTasksByIdRef.current[taskId]
+    if (snapshot) {
+      latestServerTasksByIdRef.current = {
+        ...latestServerTasksByIdRef.current,
+        [taskId]: {
+          ...snapshot,
+          version: normalizedVersion,
+        },
+      }
+    }
   }
 
   const handleFocusSessionApiError = async (
@@ -1875,25 +2666,165 @@ export function FocusDashboard({
     return { handled: false }
   }
 
+  const recoverFromStartConflict = async (session: ActiveFocusSession | null, taskToStart: Task) => {
+    let sessionToRecover = session
+    if (!sessionToRecover) {
+      try {
+        sessionToRecover = await ensureAuthoritativeSessionForCommand()
+      } catch (hydrateError) {
+        const hydrateHandled = await handleFocusSessionApiError(hydrateError, { refreshTasksOnNotFound: true })
+        if (!hydrateHandled.handled) {
+          console.error('Failed to hydrate active focus session while recovering start conflict', hydrateError)
+        }
+        return hydrateHandled.handled
+      }
+    }
+
+    if (!sessionToRecover) {
+      const fallbackExpectedVersion =
+        typeof taskToStart.version === 'number' && Number.isFinite(taskToStart.version)
+          ? Math.max(1, Math.floor(taskToStart.version))
+          : null
+      if (fallbackExpectedVersion !== null) {
+        try {
+          const resumeEventAtUtc = new Date().toISOString()
+          const resumeResponse = await focusSessionCommand('resume', {
+            task_id: taskToStart.id,
+            expected_version: fallbackExpectedVersion,
+            event_at_utc: resumeEventAtUtc,
+          })
+          if (!resumeResponse) {
+            onSignOut?.()
+            return true
+          }
+
+          applyFocusSessionEnvelope(resumeResponse)
+          setIsFocusRunning(true)
+          if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== taskToStart.id) {
+            runNonBlockingFocusSideEffect(() => startFocusSessionMeta(taskToStart))
+          }
+          return true
+        } catch (resumeFallbackError) {
+          const resumeFallbackHandled = await handleFocusSessionApiError(resumeFallbackError, { refreshTasksOnNotFound: true })
+          if (!resumeFallbackHandled.handled) {
+            console.error(
+              'Failed fallback resume while recovering start conflict',
+              { taskId: taskToStart.id, fallbackExpectedVersion },
+              resumeFallbackError,
+            )
+          }
+          if (resumeFallbackHandled.handled && resumeFallbackHandled.kind === 'conflict') {
+            const conflictSession = resumeFallbackHandled.conflict.data.active_focus_session
+            if (conflictSession) {
+              applyFocusSessionEnvelope({
+                data: {
+                  server_now_utc: resumeFallbackHandled.conflict.data.server_now_utc || new Date().toISOString(),
+                  active_focus_session: conflictSession,
+                },
+              })
+              alignActiveTaskState(conflictSession.task_id)
+              return true
+            }
+          }
+        }
+      }
+    }
+
+    if (!sessionToRecover) {
+      return false
+    }
+
+    if (sessionToRecover.task_id !== taskToStart.id) {
+      alignActiveTaskState(sessionToRecover.task_id)
+      return true
+    }
+
+    setTimerMode(sessionToRecover.timer_mode)
+    if (isSessionRunningState(sessionToRecover.session_state)) {
+      setIsFocusRunning(true)
+      if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== taskToStart.id) {
+        runNonBlockingFocusSideEffect(() => startFocusSessionMeta(taskToStart))
+      }
+      return true
+    }
+
+    try {
+      const resumeEventAtUtc = new Date().toISOString()
+      const resumeResponse = await focusSessionCommand('resume', {
+        task_id: sessionToRecover.task_id,
+        expected_version: Math.max(1, Math.floor(sessionToRecover.version)),
+        event_at_utc: resumeEventAtUtc,
+      })
+      if (!resumeResponse) {
+        onSignOut?.()
+        return true
+      }
+
+      applyFocusSessionEnvelope(resumeResponse)
+      setIsFocusRunning(true)
+      if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== taskToStart.id) {
+        runNonBlockingFocusSideEffect(() => startFocusSessionMeta(taskToStart))
+      }
+      return true
+    } catch (resumeError) {
+      const resumeHandled = await handleFocusSessionApiError(resumeError, { refreshTasksOnNotFound: true })
+      if (!resumeHandled.handled) {
+        console.error('Failed to recover start conflict via resume', { taskId: taskToStart.id }, resumeError)
+      }
+      return true
+    }
+  }
+
   const localizedTaskList = useMemo(() => taskList.map((task) => localizeStaticTaskTitle(task, locale)), [locale, taskList])
   const activeTaskDisplay = useMemo(
     () => (activeTask ? localizeStaticTaskTitle(activeTask, locale) : null),
     [activeTask, locale],
   )
+  const canStopWithoutAuthoritativeSession = useMemo(() => {
+    if (!activeTask) {
+      return false
+    }
+
+    const runtimeSnapshot = latestServerTasksByIdRef.current[activeTask.id] ?? null
+    const runtimeState = normalizeTaskRuntimeState(runtimeSnapshot?.state)
+    return runtimeState === 'working' || runtimeState === 'paused'
+  }, [activeTask, taskList])
+  const canStopFocus =
+    Boolean(activeFocusSession) || sessionElapsedSeconds > 0 || canStopWithoutAuthoritativeSession
   const isActiveTaskCooldownActive = Boolean(activeTask && isTaskCooldownActive(activeTask.id) && !isFocusRunning)
   const activeWorkspaceAccentColor = activeTask?.colorTag ?? 'blue'
   const workspaceAccentRgb = workspaceAccentRgbByColor[activeWorkspaceAccentColor]
   const carouselTaskList = useMemo(
     () =>
-      localizedTaskList.map((task) =>
-        activeTask && task.id === activeTask.id
-          ? {
-            ...task,
-            duration: timerDisplayLabel,
-          }
-          : task,
-      ),
-    [activeTask, localizedTaskList, timerDisplayLabel],
+      localizedTaskList.map((task) => {
+        const isSelectedTask = Boolean(activeTask && task.id === activeTask.id)
+        const baseTrackedSeconds = parseDurationLabelToSeconds(task.duration)
+        const liveTrackedSeconds =
+          isSelectedTask && isFocusRunning
+            ? getLiveTrackedDeltaSecondsForTask(task.id, { includeLocalFallback: true })
+            : 0
+        const nextTrackedSeconds = baseTrackedSeconds + liveTrackedSeconds
+        const nextDurationLabel = formatSecondsHms(nextTrackedSeconds)
+
+        if (nextDurationLabel === task.duration) {
+          return task
+        }
+
+        return {
+          ...task,
+          duration: nextDurationLabel,
+        }
+      }),
+    [
+      activeFocusSession?.elapsed_seconds_total,
+      activeFocusSession?.id,
+      activeFocusSession?.session_state,
+      activeFocusSession?.task_id,
+      activeTask,
+      isFocusRunning,
+      localizedTaskList,
+      sessionElapsedSeconds,
+    ],
   )
   const sidebarLogEntries = useMemo(() => {
     if (!activeUntrackedSession) {
@@ -1918,12 +2849,16 @@ export function FocusDashboard({
   }, [activeUntrackedSession, copy.untrackedTime, localizedDailyLogEntries])
 
   useEffect(() => {
-    void syncActiveFocusSession()
+    if (ENABLE_FOCUS_RUNTIME_HTTP_SYNC) {
+      void syncActiveFocusSession()
+    }
     void refreshTasksFromServer()
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        void syncActiveFocusSession()
+        if (ENABLE_FOCUS_RUNTIME_HTTP_SYNC) {
+          void syncActiveFocusSession()
+        }
         void refreshTasksFromServer()
       }
     }
@@ -1959,6 +2894,10 @@ export function FocusDashboard({
   }, [activeFocusSession, effectiveTimeZone, setActiveFocusSessionMeta])
 
   useEffect(() => {
+    if (!ENABLE_FOCUS_RUNTIME_HEARTBEAT) {
+      return
+    }
+
     if (!activeFocusSession || !isSessionRunningState(activeFocusSession.session_state)) {
       return
     }
@@ -1997,12 +2936,20 @@ export function FocusDashboard({
     }
 
     if (sessionElapsedSeconds >= activeTaskTargetSeconds) {
-      const requestKey = `${activeFocusSession.id}:${activeFocusSession.version}`
+      const sessionTaskId = activeFocusSession.task_id
+      const requestKey = `${sessionTaskId}:${Math.max(1, Math.floor(activeFocusSession.version))}`
       if (timerCompleteStopRequestKeyRef.current === requestKey) {
         return
       }
 
       const elapsedBeforeStop = sessionElapsedSeconds
+      const trackedBeforeStopSeconds = getTaskTrackedSecondsSnapshot(sessionTaskId)
+      const elapsedAtTimerCompletionSeconds = Math.max(0, Math.floor(activeTaskTargetSeconds))
+      const optimisticTrackedAfterStopSeconds = getOptimisticTrackedSecondsAfterFreeze(sessionTaskId, {
+        session: activeFocusSession,
+        elapsedSeconds: elapsedAtTimerCompletionSeconds,
+      })
+      const rollbackSession = activeFocusSession
 
         ; (async () => {
           if (isFocusCommandInFlightRef.current) {
@@ -2012,9 +2959,27 @@ export function FocusDashboard({
           timerCompleteStopRequestKeyRef.current = requestKey
           isFocusCommandInFlightRef.current = true
           try {
+            // If the effect runs late, backdate by the whole-second overrun so backend closes at timer-complete instant.
+            const overrunSeconds = Math.max(0, sessionElapsedSeconds - activeTaskTargetSeconds)
+            const timerCompletedAtMs = Date.now() - overrunSeconds * 1000
+            const timerCompletedStopEventAtUtc = new Date(timerCompletedAtMs).toISOString()
+            ensureTaskTrackedDurationAtLeast(sessionTaskId, optimisticTrackedAfterStopSeconds)
+            seedElapsedSnapshotForTaskMode(sessionTaskId, 'timer', elapsedAtTimerCompletionSeconds)
+            applyAuthoritativeFocusSnapshot(timerCompletedStopEventAtUtc, {
+              ...activeFocusSession,
+              session_state: 'paused',
+              elapsed_seconds_total: elapsedAtTimerCompletionSeconds,
+              last_paused_at_utc: timerCompletedStopEventAtUtc,
+            })
+            setSessionElapsedSeconds(elapsedAtTimerCompletionSeconds)
+            setIsFocusRunning(false)
+            startTaskCooldown(sessionTaskId)
+            triggerTimerEndAlarm()
             const response = await focusSessionCommand('stop', {
+              task_id: sessionTaskId,
               expected_version: activeFocusSession.version,
-              stop_reason: 'timer_completed',
+              event_at_utc: timerCompletedStopEventAtUtc,
+              stop_reason: 'stopped',
             })
 
             if (!response) {
@@ -2031,19 +2996,36 @@ export function FocusDashboard({
               Math.min(elapsedBeforeStop, activeTaskTargetSeconds)
             setSessionElapsedSeconds(Math.max(0, completedSeconds))
             setIsFocusRunning(false)
-            startTaskCooldown(activeFocusSession.task_id)
+            ensureTaskTrackedDurationAtLeast(
+              sessionTaskId,
+              Math.max(
+                optimisticTrackedAfterStopSeconds,
+                trackedBeforeStopSeconds,
+                trackedBeforeStopSeconds + Math.max(0, Math.floor(completedSeconds)),
+              ),
+            )
             if (!createdTimeEntryId || !didRefreshFromServer) {
-              commitCurrentFocusSession(completedSeconds)
+              commitCurrentFocusSession(completedSeconds, { baselineTrackedSeconds: trackedBeforeStopSeconds })
             } else {
               setActiveFocusSessionMeta(null)
             }
-            triggerTimerEndAlarm()
           } catch (error) {
             const handled = await handleFocusSessionApiError(error)
             if (!handled.handled) {
-              console.error('Failed to stop focus session after timer completion', error)
+              if (error instanceof ApiHttpError && error.status === 422) {
+                console.warn('Auto timer-complete stop was rejected by backend; skipping further automatic retries for this session version.', {
+                  status: error.status,
+                  body: error.body,
+                })
+              } else {
+                console.error('Failed to stop focus session after timer completion', error)
+                clearTaskCooldown(sessionTaskId)
+                applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? new Date().toISOString(), rollbackSession)
+                setSessionElapsedSeconds(Math.max(0, Math.floor(elapsedBeforeStop)))
+                // Allow retry for transient/non-validation failures.
+                timerCompleteStopRequestKeyRef.current = null
+              }
             }
-            timerCompleteStopRequestKeyRef.current = null
           } finally {
             isFocusCommandInFlightRef.current = false
           }
@@ -2053,8 +3035,15 @@ export function FocusDashboard({
     activeFocusSession,
     activeTaskTargetSeconds,
     handleFocusSessionApiError,
+    lastServerNowUtc,
     isFocusRunning,
     onSignOut,
+    applyAuthoritativeFocusSnapshot,
+    clearTaskCooldown,
+    ensureTaskTrackedDurationAtLeast,
+    getOptimisticTrackedSecondsAfterFreeze,
+    getTaskTrackedSecondsSnapshot,
+    seedElapsedSnapshotForTaskMode,
     sessionElapsedSeconds,
     timerMode,
   ])
@@ -2131,14 +3120,39 @@ export function FocusDashboard({
   const handleFinishUntrackedSession = async () => {
     const currentSession = activeUntrackedSession
     if (!currentSession) {
+      shouldAwaitBackendUntrackedCloseRef.current = false
       return
     }
 
     const endedAtMs = Date.now()
     const elapsedSeconds = Math.max(0, Math.floor((endedAtMs - currentSession.startedAtMs) / 1000))
     setActiveUntrackedSession(null)
+    const shouldAwaitBackendUntrackedClose = shouldAwaitBackendUntrackedCloseRef.current
+    shouldAwaitBackendUntrackedCloseRef.current = false
 
     if (elapsedSeconds <= 0) {
+      return
+    }
+
+    if (shouldAwaitBackendUntrackedClose) {
+      console.log('[daily-log:untracked] awaiting backend idle entry', {
+        started_at_ms: currentSession.startedAtMs,
+        ended_at_ms: endedAtMs,
+        elapsed_seconds_local: elapsedSeconds,
+      })
+      runNonBlockingFocusSideEffect(async () => {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(() => resolve(), 250)
+        })
+        try {
+          const refreshed = await refreshBootstrapDerivedDataFromServer()
+          console.log('[daily-log:untracked] backend refresh after idle->working close', {
+            refreshed,
+          })
+        } catch (error) {
+          console.error('Failed to refresh daily log after waiting backend idle entry close', error)
+        }
+      })
       return
     }
 
@@ -2162,6 +3176,10 @@ export function FocusDashboard({
         return
       }
 
+      if (!ENABLE_UNTRACKED_TIME_ENTRIES_PERSIST || timeEntriesEndpointMissingRef.current) {
+        return
+      }
+
       const created = await createTimeEntry(payload)
       if (!created) {
         onSignOut?.()
@@ -2170,19 +3188,45 @@ export function FocusDashboard({
 
       await handleCreatedTimeEntryInvalidation(created.id)
     } catch (error) {
-      if (error instanceof ApiHttpError && error.status === 401) {
-        onSignOut?.()
-        return
+      if (error instanceof ApiHttpError) {
+        if (error.status === 401) {
+          onSignOut?.()
+          return
+        }
+
+        if (error.status === 404) {
+          timeEntriesEndpointMissingRef.current = true
+          if (!hasLoggedMissingTimeEntriesEndpointRef.current) {
+            hasLoggedMissingTimeEntriesEndpointRef.current = true
+            console.warn(
+              '[focus-untracked] Skipping /api/v1/time-entries persistence because endpoint is unavailable (404).',
+            )
+          }
+          return
+        }
       }
 
       console.error('Failed to persist untracked time entry', error)
     }
   }
-  const commitCurrentFocusSession = (elapsedSecondsOverride?: number) => {
+  const scheduleFinishUntrackedSession = () => {
+    shouldAwaitBackendUntrackedCloseRef.current = true
+    window.setTimeout(() => {
+      runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
+    }, 0)
+  }
+  const commitCurrentFocusSession = (
+    elapsedSecondsOverride?: number,
+    options: { baselineTrackedSeconds?: number } = {},
+  ) => {
     const elapsedSeconds =
       typeof elapsedSecondsOverride === 'number' && Number.isFinite(elapsedSecondsOverride)
-        ? Math.max(0, Math.round(elapsedSecondsOverride))
+        ? Math.max(0, Math.floor(elapsedSecondsOverride))
         : sessionElapsedSeconds
+    const baselineTrackedSeconds =
+      typeof options.baselineTrackedSeconds === 'number' && Number.isFinite(options.baselineTrackedSeconds)
+        ? Math.max(0, Math.floor(options.baselineTrackedSeconds))
+        : null
 
     if (!activeTask || elapsedSeconds <= 0) {
       return
@@ -2203,7 +3247,22 @@ export function FocusDashboard({
 
     setDailyLogEntries((currentEntries) => sortLogEntriesByTime([...currentEntries, nextEntry]))
     setTaskList((currentTasks) =>
-      currentTasks.map((task) => (task.id === activeTask.id ? { ...task, duration: durationLabel } : task)),
+      currentTasks.map((task) =>
+        task.id === activeTask.id
+          ? (() => {
+            const currentTrackedSeconds = parseDurationLabelToSeconds(task.duration)
+            const proposedTrackedSeconds =
+              baselineTrackedSeconds === null
+                ? currentTrackedSeconds + elapsedSeconds
+                : Math.max(currentTrackedSeconds, baselineTrackedSeconds + elapsedSeconds)
+            const safeTrackedSeconds = Math.max(currentTrackedSeconds, proposedTrackedSeconds)
+            return {
+              ...task,
+              duration: formatSecondsHms(safeTrackedSeconds),
+            }
+          })()
+          : task,
+      ),
     )
     setActiveFocusSessionMeta(null)
   }
@@ -2217,23 +3276,239 @@ export function FocusDashboard({
 
     return candidateMode
   }
-  const activateTaskAndStartNewCount = async (selectedTask: Task, requestedMode?: FocusTimerMode) => {
+  const activateTaskAndStartNewCount = async (
+    selectedTask: Task,
+    requestedMode?: FocusTimerMode,
+    requestedStartTargetSeconds?: number | null,
+  ) => {
     if (isFocusCommandInFlightRef.current) {
       return
     }
 
     runNonBlockingFocusSideEffect(stopTimerEndAlarm)
-    runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
+    scheduleFinishUntrackedSession()
 
-    const nextMode = resolveTimerModeForTask(selectedTask, requestedMode)
-    const nextTargetSeconds = getTargetSecondsForStart(selectedTask, nextMode)
+    const selectedTaskRuntimeSnapshot = latestServerTasksByIdRef.current[selectedTask.id] ?? null
+    const selectedTaskRuntimeState = normalizeTaskRuntimeState(selectedTaskRuntimeSnapshot?.state)
+    const selectedTaskRuntimeMode: FocusTimerMode =
+      selectedTaskRuntimeSnapshot?.active_mode === 'timer' ? 'timer' : 'stopwatch'
+    const selectedTaskVersionForRuntimeCommand =
+      activeFocusSession && activeFocusSession.task_id === selectedTask.id
+        ? Math.max(1, Math.floor(activeFocusSession.version))
+        : typeof selectedTaskRuntimeSnapshot?.version === 'number' && Number.isFinite(selectedTaskRuntimeSnapshot.version)
+          ? Math.max(1, Math.floor(selectedTaskRuntimeSnapshot.version))
+          : typeof selectedTask.version === 'number' && Number.isFinite(selectedTask.version)
+            ? Math.max(1, Math.floor(selectedTask.version))
+            : null
+
+    let nextMode = resolveTimerModeForTask(
+      selectedTask,
+      selectedTaskRuntimeState && selectedTaskRuntimeState !== 'idle' ? selectedTaskRuntimeMode : requestedMode,
+    )
+    const normalizedRequestedStartTargetSeconds =
+      typeof requestedStartTargetSeconds === 'number' &&
+        Number.isFinite(requestedStartTargetSeconds) &&
+        requestedStartTargetSeconds > 0
+        ? Math.min(24 * 60 * 60, Math.floor(requestedStartTargetSeconds))
+        : null
+    const nextTargetSeconds =
+      nextMode === 'timer'
+        ? (normalizedRequestedStartTargetSeconds ?? getTargetSecondsForStart(selectedTask, 'timer'))
+        : null
     let nextElapsedSeedSeconds = getElapsedSeedForTaskMode(selectedTask, nextMode)
+    if (selectedTaskRuntimeSnapshot) {
+      const runtimeSnapshotElapsed = resolveElapsedFromRuntimeTaskSnapshot(selectedTaskRuntimeSnapshot, nextMode)
+      if (selectedTaskRuntimeState && selectedTaskRuntimeState !== 'idle') {
+        nextElapsedSeedSeconds = Math.max(nextElapsedSeedSeconds, runtimeSnapshotElapsed)
+      }
+    }
     if (nextMode === 'timer' && nextTargetSeconds && nextElapsedSeedSeconds >= nextTargetSeconds) {
       nextElapsedSeedSeconds = 0
     }
     const elapsedBeforeSwitch = activeFocusSession ? sessionElapsedSeconds : 0
 
     setWorkspaceGlowPulseKey((current) => current + 1)
+
+    const shouldResumeSelectedTask =
+      selectedTaskRuntimeState === 'paused' ||
+      Boolean(
+        activeFocusSession &&
+        activeFocusSession.task_id === selectedTask.id &&
+        !isSessionRunningState(activeFocusSession.session_state),
+      )
+    console.log('[diagnostic:taskcard-play] decision', {
+      taskId: selectedTask.id,
+      runtimeState: selectedTaskRuntimeState,
+      runtimeMode: selectedTaskRuntimeMode,
+      requestedMode: requestedMode ?? null,
+      resolvedMode: nextMode,
+      shouldResumeSelectedTask,
+      expectedVersion: selectedTaskVersionForRuntimeCommand,
+    })
+    if (shouldResumeSelectedTask && selectedTaskVersionForRuntimeCommand !== null) {
+      isFocusCommandInFlightRef.current = true
+      const resumeEventAtUtc = new Date().toISOString()
+      const rollbackWasRunning = isFocusRunning
+      const rollbackElapsedSeconds = sessionElapsedSeconds
+      const rollbackTimerMode = timerMode
+      const rollbackSession =
+        (activeFocusSession && activeFocusSession.task_id === selectedTask.id ? activeFocusSession : null) ??
+        (selectedTaskRuntimeSnapshot ? buildDerivedFocusSessionFromTask(selectedTaskRuntimeSnapshot) : null)
+      const optimisticResumeElapsedSeconds =
+        nextMode === 'timer' && nextTargetSeconds
+          ? Math.max(0, Math.min(Math.floor(nextTargetSeconds), Math.floor(nextElapsedSeedSeconds)))
+          : Math.max(0, Math.floor(nextElapsedSeedSeconds))
+
+      alignActiveTaskState(selectedTask.id)
+      if (rollbackSession) {
+        applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? resumeEventAtUtc, {
+          ...rollbackSession,
+          timer_mode: nextMode,
+          target_seconds: nextMode === 'timer' ? (nextTargetSeconds ?? rollbackSession.target_seconds ?? null) : null,
+          session_state: 'working',
+          last_resumed_at_utc: resumeEventAtUtc,
+          last_paused_at_utc: null,
+          elapsed_seconds_total: optimisticResumeElapsedSeconds,
+        })
+      } else {
+        setTimerMode(nextMode)
+        setSessionElapsedSeconds(optimisticResumeElapsedSeconds)
+        setIsFocusRunning(true)
+      }
+      if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+        runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+      }
+
+      try {
+        console.log('[diagnostic:taskcard-play] request resume', {
+          task_id: selectedTask.id,
+          expected_version: selectedTaskVersionForRuntimeCommand,
+          event_at_utc: resumeEventAtUtc,
+        })
+        const resumeResponse = await focusSessionCommand('resume', {
+          task_id: selectedTask.id,
+          expected_version: selectedTaskVersionForRuntimeCommand,
+          event_at_utc: resumeEventAtUtc,
+        })
+        if (!resumeResponse) {
+          onSignOut?.()
+          return
+        }
+
+        applyFocusSessionEnvelope(resumeResponse)
+        setIsFocusRunning(true)
+        if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+          runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+        }
+      } catch (error) {
+        if (error instanceof ApiHttpError && error.status === 409) {
+          console.warn('[diagnostic:taskcard-play] resume conflict', {
+            taskId: selectedTask.id,
+            expectedVersion: selectedTaskVersionForRuntimeCommand,
+            status: error.status,
+            body: error.body,
+          })
+        }
+        const versionConflict = getTaskVersionConflictFromApiError(error)
+        const conflictTaskId =
+          typeof versionConflict?.data.current.id === 'string' && versionConflict.data.current.id.trim()
+            ? versionConflict.data.current.id
+            : selectedTask.id
+        const conflictVersion =
+          typeof versionConflict?.data.current.version === 'number' && Number.isFinite(versionConflict.data.current.version)
+            ? Math.max(1, Math.floor(versionConflict.data.current.version))
+            : null
+        if (conflictVersion !== null && conflictTaskId === selectedTask.id) {
+          syncTaskVersionFromConflict(selectedTask.id, conflictVersion)
+          try {
+            const retryResumeAtUtc = new Date().toISOString()
+            const retryResponse = await focusSessionCommand('resume', {
+              task_id: selectedTask.id,
+              expected_version: conflictVersion,
+              event_at_utc: retryResumeAtUtc,
+            })
+            if (!retryResponse) {
+              onSignOut?.()
+              return
+            }
+
+            applyFocusSessionEnvelope(retryResponse)
+            setIsFocusRunning(true)
+            if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+              runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+            }
+            return
+          } catch (retryError) {
+            error = retryError
+          }
+        }
+
+        const handled = await handleFocusSessionApiError(error, { refreshTasksOnNotFound: true })
+        if (handled.handled && handled.kind === 'conflict') {
+          const conflictSession = handled.conflict.data.active_focus_session
+          if (
+            conflictSession &&
+            conflictSession.task_id === selectedTask.id &&
+            !isSessionRunningState(conflictSession.session_state)
+          ) {
+            try {
+              const retryResumeAtUtc = new Date().toISOString()
+              console.log('[diagnostic:taskcard-play] request resume(retry_from_conflict)', {
+                task_id: selectedTask.id,
+                expected_version: conflictSession.version,
+                event_at_utc: retryResumeAtUtc,
+              })
+              const retryResponse = await focusSessionCommand('resume', {
+                task_id: selectedTask.id,
+                expected_version: Math.max(1, Math.floor(conflictSession.version)),
+                event_at_utc: retryResumeAtUtc,
+              })
+              if (!retryResponse) {
+                onSignOut?.()
+                return
+              }
+
+              applyFocusSessionEnvelope(retryResponse)
+              setIsFocusRunning(true)
+              if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+                runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+              }
+              return
+            } catch (retryConflictError) {
+              if (retryConflictError instanceof ApiHttpError && retryConflictError.status === 409) {
+                console.warn('[diagnostic:taskcard-play] resume conflict(retry_from_conflict)', {
+                  taskId: selectedTask.id,
+                  status: retryConflictError.status,
+                  body: retryConflictError.body,
+                })
+              }
+              error = retryConflictError
+            }
+          }
+          if (!conflictSession) {
+            setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+            setTimerMode(rollbackTimerMode)
+            setIsFocusRunning(rollbackWasRunning)
+          }
+          return
+        }
+        if (!handled.handled) {
+          if (rollbackSession) {
+            applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? resumeEventAtUtc, {
+              ...rollbackSession,
+              elapsed_seconds_total: Math.max(0, Math.floor(rollbackElapsedSeconds)),
+            })
+          }
+          setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+          setTimerMode(rollbackTimerMode)
+          setIsFocusRunning(rollbackWasRunning)
+          console.error('Failed to resume selected paused task before start flow', { taskId: selectedTask.id }, error)
+        }
+      } finally {
+        isFocusCommandInFlightRef.current = false
+      }
+      return
+    }
 
     if (!activeFocusSession) {
       setTaskList((currentTasks) =>
@@ -2249,16 +3524,29 @@ export function FocusDashboard({
           return task
         }),
       )
-      setSessionElapsedSeconds(0)
+      const rollbackWasRunning = isFocusRunning
+      const rollbackElapsedSeconds = sessionElapsedSeconds
+      const rollbackTimerMode = timerMode
+      setSessionElapsedSeconds(nextElapsedSeedSeconds)
       setTimerMode(nextMode)
+      setIsFocusRunning(true)
+      if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+        runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+      }
 
       isFocusCommandInFlightRef.current = true
       try {
+        const startEventAtUtc = new Date().toISOString()
+        console.log('[diagnostic:taskcard-play] request start', {
+          task_id: selectedTask.id,
+          timer_mode: nextMode,
+          event_at_utc: startEventAtUtc,
+        })
         const response = await startFocusSession({
           task_id: selectedTask.id,
           timer_mode: nextMode,
-          target_seconds: nextTargetSeconds,
           elapsed_seconds_seed: nextElapsedSeedSeconds,
+          event_at_utc: startEventAtUtc,
         })
 
         if (!response) {
@@ -2271,8 +3559,142 @@ export function FocusDashboard({
         setIsFocusRunning(true)
       } catch (error) {
         const handled = await handleFocusSessionApiError(error, { refreshTasksOnNotFound: true })
+        if (handled.handled && handled.kind === 'conflict') {
+          const recovered = await recoverFromStartConflict(handled.conflict.data.active_focus_session, selectedTask)
+          if (recovered) {
+            return
+          }
+        }
+
         if (!handled.handled) {
+          setIsFocusRunning(rollbackWasRunning)
+          setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+          setTimerMode(rollbackTimerMode)
           console.error('Failed to start focus session for selected task', { taskId: selectedTask.id }, error)
+        }
+      } finally {
+        isFocusCommandInFlightRef.current = false
+      }
+
+      return
+    }
+
+    if (!isSessionRunningState(activeFocusSession.session_state)) {
+      if (activeFocusSession.task_id !== selectedTask.id) {
+        isFocusCommandInFlightRef.current = true
+        const rollbackWasRunning = isFocusRunning
+        const rollbackElapsedSeconds = sessionElapsedSeconds
+        const rollbackTimerMode = timerMode
+        const rollbackSession = activeFocusSession
+
+        setTaskList((currentTasks) =>
+          currentTasks.map((task) => {
+            if (task.id === selectedTask.id) {
+              return { ...task, state: 'active' }
+            }
+
+            if (task.state === 'active') {
+              return { ...task, state: 'scheduled' }
+            }
+
+            return task
+          }),
+        )
+        setSessionElapsedSeconds(nextElapsedSeedSeconds)
+        setTimerMode(nextMode)
+        setIsFocusRunning(true)
+        if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+          runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+        }
+
+        try {
+          const startEventAtUtc = new Date().toISOString()
+          const response = await startFocusSession({
+            task_id: selectedTask.id,
+            timer_mode: nextMode,
+            elapsed_seconds_seed: nextElapsedSeedSeconds,
+            event_at_utc: startEventAtUtc,
+          })
+
+          if (!response) {
+            onSignOut?.()
+            return
+          }
+
+          applyFocusSessionEnvelope(response)
+          runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+          setIsFocusRunning(true)
+        } catch (error) {
+          const handled = await handleFocusSessionApiError(error, { refreshTasksOnNotFound: true })
+          if (handled.handled && handled.kind === 'conflict') {
+            const recovered = await recoverFromStartConflict(handled.conflict.data.active_focus_session, selectedTask)
+            if (recovered) {
+              return
+            }
+          }
+
+          if (!handled.handled) {
+            applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? new Date().toISOString(), rollbackSession)
+            alignActiveTaskState(rollbackSession.task_id)
+            setIsFocusRunning(rollbackWasRunning)
+            setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+            setTimerMode(rollbackTimerMode)
+            console.error('Failed to start focus session from paused different task', { taskId: selectedTask.id }, error)
+          }
+        } finally {
+          isFocusCommandInFlightRef.current = false
+        }
+
+        return
+      }
+
+      isFocusCommandInFlightRef.current = true
+      const resumeEventAtUtc = new Date().toISOString()
+      const rollbackWasRunning = isFocusRunning
+      const rollbackElapsedSeconds = sessionElapsedSeconds
+      const rollbackTimerMode = timerMode
+      const rollbackSession = activeFocusSession
+      const resumeExpectedVersion =
+        typeof selectedTask.version === 'number' && Number.isFinite(selectedTask.version)
+          ? Math.max(1, Math.floor(selectedTask.version))
+          : Math.max(1, Math.floor(activeFocusSession.version))
+
+      alignActiveTaskState(selectedTask.id)
+      setTimerMode(nextMode)
+      setSessionElapsedSeconds(Math.max(0, Math.floor(nextElapsedSeedSeconds)))
+      setIsFocusRunning(true)
+      if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+        runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+      }
+
+      try {
+        const resumeResponse = await focusSessionCommand('resume', {
+          task_id: selectedTask.id,
+          expected_version: resumeExpectedVersion,
+          event_at_utc: resumeEventAtUtc,
+        })
+        if (!resumeResponse) {
+          onSignOut?.()
+          return
+        }
+
+        applyFocusSessionEnvelope(resumeResponse)
+        setIsFocusRunning(true)
+        if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== selectedTask.id) {
+          runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
+        }
+      } catch (error) {
+        const handled = await handleFocusSessionApiError(error, { refreshTasksOnNotFound: true })
+        if (!handled.handled) {
+          applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? resumeEventAtUtc, {
+            ...rollbackSession,
+            elapsed_seconds_total: Math.max(0, Math.floor(rollbackElapsedSeconds)),
+          })
+          alignActiveTaskState(rollbackSession.task_id)
+          setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+          setTimerMode(rollbackTimerMode)
+          setIsFocusRunning(rollbackWasRunning)
+          console.error('Failed to resume paused focus session while activating task', { taskId: selectedTask.id }, error)
         }
       } finally {
         isFocusCommandInFlightRef.current = false
@@ -2284,36 +3706,54 @@ export function FocusDashboard({
     isFocusCommandInFlightRef.current = true
     try {
       const previousSessionTaskId = activeFocusSession.task_id
-      const response = await focusSessionCommand('switch-task', {
+      const previousSessionMode = activeFocusSession.timer_mode
+      const switchStopEventAtUtc = new Date().toISOString()
+      const stopResponse = await focusSessionCommand('stop', {
+        task_id: previousSessionTaskId,
         expected_version: activeFocusSession.version,
-        task_id: selectedTask.id,
-        timer_mode: nextMode,
-        target_seconds: nextTargetSeconds,
-        elapsed_seconds_seed: nextElapsedSeedSeconds,
+        event_at_utc: switchStopEventAtUtc,
+        stop_reason: 'task_switch',
       })
 
-      if (!response) {
+      if (!stopResponse) {
         onSignOut?.()
         return
       }
 
-      const createdTimeEntryId = response.data.created_time_entry_id ?? null
-      const didRefreshFromServer = createdTimeEntryId
-        ? await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
+      const stopCreatedTimeEntryId = stopResponse.data.created_time_entry_id ?? null
+      const stopDidRefreshFromServer = stopCreatedTimeEntryId
+        ? await handleCreatedTimeEntryInvalidation(stopCreatedTimeEntryId)
         : false
 
-      if (elapsedBeforeSwitch > 0 && (!createdTimeEntryId || !didRefreshFromServer)) {
+      if (elapsedBeforeSwitch > 0 && (!stopCreatedTimeEntryId || !stopDidRefreshFromServer)) {
         runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(elapsedBeforeSwitch))
-      } else if (createdTimeEntryId) {
+      } else if (stopCreatedTimeEntryId) {
         setActiveFocusSessionMeta(null)
       }
 
-      applyFocusSessionEnvelope(response)
+      applyFocusSessionEnvelope(stopResponse)
       setSessionElapsedSeconds(0)
-      setTimerMode(nextMode)
-      if (previousSessionTaskId !== selectedTask.id) {
+      setIsFocusRunning(false)
+      resetCountersAfterStop(previousSessionTaskId, previousSessionMode)
+      if (previousSessionTaskId !== selectedTask.id && previousSessionMode === 'stopwatch') {
         startTaskCooldown(previousSessionTaskId)
       }
+
+      const startEventAtUtc = new Date().toISOString()
+      const startResponse = await startFocusSession({
+        task_id: selectedTask.id,
+        timer_mode: nextMode,
+        elapsed_seconds_seed: nextElapsedSeedSeconds,
+        event_at_utc: startEventAtUtc,
+      })
+      if (!startResponse) {
+        onSignOut?.()
+        return
+      }
+
+      applyFocusSessionEnvelope(startResponse)
+      setSessionElapsedSeconds(0)
+      setTimerMode(nextMode)
       runNonBlockingFocusSideEffect(() => startFocusSessionMeta(selectedTask))
       setIsFocusRunning(true)
     } catch (error) {
@@ -2351,16 +3791,32 @@ export function FocusDashboard({
       return
     }
 
+    // Local-first play/resume path: do not wait for a backend preflight lookup when no session is running.
+    if (!isSessionCurrentlyRunning) {
+      await activateTaskAndStartNewCount(activeTask, requestedStartMode, normalizedRequestedStartTargetSeconds)
+      return
+    }
+
     let activeSessionForCommand = activeFocusSession
-    if (!activeSessionForCommand && isSessionCurrentlyRunning) {
-      try {
-        activeSessionForCommand = await ensureAuthoritativeSessionForCommand()
-      } catch (error) {
-        const handled = await handleFocusSessionApiError(error)
-        if (!handled.handled) {
-          console.error('Failed to hydrate active focus session before runtime command', error)
+    const fallbackRuntimeSnapshotForActiveTask = latestServerTasksByIdRef.current[activeTask.id] ?? null
+    const fallbackRuntimeStateForActiveTask = normalizeTaskRuntimeState(fallbackRuntimeSnapshotForActiveTask?.state)
+    const shouldBypassAuthoritativeLookupForIdleStart =
+      !activeSessionForCommand &&
+      !isFocusRunning &&
+      (!fallbackRuntimeStateForActiveTask || fallbackRuntimeStateForActiveTask === 'idle')
+    if (!activeSessionForCommand) {
+      if (!shouldBypassAuthoritativeLookupForIdleStart) {
+        try {
+          activeSessionForCommand = await ensureAuthoritativeSessionForCommand()
+        } catch (error) {
+          const handled = await handleFocusSessionApiError(error)
+          if (handled.handled && handled.kind === 'conflict') {
+            activeSessionForCommand = handled.conflict.data.active_focus_session
+          } else if (!handled.handled) {
+            console.error('Failed to hydrate active focus session before runtime command', error)
+            return
+          }
         }
-        return
       }
 
       if (!activeSessionForCommand) {
@@ -2371,9 +3827,20 @@ export function FocusDashboard({
 
         if (isFocusRunning && fallbackExpectedVersion !== null) {
           isFocusCommandInFlightRef.current = true
+          const pauseEventAtUtc = new Date().toISOString()
+          const previousLocalRunningState = isFocusRunning
+          const optimisticTrackedAfterPauseSeconds = getOptimisticTrackedSecondsAfterFreeze(activeTask.id, {
+            session: null,
+            elapsedSeconds: sessionElapsedSeconds,
+            includeLocalFallback: true,
+          })
+          ensureTaskTrackedDurationAtLeast(activeTask.id, optimisticTrackedAfterPauseSeconds)
+          setIsFocusRunning(false)
           try {
             const response = await focusSessionCommand('pause', {
               expected_version: fallbackExpectedVersion,
+              event_at_utc: pauseEventAtUtc,
+              time_zone_name: effectiveTimeZone,
             })
 
             if (!response) {
@@ -2382,12 +3849,16 @@ export function FocusDashboard({
             }
 
             applyFocusSessionEnvelope(response)
+            await ensureDailyLogSnapshotFromPauseResponse(response)
             setIsFocusRunning(false)
-            startTaskCooldown(activeTask.id)
+            if ((activeSessionForCommand?.timer_mode ?? fallbackRuntimeModeForActiveTask) === 'stopwatch') {
+              startTaskCooldown(activeTask.id)
+            }
             runNonBlockingFocusSideEffect(handleStartUntrackedSession)
           } catch (error) {
             const handled = await handleFocusSessionApiError(error)
             if (!handled.handled) {
+              setIsFocusRunning(previousLocalRunningState)
               console.error(
                 'Failed to pause focus session using task version fallback',
                 { taskId: activeTask.id, fallbackExpectedVersion },
@@ -2400,8 +3871,71 @@ export function FocusDashboard({
           return
         }
 
-        console.warn('No authoritative focus session available for runtime control command.')
-        return
+        const shouldAttemptFallbackResume =
+          !isFocusRunning &&
+          fallbackExpectedVersion !== null &&
+          fallbackRuntimeStateForActiveTask === 'paused'
+        if (shouldAttemptFallbackResume) {
+          isFocusCommandInFlightRef.current = true
+          const previousLocalRunningState = isFocusRunning
+          setIsFocusRunning(true)
+          let didRecoverViaResume = false
+          try {
+            const resumeEventAtUtc = new Date().toISOString()
+            const response = await focusSessionCommand('resume', {
+              task_id: activeTask.id,
+              expected_version: fallbackExpectedVersion,
+              event_at_utc: resumeEventAtUtc,
+            })
+
+            if (!response) {
+              onSignOut?.()
+              return
+            }
+
+            applyFocusSessionEnvelope(response)
+            setIsFocusRunning(true)
+            didRecoverViaResume = true
+            if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== activeTask.id) {
+              runNonBlockingFocusSideEffect(() => startFocusSessionMeta(activeTask))
+            }
+          } catch (error) {
+            const handled = await handleFocusSessionApiError(error)
+            if (handled.handled && handled.kind === 'conflict') {
+              const conflictSession = handled.conflict.data.active_focus_session
+              if (conflictSession) {
+                if (conflictSession.task_id === activeTask.id) {
+                  setTimerMode(conflictSession.timer_mode)
+                  setIsFocusRunning(isSessionRunningState(conflictSession.session_state))
+                } else {
+                  alignActiveTaskState(conflictSession.task_id)
+                }
+                didRecoverViaResume = true
+              } else {
+                setIsFocusRunning(previousLocalRunningState)
+              }
+            }
+
+            if (!handled.handled) {
+              setIsFocusRunning(previousLocalRunningState)
+              console.error(
+                'Failed to resume focus session using task version fallback',
+                { taskId: activeTask.id, fallbackExpectedVersion },
+                error,
+              )
+            }
+          } finally {
+            isFocusCommandInFlightRef.current = false
+          }
+          if (didRecoverViaResume) {
+            return
+          }
+        }
+
+        if (isFocusRunning) {
+          console.warn('No authoritative focus session available for runtime control command.')
+          return
+        }
       }
     }
 
@@ -2422,9 +3956,37 @@ export function FocusDashboard({
 
       if (isSessionRunningState(activeSessionForCommand.session_state)) {
         isFocusCommandInFlightRef.current = true
+        const optimisticPausedAtUtc = new Date().toISOString()
+        const rollbackSession = activeSessionForCommand
+        const rollbackElapsedSeconds = sessionElapsedSeconds
+        const optimisticPausedElapsedSeconds = getElapsedSecondsAtClientEvent(
+          activeSessionForCommand,
+          optimisticPausedAtUtc,
+          sessionElapsedSeconds,
+        )
+        const optimisticPausedSession: ActiveFocusSession = {
+          ...activeSessionForCommand,
+          session_state: 'paused',
+          last_paused_at_utc: optimisticPausedAtUtc,
+          elapsed_seconds_total: optimisticPausedElapsedSeconds,
+        }
+        const optimisticTrackedAfterPauseSeconds = getOptimisticTrackedSecondsAfterFreeze(
+          activeSessionForCommand.task_id,
+          {
+            session: activeSessionForCommand,
+            elapsedSeconds: optimisticPausedElapsedSeconds,
+          },
+        )
+        ensureTaskTrackedDurationAtLeast(activeSessionForCommand.task_id, optimisticTrackedAfterPauseSeconds)
+        applyAuthoritativeFocusSnapshot(optimisticPausedAtUtc, optimisticPausedSession)
+        setSessionElapsedSeconds(optimisticPausedSession.elapsed_seconds_total)
+        setIsFocusRunning(false)
         try {
-          const response = await focusSessionCommand('pause', {
-            expected_version: resolveExpectedVersionForCommand(activeSessionForCommand.version),
+          const pauseExpectedVersion = Math.max(1, Math.floor(activeSessionForCommand.version))
+          let response = await focusSessionCommand('pause', {
+            expected_version: pauseExpectedVersion,
+            event_at_utc: optimisticPausedAtUtc,
+            time_zone_name: effectiveTimeZone,
           })
 
           if (!response) {
@@ -2432,13 +3994,48 @@ export function FocusDashboard({
             return
           }
 
+          if (response.data.active_focus_session && activeSessionForCommand.timer_mode === 'stopwatch') {
+            response = {
+              ...response,
+              data: {
+                ...response.data,
+                active_focus_session: {
+                  ...response.data.active_focus_session,
+                  // Keep pause frozen at click-time value; never drift backward on async response.
+                  elapsed_seconds_total: optimisticPausedElapsedSeconds,
+                },
+              },
+            }
+          }
+
           applyFocusSessionEnvelope(response)
+          await ensureDailyLogSnapshotFromPauseResponse(response)
+          const pausedElapsedSeconds =
+            response.data.active_focus_session &&
+              typeof response.data.active_focus_session.elapsed_seconds_total === 'number' &&
+              Number.isFinite(response.data.active_focus_session.elapsed_seconds_total)
+              ? Math.max(0, Math.floor(response.data.active_focus_session.elapsed_seconds_total))
+              : optimisticPausedSession.elapsed_seconds_total
+          ensureTaskTrackedDurationAtLeast(
+            activeSessionForCommand.task_id,
+            Math.max(optimisticTrackedAfterPauseSeconds, pausedElapsedSeconds),
+          )
           setIsFocusRunning(false)
-          startTaskCooldown(activeSessionForCommand.task_id)
+          if (activeSessionForCommand.timer_mode === 'stopwatch') {
+            startTaskCooldown(activeSessionForCommand.task_id)
+          } else {
+            clearTaskCooldown(activeSessionForCommand.task_id)
+          }
           runNonBlockingFocusSideEffect(handleStartUntrackedSession)
         } catch (error) {
           const handled = await handleFocusSessionApiError(error)
           if (!handled.handled) {
+            applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? optimisticPausedAtUtc, {
+              ...rollbackSession,
+              elapsed_seconds_total: Math.max(0, Math.floor(rollbackElapsedSeconds)),
+            })
+            setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+            setIsFocusRunning(isSessionRunningState(rollbackSession.session_state))
             console.error('Failed to pause focus session', error)
           }
         } finally {
@@ -2453,12 +4050,27 @@ export function FocusDashboard({
         return
       }
 
-      runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
+      scheduleFinishUntrackedSession()
 
       isFocusCommandInFlightRef.current = true
+      const optimisticResumedAtUtc = new Date().toISOString()
+      const rollbackSession = activeSessionForCommand
+      const rollbackElapsedSeconds = sessionElapsedSeconds
+      const optimisticWorkingSession: ActiveFocusSession = {
+        ...activeSessionForCommand,
+        session_state: 'working',
+        last_resumed_at_utc: optimisticResumedAtUtc,
+        last_paused_at_utc: null,
+        elapsed_seconds_total: Math.max(0, Math.floor(sessionElapsedSeconds)),
+      }
+      applyAuthoritativeFocusSnapshot(optimisticResumedAtUtc, optimisticWorkingSession)
+      setSessionElapsedSeconds(optimisticWorkingSession.elapsed_seconds_total)
+      setIsFocusRunning(true)
       try {
         let response = await focusSessionCommand('resume', {
+          task_id: activeTask.id,
           expected_version: resolveExpectedVersionForCommand(activeSessionForCommand.version),
+          event_at_utc: optimisticResumedAtUtc,
         })
 
         if (!response) {
@@ -2505,7 +4117,9 @@ export function FocusDashboard({
               !isSessionRunningState(refreshedSession.session_state)
             ) {
               const retryResponse = await focusSessionCommand('resume', {
+                task_id: activeTask.id,
                 expected_version: resolveExpectedVersionForCommand(refreshedSession.version),
+                event_at_utc: optimisticResumedAtUtc,
               })
               if (!retryResponse) {
                 onSignOut?.()
@@ -2527,6 +4141,12 @@ export function FocusDashboard({
 
         const handled = await handleFocusSessionApiError(resumeError)
         if (!handled.handled) {
+          applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? optimisticResumedAtUtc, {
+            ...rollbackSession,
+            elapsed_seconds_total: Math.max(0, Math.floor(rollbackElapsedSeconds)),
+          })
+          setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+          setIsFocusRunning(isSessionRunningState(rollbackSession.session_state))
           console.error('Failed to resume focus session', resumeError)
         }
       } finally {
@@ -2535,7 +4155,7 @@ export function FocusDashboard({
       return
     }
 
-    runNonBlockingFocusSideEffect(handleFinishUntrackedSession)
+    scheduleFinishUntrackedSession()
 
     const willResetCompletedTimer = Boolean(
       timerMode === 'timer' && activeTaskTargetSeconds && sessionElapsedSeconds >= activeTaskTargetSeconds,
@@ -2553,19 +4173,24 @@ export function FocusDashboard({
     if (nextMode === 'timer' && activeTaskTargetSeconds && nextElapsedSeedSeconds >= activeTaskTargetSeconds) {
       nextElapsedSeedSeconds = 0
     }
-    const nextTargetSeconds =
-      nextMode === 'timer'
-        ? (normalizedRequestedStartTargetSeconds ?? getTargetSecondsForStart(activeTask, 'timer'))
-        : null
+    const rollbackWasRunning = isFocusRunning
+    const rollbackElapsedSeconds = sessionElapsedSeconds
+    const rollbackTimerMode = timerMode
+    setSessionElapsedSeconds(nextElapsedSeedSeconds)
     setTimerMode(nextMode)
+    setIsFocusRunning(true)
+    if (!activeFocusSessionMeta || activeFocusSessionMeta.taskId !== activeTask.id) {
+      runNonBlockingFocusSideEffect(() => startFocusSessionMeta(activeTask))
+    }
 
     isFocusCommandInFlightRef.current = true
     try {
+      const startEventAtUtc = new Date().toISOString()
       const response = await startFocusSession({
         task_id: activeTask.id,
         timer_mode: nextMode,
-        target_seconds: nextTargetSeconds,
         elapsed_seconds_seed: nextElapsedSeedSeconds,
+        event_at_utc: startEventAtUtc,
       })
 
       if (!response) {
@@ -2578,7 +4203,17 @@ export function FocusDashboard({
       setIsFocusRunning(true)
     } catch (error) {
       const handled = await handleFocusSessionApiError(error, { refreshTasksOnNotFound: true })
+      if (handled.handled && handled.kind === 'conflict') {
+        const recovered = await recoverFromStartConflict(handled.conflict.data.active_focus_session, activeTask)
+        if (recovered) {
+          return
+        }
+      }
+
       if (!handled.handled) {
+        setIsFocusRunning(rollbackWasRunning)
+        setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+        setTimerMode(rollbackTimerMode)
         console.error('Failed to start focus session', { taskId: activeTask.id, timerMode: nextMode }, error)
       }
     } finally {
@@ -2606,19 +4241,166 @@ export function FocusDashboard({
     }
 
     if (!activeSessionForStop) {
-      console.warn('Stop ignored because no active authoritative focus session is available.')
+      const fallbackExpectedVersion =
+        activeTask && typeof activeTask.version === 'number' && Number.isFinite(activeTask.version)
+          ? Math.max(1, Math.floor(activeTask.version))
+          : null
+      const fallbackTaskId = activeTask?.id ?? null
+      const fallbackMode = timerMode
+      if (fallbackExpectedVersion === null || !fallbackTaskId) {
+        console.warn('Stop ignored because no active authoritative focus session is available.')
+        return
+      }
+
+      const fallbackRuntimeSnapshot = latestServerTasksByIdRef.current[fallbackTaskId] ?? null
+      const fallbackRuntimeState = normalizeTaskRuntimeState(fallbackRuntimeSnapshot?.state)
+      const fallbackRuntimeMode: FocusTimerMode =
+        fallbackRuntimeSnapshot?.active_mode === 'timer' ? 'timer' : fallbackMode
+      const fallbackTrackedBeforeStopSeconds = getTaskTrackedSecondsSnapshot(fallbackTaskId)
+      const optimisticTrackedAfterStopSeconds = getOptimisticTrackedSecondsAfterFreeze(fallbackTaskId, {
+        elapsedSeconds: sessionElapsedSeconds,
+        includeLocalFallback: true,
+      })
+      const rollbackLocalRunningState = isFocusRunning
+      const fallbackStopReason = fallbackRuntimeState === 'paused' ? 'stopped_from_paused' : 'stopped'
+      const shouldLogStopwatchWorkingStopFallback =
+        fallbackRuntimeMode === 'stopwatch' && fallbackRuntimeState === 'working'
+      isFocusCommandInFlightRef.current = true
+      const optimisticStoppedAtUtc = new Date().toISOString()
+      const rollbackElapsedSeconds = sessionElapsedSeconds
+      ensureTaskTrackedDurationAtLeast(fallbackTaskId, optimisticTrackedAfterStopSeconds)
+      setSessionElapsedSeconds(0)
+      setIsFocusRunning(false)
+      resetCountersAfterStop(fallbackTaskId, fallbackMode)
+      if (fallbackMode === 'stopwatch') {
+        startTaskCooldown(fallbackTaskId)
+      }
+      try {
+        if (shouldLogStopwatchWorkingStopFallback) {
+          console.log('[diagnostic:stop-working-stopwatch] request', {
+            source: 'fallback',
+            task_id: fallbackTaskId,
+            expected_version: fallbackExpectedVersion,
+            event_at_utc: optimisticStoppedAtUtc,
+            stop_reason: fallbackStopReason,
+            runtime_state: fallbackRuntimeState,
+            runtime_mode: fallbackRuntimeMode,
+          })
+        }
+        const response = await focusSessionCommand('stop', {
+          task_id: fallbackTaskId,
+          expected_version: fallbackExpectedVersion,
+          event_at_utc: optimisticStoppedAtUtc,
+          stop_reason: fallbackStopReason,
+        })
+
+        if (!response) {
+          onSignOut?.()
+          return
+        }
+
+        const stoppedElapsed =
+          response.data.stopped_session_summary?.elapsed_seconds_final ??
+          Math.max(0, Math.floor(sessionElapsedSeconds))
+        const createdTimeEntryId = response.data.created_time_entry_id ?? null
+        if (createdTimeEntryId) {
+          await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
+        }
+        if (shouldLogStopwatchWorkingStopFallback) {
+          console.log('[diagnostic:stop-working-stopwatch] response', {
+            source: 'fallback',
+            request_event_at_utc: optimisticStoppedAtUtc,
+            server_now_utc: response.data.server_now_utc,
+            effective_event_at_utc: response.data.effective_event_at_utc,
+            active_focus_session: response.data.active_focus_session,
+            stopped_session_summary: response.data.stopped_session_summary ?? null,
+            created_time_entry_id: response.data.created_time_entry_id ?? null,
+          })
+        }
+
+        applyFocusSessionEnvelope(response)
+        setSessionElapsedSeconds(0)
+        setIsFocusRunning(false)
+        resetCountersAfterStop(fallbackTaskId, fallbackMode)
+        ensureTaskTrackedDurationAtLeast(
+          fallbackTaskId,
+          Math.max(
+            optimisticTrackedAfterStopSeconds,
+            fallbackTrackedBeforeStopSeconds,
+            Math.max(0, Math.floor(stoppedElapsed)),
+          ),
+        )
+        setActiveFocusSessionMeta(null)
+
+        runNonBlockingFocusSideEffect(handleStartUntrackedSession)
+      } catch (error) {
+        const handled = await handleFocusSessionApiError(error)
+        if (!handled.handled) {
+          clearTaskCooldown(fallbackTaskId)
+          setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+          setIsFocusRunning(rollbackLocalRunningState)
+          console.error(
+            'Failed to stop focus session using task version fallback',
+            {
+              taskId: fallbackTaskId,
+              fallbackExpectedVersion,
+              fallbackRuntimeState,
+              fallbackRuntimeMode,
+              rollbackLocalRunningState,
+              apiErrorStatus: error instanceof ApiHttpError ? error.status : null,
+              apiErrorBody: error instanceof ApiHttpError ? error.body : null,
+            },
+            error,
+          )
+        }
+      } finally {
+        isFocusCommandInFlightRef.current = false
+      }
       return
     }
 
     const elapsedBeforeStop = sessionElapsedSeconds
     const activeSessionTaskId = activeSessionForStop.task_id
     const activeSessionMode = activeSessionForStop.timer_mode
+    const trackedBeforeStopSeconds = getTaskTrackedSecondsSnapshot(activeSessionTaskId)
+    const optimisticTrackedAfterStopSeconds = getOptimisticTrackedSecondsAfterFreeze(activeSessionTaskId, {
+      session: activeSessionForStop,
+      elapsedSeconds: elapsedBeforeStop,
+    })
+    const wasRunningLocallyBeforeStop = isFocusRunning
 
     isFocusCommandInFlightRef.current = true
+    const optimisticStoppedAtUtc = new Date().toISOString()
+    const rollbackSession = activeSessionForStop
+    const rollbackElapsedSeconds = sessionElapsedSeconds
+    const activeStopReason = activeSessionForStop.session_state === 'paused' ? 'stopped_from_paused' : 'stopped'
+    const shouldLogStopwatchWorkingStop =
+      activeSessionForStop.timer_mode === 'stopwatch' && activeSessionForStop.session_state === 'working'
+    ensureTaskTrackedDurationAtLeast(activeSessionTaskId, optimisticTrackedAfterStopSeconds)
+    applyAuthoritativeFocusSnapshot(optimisticStoppedAtUtc, null)
+    setSessionElapsedSeconds(0)
+    setIsFocusRunning(false)
+    resetCountersAfterStop(activeSessionTaskId, activeSessionMode)
+    if (activeSessionMode === 'stopwatch') {
+      startTaskCooldown(activeSessionTaskId)
+    }
     try {
+      if (shouldLogStopwatchWorkingStop) {
+        console.log('[diagnostic:stop-working-stopwatch] request', {
+          source: 'active_session',
+          task_id: activeSessionTaskId,
+          expected_version: activeSessionForStop.version,
+          event_at_utc: optimisticStoppedAtUtc,
+          stop_reason: activeStopReason,
+          runtime_state: activeSessionForStop.session_state,
+          runtime_mode: activeSessionForStop.timer_mode,
+        })
+      }
       const response = await focusSessionCommand('stop', {
+        task_id: activeSessionTaskId,
         expected_version: activeSessionForStop.version,
-        stop_reason: 'manual',
+        event_at_utc: optimisticStoppedAtUtc,
+        stop_reason: activeStopReason,
       })
 
       if (!response) {
@@ -2628,33 +4410,75 @@ export function FocusDashboard({
 
       const stoppedElapsed =
         response.data.stopped_session_summary?.elapsed_seconds_final ??
-        Math.max(0, Math.round(elapsedBeforeStop))
+        Math.max(0, Math.floor(elapsedBeforeStop))
       const createdTimeEntryId = response.data.created_time_entry_id ?? null
-      const didRefreshFromServer = createdTimeEntryId
-        ? await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
-        : false
+      if (createdTimeEntryId) {
+        await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
+      }
+      if (shouldLogStopwatchWorkingStop) {
+        console.log('[diagnostic:stop-working-stopwatch] response', {
+          source: 'active_session',
+          request_event_at_utc: optimisticStoppedAtUtc,
+          server_now_utc: response.data.server_now_utc,
+          effective_event_at_utc: response.data.effective_event_at_utc,
+          active_focus_session: response.data.active_focus_session,
+          stopped_session_summary: response.data.stopped_session_summary ?? null,
+          created_time_entry_id: response.data.created_time_entry_id ?? null,
+        })
+      }
 
       applyFocusSessionEnvelope(response)
       setSessionElapsedSeconds(0)
       setIsFocusRunning(false)
       resetCountersAfterStop(activeSessionTaskId, activeSessionMode)
-      startTaskCooldown(activeSessionTaskId)
-
-      if (stoppedElapsed > 0 && (!createdTimeEntryId || !didRefreshFromServer)) {
-        runNonBlockingFocusSideEffect(() => commitCurrentFocusSession(stoppedElapsed))
-      } else {
-        setActiveFocusSessionMeta(null)
-      }
+      ensureTaskTrackedDurationAtLeast(
+        activeSessionTaskId,
+        Math.max(
+          optimisticTrackedAfterStopSeconds,
+          trackedBeforeStopSeconds,
+          Math.max(0, Math.floor(stoppedElapsed)),
+        ),
+      )
+      setActiveFocusSessionMeta(null)
 
       runNonBlockingFocusSideEffect(handleStartUntrackedSession)
     } catch (error) {
       const handled = await handleFocusSessionApiError(error)
       if (!handled.handled) {
-        console.error('Failed to stop focus session', error)
+        clearTaskCooldown(activeSessionTaskId)
+        applyAuthoritativeFocusSnapshot(lastServerNowUtc ?? optimisticStoppedAtUtc, {
+          ...rollbackSession,
+          elapsed_seconds_total: Math.max(0, Math.floor(rollbackElapsedSeconds)),
+        })
+        setSessionElapsedSeconds(Math.max(0, Math.floor(rollbackElapsedSeconds)))
+        setIsFocusRunning(isSessionRunningState(rollbackSession.session_state))
+        console.error(
+          'Failed to stop focus session',
+          {
+            taskId: activeSessionTaskId,
+            activeSessionState: activeSessionForStop.session_state,
+            activeSessionMode,
+            wasRunningLocallyBeforeStop,
+            apiErrorStatus: error instanceof ApiHttpError ? error.status : null,
+            apiErrorBody: error instanceof ApiHttpError ? error.body : null,
+          },
+          error,
+        )
       }
     } finally {
       isFocusCommandInFlightRef.current = false
     }
+  }
+  const handleResetAfterTimerAlarm = () => {
+    runNonBlockingFocusSideEffect(stopTimerEndAlarm)
+
+    if (!activeTask || timerMode !== 'timer') {
+      return
+    }
+
+    setIsFocusRunning(false)
+    setSessionElapsedSeconds(0)
+    resetCountersAfterStop(activeTask.id, 'timer')
   }
   const handleChangeTimerMode = (nextMode: FocusTimerMode) => {
     if (!activeTask || isFocusRunning) {
@@ -2712,7 +4536,7 @@ export function FocusDashboard({
     }
 
     if (activeTask && selectedTask.id === activeTask.id) {
-      const nextPreferredMode = timerMode
+      const nextPreferredMode = resolveTimerModeForTask(selectedTask, preferredMode ?? timerMode)
       await handleToggleFocus(nextPreferredMode)
       return
     }
@@ -2794,13 +4618,14 @@ export function FocusDashboard({
               <TimerPanel
                 activeTask={activeTask}
                 canUseTimerMode={Boolean(activeTaskTargetSeconds)}
-                canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
+                canStopFocus={canStopFocus}
                 hasActiveSession={Boolean(activeFocusSession)}
                 isToggleCooldownActive={isActiveTaskCooldownActive}
                 isFocusOnlyMode
                 isRunning={isFocusRunning}
                 mode={timerMode}
                 onChangeMode={handleChangeTimerMode}
+                onResetAfterTimerAlarm={handleResetAfterTimerAlarm}
                 onStopFocus={handleStopFocus}
                 onToggleFocus={handleToggleFocus}
                 onUpdateTimerTargetSeconds={handleUpdateTimerTargetSeconds}
@@ -2816,7 +4641,7 @@ export function FocusDashboard({
               <button
                 aria-label={copy.silenceTimerAlarm}
                 className="timer-alarm-stop-glow fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-rose-300/55 bg-rose-500/18 px-3 py-2 text-sm text-rose-50 ring-1 ring-rose-300/45 backdrop-blur-md transition hover:border-rose-200/70 hover:bg-rose-500/24 hover:ring-rose-200/60"
-                onClick={stopTimerEndAlarm}
+                onClick={handleResetAfterTimerAlarm}
                 type="button"
               >
                 <FontAwesomeIcon className="text-[12px] drop-shadow-[0_0_8px_rgba(251,113,133,0.35)]" icon={faBellSlash} />
@@ -2874,12 +4699,13 @@ export function FocusDashboard({
                     <TimerPanel
                       activeTask={activeTaskDisplay}
                       canUseTimerMode={Boolean(activeTaskTargetSeconds)}
-                      canStopFocus={Boolean(activeFocusSession) || sessionElapsedSeconds > 0}
+                      canStopFocus={canStopFocus}
                       hasActiveSession={Boolean(activeFocusSession)}
                       isToggleCooldownActive={isActiveTaskCooldownActive}
                       isRunning={isFocusRunning}
                       mode={timerMode}
                       onChangeMode={handleChangeTimerMode}
+                      onResetAfterTimerAlarm={handleResetAfterTimerAlarm}
                       onStopFocus={handleStopFocus}
                       onToggleFocus={handleToggleFocus}
                       onUpdateTimerTargetSeconds={handleUpdateTimerTargetSeconds}
@@ -2934,7 +4760,7 @@ export function FocusDashboard({
               <button
                 aria-label={copy.silenceTimerAlarm}
                 className="timer-alarm-stop-glow fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-rose-300/55 bg-rose-500/18 px-3 py-2 text-sm text-rose-50 ring-1 ring-rose-300/45 backdrop-blur-md transition hover:border-rose-200/70 hover:bg-rose-500/24 hover:ring-rose-200/60"
-                onClick={stopTimerEndAlarm}
+                onClick={handleResetAfterTimerAlarm}
                 type="button"
               >
                 <FontAwesomeIcon className="text-[12px] drop-shadow-[0_0_8px_rgba(251,113,133,0.35)]" icon={faBellSlash} />
@@ -3101,19 +4927,21 @@ function localizeStaticTaskTitle(task: Task, locale: 'es' | 'en'): Task {
 
 function sortLogEntriesByTime(entries: LogEntry[]) {
   return [...entries].sort((a, b) => {
-    const dateA = a.date ?? '9999-99-99'
-    const dateB = b.date ?? '9999-99-99'
+    const dateA = a.date ?? ''
+    const dateB = b.date ?? ''
     if (dateA !== dateB) {
+      // Oldest date first.
       return dateA.localeCompare(dateB)
     }
 
-    return parseStartLabelToMinutes(a.start) - parseStartLabelToMinutes(b.start)
+    // Oldest time first (supports HH:MM:SS).
+    return parseStartLabelToSecondsOfDay(a.start) - parseStartLabelToSecondsOfDay(b.start)
   })
 }
 
-function parseStartLabelToMinutes(label: string) {
+function parseStartLabelToSecondsOfDay(label: string) {
   if (typeof label !== 'string') {
-    return Number.MAX_SAFE_INTEGER
+    return Number.NEGATIVE_INFINITY
   }
 
   const normalizedLabel = label
@@ -3124,18 +4952,33 @@ function parseStartLabelToMinutes(label: string) {
     .replace(/\b(p)\s*m\b/i, 'PM')
     .toUpperCase()
 
-  const match = normalizedLabel.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
-  if (!match) {
-    return Number.MAX_SAFE_INTEGER
+  const withMeridiemMatch = normalizedLabel.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)$/i)
+  if (withMeridiemMatch) {
+    const rawHours = Number(withMeridiemMatch[1])
+    const minutes = Number(withMeridiemMatch[2])
+    const seconds = Number(withMeridiemMatch[3] ?? '0')
+    const meridiem = withMeridiemMatch[4].toUpperCase()
+    if (!Number.isFinite(rawHours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return Number.NEGATIVE_INFINITY
+    }
+
+    const normalizedHours = rawHours % 12
+    const hour24 = meridiem === 'PM' ? normalizedHours + 12 : normalizedHours
+    return hour24 * 3600 + minutes * 60 + seconds
   }
 
-  const rawHours = Number(match[1])
-  const minutes = Number(match[2])
-  const meridiem = match[3].toUpperCase()
-  const normalizedHours = rawHours % 12
-  const hour24 = meridiem === 'PM' ? normalizedHours + 12 : normalizedHours
+  const twentyFourHourMatch = normalizedLabel.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  if (!twentyFourHourMatch) {
+    return Number.NEGATIVE_INFINITY
+  }
 
-  return hour24 * 60 + minutes
+  const hours = Number(twentyFourHourMatch[1])
+  const minutes = Number(twentyFourHourMatch[2])
+  const seconds = Number(twentyFourHourMatch[3] ?? '0')
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return Number.NEGATIVE_INFINITY
+  }
+  return hours * 3600 + minutes * 60 + seconds
 }
 
 function runNonBlockingFocusSideEffect(action: () => void | Promise<void>) {

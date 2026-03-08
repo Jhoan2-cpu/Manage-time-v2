@@ -2,17 +2,23 @@ import { ApiHttpError, apiFetch, ensureCsrfCookie, parseJsonResponse } from '../
 import type { AppLocale } from '../../i18n/messages'
 import {
   isMockBackendEnabled,
+  mockCreateTask,
   mockCreateTimeEntry,
+  mockDeleteTask,
   mockFocusSessionCommand,
+  mockGetAppBootstrap,
   mockGetActiveFocusSession,
   mockGetHistoryDayDetail,
   mockGetHistoryDays,
   mockGetHistoryOverview,
   mockGetPreferences,
+  mockGetTasks,
   mockReorderTasks,
   mockStartFocusSession,
+  mockUpdateTask,
   mockUpdatePreferences,
 } from '../../lib/mock/mockBackend'
+import { roundElapsedSecondsBetweenMs } from './utils/time'
 
 export type AppBootstrapInclude =
   | 'tasks'
@@ -128,17 +134,21 @@ type PreferencesEnvelope = {
 export type TaskApiItem = {
   id: string
   user_id: string
+  sort_order?: number
   name: string
   icon_tag: string | null
   color_tag: string | null
   alarm_time_local: string | null
   active_mode?: 'timer' | 'stopwatch'
-  state?: 'idle' | 'working' | 'paused' | 'stopped'
+  state?: 'idle' | 'working' | 'paused'
   timer_initial_seconds: number | null
   timer_remaining_seconds?: number | null
   timer_started_at_utc?: string | null
+  timer_ended_at_utc?: string | null
   stopwatch_elapsed_seconds?: number | null
   stopwatch_started_at_utc?: string | null
+  stopwatch_ended_at_utc?: string | null
+  total_tracked_seconds?: number | null
   target_duration_seconds?: number | null
   version: number
   created_at: string
@@ -191,6 +201,9 @@ export type TaskVersionConflictEnvelope = {
 export type ActiveFocusSession = AppBootstrapActiveFocusSession
 
 export type FocusStoppedReason =
+  | 'paused'
+  | 'stopped'
+  | 'stopped_from_paused'
   | 'manual'
   | 'timer_completed'
   | 'task_switch'
@@ -211,6 +224,7 @@ export type StoppedFocusSessionSummary = {
 export type FocusSessionStateEnvelope = {
   data: {
     server_now_utc: string
+    effective_event_at_utc?: string
     active_focus_session: ActiveFocusSession | null
     stopped_session_summary?: StoppedFocusSessionSummary | null
     created_time_entry_id?: string
@@ -256,14 +270,19 @@ export type StartFocusSessionPayload = {
   timer_mode: FocusTimerModeApi
   target_seconds?: number | null
   elapsed_seconds_seed?: number
+  event_at_utc: string
 }
 
 export type PauseFocusSessionPayload = {
   expected_version: number
+  event_at_utc: string
+  time_zone_name?: string
 }
 
 export type ResumeFocusSessionPayload = {
+  task_id: string
   expected_version: number
+  event_at_utc: string
 }
 
 export type SwitchTaskFocusSessionPayload = {
@@ -275,7 +294,9 @@ export type SwitchTaskFocusSessionPayload = {
 }
 
 export type StopFocusSessionPayload = {
+  task_id?: string
   expected_version: number
+  event_at_utc?: string
   stop_reason?: FocusStoppedReason
   stopped_reason?: FocusStoppedReason
 }
@@ -410,6 +431,11 @@ type TimeEntryCreatedEnvelope = {
 }
 
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
+  if (isMockBackendEnabled()) {
+    const data = mockGetAppBootstrap()
+    return data ? (data as AppBootstrapData) : null
+  }
+
   try {
     const response = await requestBootstrap(options.include)
     if (response.status === 401) {
@@ -474,16 +500,106 @@ export async function updatePreferences(payload: UpdatePreferencesPayload) {
 }
 
 export async function getTasks() {
+  if (isMockBackendEnabled()) {
+    const data = mockGetTasks()
+    if (!data) {
+      return null
+    }
+
+    const activeSession = mockGetActiveFocusSession()?.data.active_focus_session ?? null
+    const userId = getLocalAuthUserId() ?? 'mock-user'
+    const nowIso = new Date().toISOString()
+    return data.map((task) => ({
+      id: task.id,
+      user_id: userId,
+      sort_order: task.sort_order,
+      name: task.title,
+      icon_tag: task.icon_tag,
+      color_tag: task.color_tag,
+      alarm_time_local: task.alarm_time_local,
+      active_mode: activeSession?.task_id === task.id ? activeSession.timer_mode : undefined,
+      state:
+        activeSession?.task_id === task.id
+          ? activeSession.session_state === 'paused'
+            ? 'paused'
+            : 'working'
+          : 'idle',
+      timer_initial_seconds: task.target_duration_seconds,
+      timer_remaining_seconds: null,
+      timer_started_at_utc: null,
+      timer_ended_at_utc: null,
+      stopwatch_elapsed_seconds: null,
+      stopwatch_started_at_utc: null,
+      stopwatch_ended_at_utc: null,
+      total_tracked_seconds: task.focus_time_total_seconds,
+      target_duration_seconds: task.target_duration_seconds,
+      version: 1,
+      created_at: nowIso,
+      updated_at: nowIso,
+    }))
+  }
+
   const response = await apiFetch('/api/v1/focus/tasks', { method: 'GET' })
   if (response.status === 401) {
     return null
   }
 
   const json = await parseJsonResponse<TasksListEnvelope>(response, 'Tasks lookup failed')
-  return json.data
+  const sorted = [...json.data].sort((left, right) => {
+    const leftOrder =
+      typeof left.sort_order === 'number' && Number.isFinite(left.sort_order) ? Math.floor(left.sort_order) : Number.MAX_SAFE_INTEGER
+    const rightOrder =
+      typeof right.sort_order === 'number' && Number.isFinite(right.sort_order) ? Math.floor(right.sort_order) : Number.MAX_SAFE_INTEGER
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder
+    }
+    return left.id.localeCompare(right.id)
+  })
+  return sorted
 }
 
 export async function createTask(payload: CreateTaskPayload) {
+  if (isMockBackendEnabled()) {
+    const created = mockCreateTask({
+      title: payload.name,
+      color_tag: payload.color_tag ?? 'blue',
+      icon_tag: payload.icon_tag ?? 'briefcase',
+      target_duration_seconds:
+        typeof payload.target_duration_seconds === 'number' && Number.isFinite(payload.target_duration_seconds)
+          ? payload.target_duration_seconds
+          : payload.timer_initial_seconds ?? null,
+      alarm_time_local: payload.alarm_time_local ?? null,
+    })
+    if (!created) {
+      return null
+    }
+    const userId = getLocalAuthUserId() ?? 'mock-user'
+    const nowIso = new Date().toISOString()
+    return {
+      id: created.id,
+      user_id: userId,
+      sort_order: created.sort_order,
+      name: created.title,
+      icon_tag: created.icon_tag,
+      color_tag: created.color_tag,
+      alarm_time_local: created.alarm_time_local,
+      active_mode: undefined,
+      state: 'idle',
+      timer_initial_seconds: created.target_duration_seconds,
+      timer_remaining_seconds: null,
+      timer_started_at_utc: null,
+      timer_ended_at_utc: null,
+      stopwatch_elapsed_seconds: null,
+      stopwatch_started_at_utc: null,
+      stopwatch_ended_at_utc: null,
+      total_tracked_seconds: created.focus_time_total_seconds,
+      target_duration_seconds: created.target_duration_seconds,
+      version: 1,
+      created_at: nowIso,
+      updated_at: nowIso,
+    } satisfies TaskApiItem
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch('/api/v1/focus/tasks', {
     method: 'POST',
@@ -502,6 +618,47 @@ export async function createTask(payload: CreateTaskPayload) {
 }
 
 export async function updateTask(taskId: string, payload: UpdateTaskPayload) {
+  if (isMockBackendEnabled()) {
+    const updated = mockUpdateTask(taskId, {
+      title: payload.name,
+      color_tag: payload.color_tag,
+      icon_tag: payload.icon_tag,
+      alarm_time_local: payload.alarm_time_local,
+      target_duration_seconds:
+        typeof payload.target_duration_seconds === 'number' && Number.isFinite(payload.target_duration_seconds)
+          ? payload.target_duration_seconds
+          : payload.timer_initial_seconds,
+    })
+    if (!updated) {
+      return null
+    }
+    const userId = getLocalAuthUserId() ?? 'mock-user'
+    const nowIso = new Date().toISOString()
+    return {
+      id: updated.id,
+      user_id: userId,
+      sort_order: updated.sort_order,
+      name: updated.title,
+      icon_tag: updated.icon_tag,
+      color_tag: updated.color_tag,
+      alarm_time_local: updated.alarm_time_local,
+      active_mode: undefined,
+      state: 'idle',
+      timer_initial_seconds: updated.target_duration_seconds,
+      timer_remaining_seconds: null,
+      timer_started_at_utc: null,
+      timer_ended_at_utc: null,
+      stopwatch_elapsed_seconds: null,
+      stopwatch_started_at_utc: null,
+      stopwatch_ended_at_utc: null,
+      total_tracked_seconds: updated.focus_time_total_seconds,
+      target_duration_seconds: updated.target_duration_seconds,
+      version: Math.max(1, payload.if_version + 1),
+      created_at: nowIso,
+      updated_at: nowIso,
+    } satisfies TaskApiItem
+  }
+
   await ensureCsrfCookie()
   const response = await apiFetch(`/api/v1/focus/tasks/${encodeURIComponent(taskId)}`, {
     method: 'PATCH',
@@ -520,6 +677,11 @@ export async function updateTask(taskId: string, payload: UpdateTaskPayload) {
 }
 
 export async function deleteTask(taskId: string, options: { ifVersion: number }) {
+  if (isMockBackendEnabled()) {
+    const deleted = mockDeleteTask(taskId)
+    return deleted ? 'deleted' : null
+  }
+
   await ensureCsrfCookie()
   const expectedVersion = Math.max(1, Math.floor(options.ifVersion))
   const response = await apiFetch(`/api/v1/focus/tasks/${encodeURIComponent(taskId)}?if_version=${expectedVersion}`, {
@@ -594,7 +756,15 @@ export async function startFocusSession(payload: StartFocusSessionPayload) {
   }
 
   await ensureCsrfCookie()
-  const { elapsed_seconds_seed: _elapsedSeed, ...networkPayload } = payload
+  const networkPayload: {
+    task_id: string
+    timer_mode: FocusTimerModeApi
+    event_at_utc: string
+  } = {
+    task_id: payload.task_id,
+    timer_mode: payload.timer_mode,
+    event_at_utc: payload.event_at_utc.trim(),
+  }
   const response = await requestFocusRuntime('start', {
     method: 'POST',
     headers: {
@@ -603,15 +773,15 @@ export async function startFocusSession(payload: StartFocusSessionPayload) {
     body: JSON.stringify(networkPayload),
   })
   if (!response) {
-    return startLocalFocusRuntimeSession(payload)
+    throw new ApiHttpError(
+      404,
+      { message: 'Focus runtime start endpoint is unavailable.' },
+      'Focus session start failed',
+    )
   }
 
   if (response.status === 401) {
     return null
-  }
-
-  if (response.status >= 500) {
-    return startLocalFocusRuntimeSession(payload)
   }
 
   return parseJsonResponse<FocusSessionStateEnvelope>(response, 'Focus session start failed')
@@ -645,7 +815,14 @@ export async function focusSessionCommand(
       : payload
   const networkPayload = endpoint === 'stop'
     ? normalizeStopPayload(networkPayloadBase as StopFocusSessionPayload)
+    : endpoint === 'pause'
+      ? normalizePausePayload(networkPayloadBase as PauseFocusSessionPayload)
+    : endpoint === 'resume'
+      ? normalizeResumePayload(networkPayloadBase as ResumeFocusSessionPayload)
     : networkPayloadBase
+  if (endpoint === 'pause') {
+    console.log('[focus-runtime:pause] request', networkPayload)
+  }
   const response = await requestFocusRuntime(endpoint, {
     method: 'POST',
     headers: {
@@ -653,29 +830,29 @@ export async function focusSessionCommand(
     },
     body: JSON.stringify(networkPayload),
   })
-  const requiresBackendPersistence =
-    endpoint === 'pause' || endpoint === 'resume' || endpoint === 'stop' || endpoint === 'reset'
   if (!response) {
-    if (requiresBackendPersistence) {
-      throw new ApiHttpError(
-        404,
-        { message: `Focus runtime endpoint "${endpoint}" is unavailable.` },
-        `Focus session ${endpoint} failed`,
-      )
-    }
-
-    return runLocalFocusRuntimeCommand(endpoint, payload)
+    throw new ApiHttpError(
+      404,
+      { message: `Focus runtime endpoint "${endpoint}" is unavailable.` },
+      `Focus session ${endpoint} failed`,
+    )
   }
 
   if (response.status === 401) {
     return null
   }
 
-  if (response.status >= 500 && !requiresBackendPersistence) {
-    return runLocalFocusRuntimeCommand(endpoint, payload)
+  const parsed = await parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
+  if (endpoint === 'pause') {
+    const dailyLogToday = (parsed.data as { daily_log_today?: unknown }).daily_log_today
+    console.log('[focus-runtime:pause] response', {
+      server_now_utc: parsed.data.server_now_utc,
+      effective_event_at_utc: parsed.data.effective_event_at_utc,
+      active_focus_session: parsed.data.active_focus_session,
+      daily_log_today: dailyLogToday ?? null,
+    })
   }
-
-  return parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
+  return parsed
 }
 
 async function requestFocusRuntime(
@@ -727,6 +904,10 @@ function startLocalFocusRuntimeSession(payload: StartFocusSessionPayload) {
   }
 
   const nowIso = new Date().toISOString()
+  const effectiveEventAtUtc =
+    typeof payload.event_at_utc === 'string' && payload.event_at_utc.trim()
+      ? payload.event_at_utc.trim()
+      : nowIso
   const existing = readLocalFocusRuntimeSession(userId)
   const timerMode: FocusTimerModeApi = payload.timer_mode === 'timer' ? 'timer' : 'stopwatch'
   const targetSeconds = timerMode === 'timer' ? normalizeTargetSeconds(payload.target_seconds) : null
@@ -738,8 +919,8 @@ function startLocalFocusRuntimeSession(payload: StartFocusSessionPayload) {
     timer_mode: timerMode,
     session_state: 'running',
     target_seconds: targetSeconds,
-    started_at_utc: nowIso,
-    last_resumed_at_utc: nowIso,
+    started_at_utc: effectiveEventAtUtc,
+    last_resumed_at_utc: effectiveEventAtUtc,
     last_paused_at_utc: null,
     elapsed_seconds_total: elapsedSeed,
     version,
@@ -773,12 +954,20 @@ function runLocalFocusRuntimeCommand(
       return getLocalFocusRuntimeEnvelope()
     }
 
+    const pausePayload = payload as PauseFocusSessionPayload
+    const effectivePauseAtUtc =
+      typeof pausePayload.event_at_utc === 'string' && pausePayload.event_at_utc.trim()
+        ? pausePayload.event_at_utc.trim()
+        : nowIso
+    const effectivePauseMs = Date.parse(effectivePauseAtUtc)
+    const resolvedPauseMs = Number.isFinite(effectivePauseMs) ? effectivePauseMs : nowMs
+
     if (isRuntimeSessionRunning(session)) {
-      const elapsedAtPause = resolveLocalRuntimeElapsed(session, nowMs)
+      const elapsedAtPause = resolveLocalRuntimeElapsed(session, resolvedPauseMs)
       const nextTarget = normalizeTargetSeconds(session.target_seconds)
       session.elapsed_seconds_total = clampElapsedByTarget(elapsedAtPause, nextTarget)
       session.session_state = 'paused'
-      session.last_paused_at_utc = nowIso
+      session.last_paused_at_utc = effectivePauseAtUtc
       session.version = session.version + 1
       writeLocalFocusRuntimeSession(userId, session)
     }
@@ -791,9 +980,19 @@ function runLocalFocusRuntimeCommand(
       return getLocalFocusRuntimeEnvelope()
     }
 
+    const resumePayload = payload as ResumeFocusSessionPayload
+    const effectiveResumeAtUtc =
+      typeof resumePayload.event_at_utc === 'string' && resumePayload.event_at_utc.trim()
+        ? resumePayload.event_at_utc.trim()
+        : nowIso
+
+    if (typeof resumePayload.task_id === 'string' && resumePayload.task_id.trim() && session.task_id !== resumePayload.task_id.trim()) {
+      return getLocalFocusRuntimeEnvelope({ session })
+    }
+
     if (!isRuntimeSessionRunning(session)) {
       session.session_state = 'running'
-      session.last_resumed_at_utc = nowIso
+      session.last_resumed_at_utc = effectiveResumeAtUtc
       session.last_paused_at_utc = null
       session.version = session.version + 1
       writeLocalFocusRuntimeSession(userId, session)
@@ -849,7 +1048,17 @@ function runLocalFocusRuntimeCommand(
     }
 
     const stopPayload = payload as StopFocusSessionPayload
-    const elapsedFinal = resolveLocalRuntimeElapsed(session, nowMs)
+    const effectiveStopAtUtc =
+      typeof stopPayload.event_at_utc === 'string' && stopPayload.event_at_utc.trim()
+        ? stopPayload.event_at_utc.trim()
+        : nowIso
+    const effectiveStopAtMs = Date.parse(effectiveStopAtUtc)
+    const resolvedStopAtMs = Number.isFinite(effectiveStopAtMs) ? effectiveStopAtMs : nowMs
+    if (typeof stopPayload.task_id === 'string' && stopPayload.task_id.trim() && session.task_id !== stopPayload.task_id.trim()) {
+      return getLocalFocusRuntimeEnvelope({ session })
+    }
+
+    const elapsedFinal = resolveLocalRuntimeElapsed(session, resolvedStopAtMs)
     const canonicalStopReason = normalizeStopReason(stopPayload)
     const summary: StoppedFocusSessionSummary = {
       task_id: session.task_id,
@@ -1159,16 +1368,59 @@ function isTaskVersionConflictCode(value: unknown): value is TaskVersionConflict
 }
 
 function normalizeStopPayload(payload: StopFocusSessionPayload) {
-  const canonicalReason = payload.stop_reason ?? payload.stopped_reason
-  if (!canonicalReason) {
-    return {
-      expected_version: payload.expected_version,
-    }
+  const normalizedPayload: {
+    task_id?: string
+    expected_version: number
+    event_at_utc?: string
+    stop_reason?: FocusStoppedReason
+  } = {
+    expected_version: payload.expected_version,
   }
 
-  return {
+  if (typeof payload.task_id === 'string' && payload.task_id.trim()) {
+    normalizedPayload.task_id = payload.task_id.trim()
+  }
+
+  if (typeof payload.event_at_utc === 'string' && payload.event_at_utc.trim()) {
+    normalizedPayload.event_at_utc = payload.event_at_utc.trim()
+  }
+
+  const canonicalReason = payload.stop_reason ?? payload.stopped_reason
+  if (canonicalReason) {
+    normalizedPayload.stop_reason = canonicalReason
+  }
+
+  return normalizedPayload
+}
+
+function normalizePausePayload(payload: PauseFocusSessionPayload) {
+  const normalizedPayload: {
+    expected_version: number
+    event_at_utc: string
+    time_zone_name?: string
+  } = {
     expected_version: payload.expected_version,
-    stop_reason: canonicalReason,
+    event_at_utc:
+      typeof payload.event_at_utc === 'string' && payload.event_at_utc.trim()
+        ? payload.event_at_utc.trim()
+        : new Date().toISOString(),
+  }
+
+  if (typeof payload.time_zone_name === 'string' && payload.time_zone_name.trim()) {
+    normalizedPayload.time_zone_name = payload.time_zone_name.trim()
+  }
+
+  return normalizedPayload
+}
+
+function normalizeResumePayload(payload: ResumeFocusSessionPayload) {
+  return {
+    task_id: payload.task_id,
+    expected_version: payload.expected_version,
+    event_at_utc:
+      typeof payload.event_at_utc === 'string' && payload.event_at_utc.trim()
+        ? payload.event_at_utc.trim()
+        : new Date().toISOString(),
   }
 }
 
@@ -1316,7 +1568,7 @@ function resolveLocalRuntimeElapsed(session: LocalFocusRuntimeSession, nowMs: nu
     return clampElapsedByTarget(baseElapsed, session.target_seconds)
   }
 
-  const deltaSeconds = Math.max(0, Math.floor((nowMs - resumedAtMs) / 1000))
+  const deltaSeconds = roundElapsedSecondsBetweenMs(resumedAtMs, nowMs)
   return clampElapsedByTarget(baseElapsed + deltaSeconds, session.target_seconds)
 }
 
@@ -1331,6 +1583,9 @@ function normalizeStopReason(payload: StopFocusSessionPayload): FocusStoppedReas
   }
 
   if (
+    value === 'paused' ||
+    value === 'stopped' ||
+    value === 'stopped_from_paused' ||
     value === 'manual' ||
     value === 'timer_completed' ||
     value === 'task_switch' ||
