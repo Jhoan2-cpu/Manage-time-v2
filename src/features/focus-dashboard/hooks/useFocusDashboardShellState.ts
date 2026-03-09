@@ -3,9 +3,13 @@ import { getBrowserTimeZone, getSupportedTimeZones } from '../utils/time'
 import type { AppBootstrapPreferences } from '../api'
 import {
   getBackgroundMusicVolume,
+  getTimerAlarmVolume,
   getUiInteractionSfxEnabled,
+  getUiInteractionSfxVolume,
   setBackgroundMusicVolume,
+  setTimerAlarmVolume,
   setUiInteractionSfxEnabled,
+  setUiInteractionSfxVolume,
   subscribeBackgroundMusicState,
   subscribeTimerRingtoneState,
   toggleBackgroundMusic,
@@ -25,23 +29,13 @@ export function useFocusDashboardShellState({ onSignOut, initialPreferences }: U
   const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false)
   const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false)
   const [isTimerAlarmPlaying, setIsTimerAlarmPlaying] = useState(false)
-   const [uiInteractionSfxEnabled, setUiInteractionSfxEnabledState] = useState(() => {
-     if (typeof initialPreferences?.ui_sounds_enabled === 'boolean') {
-       return initialPreferences.ui_sounds_enabled
-     }
-
-     return getUiInteractionSfxEnabled()
-   })
-   const [backgroundMusicVolume, setBackgroundMusicVolumeState] = useState(() => {
-     if (typeof initialPreferences?.background_music_volume_percent === 'number' && Number.isFinite(initialPreferences.background_music_volume_percent)) {
-       return Math.max(0, Math.min(100, Math.round(initialPreferences.background_music_volume_percent)))
-     }
-
-     return getBackgroundMusicVolume()
-   })
-   const [requireTaskSwitchConfirmation, setRequireTaskSwitchConfirmation] = useState(
-     initialPreferences?.confirm_task_switch_enabled ?? true,
-   )
+  const [uiInteractionSfxEnabled, setUiInteractionSfxEnabledState] = useState(() => getUiInteractionSfxEnabled())
+  const [uiInteractionSfxVolume, setUiInteractionSfxVolumeState] = useState(() => getUiInteractionSfxVolume())
+  const [backgroundMusicVolume, setBackgroundMusicVolumeState] = useState(() => getBackgroundMusicVolume())
+  const [timerAlarmVolume, setTimerAlarmVolumeState] = useState(() => getTimerAlarmVolume())
+  const [requireTaskSwitchConfirmation, setRequireTaskSwitchConfirmation] = useState(
+    initialPreferences?.confirm_task_switch_enabled ?? true,
+  )
   const [selectedTimeZone, setSelectedTimeZone] = useState(() => {
     if (typeof initialPreferences?.time_zone_name === 'string' && initialPreferences.time_zone_name.trim()) {
       return initialPreferences.time_zone_name.trim()
@@ -100,10 +94,6 @@ export function useFocusDashboardShellState({ onSignOut, initialPreferences }: U
       return
     }
 
-    const nextUiSfx = setUiInteractionSfxEnabled(initialPreferences.ui_sounds_enabled)
-    const nextVolume = setBackgroundMusicVolume(initialPreferences.background_music_volume_percent)
-    setUiInteractionSfxEnabledState(nextUiSfx)
-    setBackgroundMusicVolumeState(nextVolume)
     setRequireTaskSwitchConfirmation(initialPreferences.confirm_task_switch_enabled)
     setAutoDetectTimeZone(initialPreferences.time_zone_auto_detect)
     if (typeof initialPreferences.time_zone_name === 'string' && initialPreferences.time_zone_name.trim()) {
@@ -166,6 +156,16 @@ export function useFocusDashboardShellState({ onSignOut, initialPreferences }: U
     setBackgroundMusicVolumeState(appliedVolume)
   }
 
+  const handleUiInteractionSfxVolumeChange = (nextValue: number) => {
+    const appliedVolume = setUiInteractionSfxVolume(nextValue)
+    setUiInteractionSfxVolumeState(appliedVolume)
+  }
+
+  const handleTimerAlarmVolumeChange = (nextValue: number) => {
+    const appliedVolume = setTimerAlarmVolume(nextValue)
+    setTimerAlarmVolumeState(appliedVolume)
+  }
+
   const handleToggleAutoDetectTimeZone = (nextValue: boolean) => {
     setAutoDetectTimeZone(nextValue)
   }
@@ -215,7 +215,9 @@ export function useFocusDashboardShellState({ onSignOut, initialPreferences }: U
     isBackgroundMusicPlaying,
     isTimerAlarmPlaying,
     uiInteractionSfxEnabled,
+    uiInteractionSfxVolume,
     backgroundMusicVolume,
+    timerAlarmVolume,
     requireTaskSwitchConfirmation,
     setRequireTaskSwitchConfirmation,
     selectedTimeZone,
@@ -229,7 +231,9 @@ export function useFocusDashboardShellState({ onSignOut, initialPreferences }: U
     handleCloseSettings,
     handleToggleBackgroundMusic,
     handleToggleUiInteractionSfx,
+    handleUiInteractionSfxVolumeChange,
     handleBackgroundMusicVolumeChange,
+    handleTimerAlarmVolumeChange,
     handleToggleAutoDetectTimeZone,
     handleTimeZoneChange,
     handleOpenProfile,

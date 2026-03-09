@@ -595,9 +595,17 @@ function adaptFocusDailyLogToUiEntries(
   dailyLog: FocusDailyLogData,
   options: { timeZone: string; untrackedLabel: string },
 ) {
-  const focusEntries: LogEntry[] = dailyLog.focus_time_entries.map((entry) => {
+  const focusEntries = dailyLog.focus_time_entries.map((entry) => {
     const startedAt = new Date(entry.started_at_utc)
     const safeDate = Number.isFinite(startedAt.getTime()) ? startedAt : new Date()
+    const startedAtMs = Number.isFinite(startedAt.getTime()) ? startedAt.getTime() : Number.NEGATIVE_INFINITY
+    const endedAtMs =
+      typeof entry.ended_at_utc === 'string' && entry.ended_at_utc.trim()
+        ? (() => {
+          const parsed = Date.parse(entry.ended_at_utc)
+          return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
+        })()
+        : Number.POSITIVE_INFINITY
     const elapsedSeconds =
       typeof entry.elapsed_seconds === 'number' && Number.isFinite(entry.elapsed_seconds)
         ? Math.max(0, Math.floor(entry.elapsed_seconds))
@@ -608,35 +616,65 @@ function adaptFocusDailyLogToUiEntries(
         : undefined
 
     return {
-      id: `focus-${entry.id}`,
-      date: formatLocalDateKey(safeDate, options.timeZone),
-      start: formatLogStartTime(safeDate, options.timeZone),
-      duration: formatLogDurationFromSeconds(elapsedSeconds),
-      taskId: normalizedTaskId,
-      activity: normalizedTaskId ? undefined : options.untrackedLabel,
-      tone: normalizedTaskId ? undefined : 'default',
-    } satisfies LogEntry
+      startedAtMs,
+      endedAtMs,
+      entry: {
+        id: `focus-${entry.id}`,
+        date: formatLocalDateKey(safeDate, options.timeZone),
+        start: formatLogStartTime(safeDate, options.timeZone),
+        duration: formatLogDurationFromSeconds(elapsedSeconds),
+        taskId: normalizedTaskId,
+        activity: normalizedTaskId ? undefined : options.untrackedLabel,
+        tone: normalizedTaskId ? undefined : 'default',
+        startedAtMs,
+        endedAtMs,
+      } satisfies LogEntry,
+    }
   })
 
-  const idleEntries: LogEntry[] = dailyLog.idle_time_entries.map((entry) => {
+  const idleEntries = dailyLog.idle_time_entries.map((entry) => {
     const startedAt = new Date(entry.started_at_utc)
     const safeDate = Number.isFinite(startedAt.getTime()) ? startedAt : new Date()
+    const startedAtMs = Number.isFinite(startedAt.getTime()) ? startedAt.getTime() : Number.NEGATIVE_INFINITY
+    const endedAtMs =
+      typeof entry.ended_at_utc === 'string' && entry.ended_at_utc.trim()
+        ? (() => {
+          const parsed = Date.parse(entry.ended_at_utc)
+          return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
+        })()
+        : Number.POSITIVE_INFINITY
     const elapsedSeconds =
       typeof entry.elapsed_seconds === 'number' && Number.isFinite(entry.elapsed_seconds)
         ? Math.max(0, Math.floor(entry.elapsed_seconds))
         : 0
 
     return {
-      id: `idle-${entry.id}`,
-      date: formatLocalDateKey(safeDate, options.timeZone),
-      start: formatLogStartTime(safeDate, options.timeZone),
-      duration: formatLogDurationFromSeconds(elapsedSeconds),
-      activity: options.untrackedLabel,
-      tone: 'faded',
-    } satisfies LogEntry
+      startedAtMs,
+      endedAtMs,
+      entry: {
+        id: `idle-${entry.id}`,
+        date: formatLocalDateKey(safeDate, options.timeZone),
+        start: formatLogStartTime(safeDate, options.timeZone),
+        duration: formatLogDurationFromSeconds(elapsedSeconds),
+        activity: options.untrackedLabel,
+        tone: 'faded',
+        startedAtMs,
+        endedAtMs,
+      } satisfies LogEntry,
+    }
   })
 
-  return sortLogEntriesByTime([...focusEntries, ...idleEntries])
+  return [...focusEntries, ...idleEntries]
+    .sort((left, right) => {
+      if (left.startedAtMs !== right.startedAtMs) {
+        return left.startedAtMs - right.startedAtMs
+      }
+      if (left.endedAtMs !== right.endedAtMs) {
+        return left.endedAtMs - right.endedAtMs
+      }
+      return left.entry.id.localeCompare(right.entry.id)
+    })
+    .map((item) => item.entry)
 }
 
 function normalizeRuntimeDateLocal(value: unknown) {
@@ -913,12 +951,11 @@ export function FocusDashboard({
     isBackgroundMusicPlaying,
     isTimerAlarmPlaying,
     uiInteractionSfxEnabled,
+    uiInteractionSfxVolume,
     backgroundMusicVolume,
+    timerAlarmVolume,
     requireTaskSwitchConfirmation,
     setRequireTaskSwitchConfirmation,
-    selectedTimeZone,
-    autoDetectTimeZone,
-    timeZoneOptions,
     effectiveTimeZone,
     isDailyLogOpen,
     isFocusOnlyMode,
@@ -927,9 +964,9 @@ export function FocusDashboard({
     handleCloseSettings,
     handleToggleBackgroundMusic,
     handleToggleUiInteractionSfx,
+    handleUiInteractionSfxVolumeChange,
     handleBackgroundMusicVolumeChange,
-    handleToggleAutoDetectTimeZone,
-    handleTimeZoneChange,
+    handleTimerAlarmVolumeChange,
     handleOpenProfile,
     handleCloseProfile,
     handleRequestSignOut,
@@ -957,7 +994,10 @@ export function FocusDashboard({
   const taskcardsRealtimeResyncTimerRef = useRef<number | null>(null)
   const timerCompleteStopRequestKeyRef = useRef<string | null>(null)
   const lastHandledCreatedTimeEntryIdRef = useRef<string | null>(null)
+  const bootstrapDerivedRefreshRequestInFlightRef = useRef<Promise<boolean> | null>(null)
+  const lastDailyLogOrderedSignatureRef = useRef<string | null>(null)
   const shouldAwaitBackendUntrackedCloseRef = useRef(false)
+  const shouldSyncDailyLogAfterIdleCloseRef = useRef(false)
   const processedTaskRealtimeEventIdsRef = useRef<string[]>([])
   const processedFocusRealtimeEventIdsRef = useRef<string[]>([])
   const focusActiveEndpointMissingRef = useRef(false)
@@ -993,20 +1033,46 @@ export function FocusDashboard({
     }, 120)
   }
 
+  const applyOrderedDailyLogEntriesFromBackend = (
+    source:
+      | 'bootstrap_initial'
+      | 'runtime_daily_log_today'
+      | 'get_focus_daily_log'
+      | 'bootstrap_fallback',
+    entries: LogEntry[],
+  ) => {
+    const orderedEntries = sortLogEntriesByTime(entries)
+    setDailyLogEntries(orderedEntries)
+
+    const preview = orderedEntries.map((entry, index) => ({
+      position: index + 1,
+      id: entry.id,
+      date: entry.date,
+      start: entry.start,
+      duration: entry.duration,
+      taskId: entry.taskId ?? null,
+      activity: entry.activity ?? null,
+      tone: entry.tone ?? null,
+    }))
+    const signature = JSON.stringify(preview)
+    if (lastDailyLogOrderedSignatureRef.current === signature) {
+      return
+    }
+    lastDailyLogOrderedSignatureRef.current = signature
+
+    console.log('[daily-log:ordered] backend -> ui', {
+      source,
+      count: orderedEntries.length,
+      entries: preview,
+    })
+  }
+
   useEffect(() => {
     latestPreferencesRef.current = bootstrapData?.preferences ?? null
   }, [bootstrapData?.preferences])
 
   useEffect(() => {
-    console.log("===================================");
-    console.log('[daily-log:ui] entries updated', {
-      count: dailyLogEntries.length,
-      entries: dailyLogEntries,
-    })
-  }, [dailyLogEntries])
-
-  useEffect(() => {
-    setDailyLogEntries(bootstrapInitialDailyLogEntries)
+    applyOrderedDailyLogEntriesFromBackend('bootstrap_initial', bootstrapInitialDailyLogEntries)
   }, [bootstrapInitialDailyLogEntries])
 
   useEffect(() => {
@@ -1165,28 +1231,23 @@ export function FocusDashboard({
 
   const handleToggleUiInteractionSfxPersist = (nextValue: boolean) => {
     handleToggleUiInteractionSfx(nextValue)
-    queuePreferencesPatch({ ui_sounds_enabled: nextValue }, 150)
   }
 
   const handleBackgroundMusicVolumeChangePersist = (nextValue: number) => {
     handleBackgroundMusicVolumeChange(nextValue)
-    const volumePercent = Math.max(0, Math.min(100, Math.round(nextValue * 100)))
-    queuePreferencesPatch({ background_music_volume_percent: volumePercent }, 280)
+  }
+
+  const handleUiInteractionSfxVolumeChangePersist = (nextValue: number) => {
+    handleUiInteractionSfxVolumeChange(nextValue)
+  }
+
+  const handleTimerAlarmVolumeChangePersist = (nextValue: number) => {
+    handleTimerAlarmVolumeChange(nextValue)
   }
 
   const handleToggleTaskSwitchConfirmationPersist = (nextValue: boolean) => {
     setRequireTaskSwitchConfirmation(nextValue)
     queuePreferencesPatch({ confirm_task_switch_enabled: nextValue }, 150)
-  }
-
-  const handleToggleAutoDetectTimeZonePersist = (nextValue: boolean) => {
-    handleToggleAutoDetectTimeZone(nextValue)
-    queuePreferencesPatch({ time_zone_auto_detect: nextValue }, 150)
-  }
-
-  const handleTimeZoneChangePersist = (nextValue: string) => {
-    handleTimeZoneChange(nextValue)
-    queuePreferencesPatch({ time_zone_name: nextValue }, 150)
   }
 
   const buildTasksApiPayloadFromModalPayload = (payload: NewTaskPayload): CreateTaskPayload => {
@@ -1528,7 +1589,9 @@ export function FocusDashboard({
 
     if (runtimeState === 'idle') {
       if (activeTask?.id === serverTask.id) {
-        setIsFocusRunning(false)
+        if (!activeFocusSession || !isSessionRunningState(activeFocusSession.session_state)) {
+          setIsFocusRunning(false)
+        }
       }
       return
     }
@@ -1536,6 +1599,9 @@ export function FocusDashboard({
     // Paused snapshots should not steal active-card focus in TimerPanel,
     // but they must hydrate elapsed seed for reload continuity.
     if (runtimeState === 'paused') {
+      if (activeFocusSession && isSessionRunningState(activeFocusSession.session_state)) {
+        return
+      }
       if (activeTask?.id === serverTask.id) {
         setTimerMode(nextMode)
         setSessionElapsedSeconds(safeElapsedSeconds)
@@ -1576,7 +1642,9 @@ export function FocusDashboard({
 
     const runtimeTask = pickRuntimeTaskSnapshot(serverTasks)
     if (!runtimeTask) {
-      setIsFocusRunning(false)
+      if (!activeFocusSession || !isSessionRunningState(activeFocusSession.session_state)) {
+        setIsFocusRunning(false)
+      }
       return
     }
 
@@ -1598,37 +1666,15 @@ export function FocusDashboard({
     } satisfies FocusSessionStateEnvelope
 
     const runtimeDailyLogRaw = (normalizedEnvelope.data as { daily_log_today?: unknown }).daily_log_today
-    if (runtimeDailyLogRaw !== undefined) {
-      console.log('[daily-log:pause] daily_log_today payload', runtimeDailyLogRaw)
-    }
     const runtimeDailyLogPayload = normalizeRuntimeDailyLogTodayPayload(runtimeDailyLogRaw)
     if (runtimeDailyLogPayload) {
       const runtimeDailyLog = runtimeDailyLogPayload.dailyLog
-      const rawDailyLog = runtimeDailyLogRaw as {
-        tracked_seconds?: unknown
-        untracked_seconds?: unknown
-        total_seconds?: unknown
-      } | null
       const timeZoneForDailyLog =
         typeof runtimeDailyLog.time_zone_name === 'string' && runtimeDailyLog.time_zone_name.trim()
           ? runtimeDailyLog.time_zone_name.trim()
           : effectiveTimeZone
-      console.log('[daily-log:pause] normalized', {
-        date_local: runtimeDailyLog.date,
-        time_zone_name: runtimeDailyLog.time_zone_name,
-        focus_entries_count: runtimeDailyLog.focus_time_entries.length,
-        idle_entries_count: runtimeDailyLog.idle_time_entries.length,
-        tracked_seconds: runtimeDailyLogPayload.trackedSeconds,
-        untracked_seconds:
-          typeof rawDailyLog?.untracked_seconds === 'number' && Number.isFinite(rawDailyLog.untracked_seconds)
-            ? Math.max(0, Math.floor(rawDailyLog.untracked_seconds))
-            : null,
-        total_seconds:
-          typeof rawDailyLog?.total_seconds === 'number' && Number.isFinite(rawDailyLog.total_seconds)
-            ? Math.max(0, Math.floor(rawDailyLog.total_seconds))
-            : null,
-      })
-      setDailyLogEntries(
+      applyOrderedDailyLogEntriesFromBackend(
+        'runtime_daily_log_today',
         adaptFocusDailyLogToUiEntries(runtimeDailyLog, {
           timeZone: timeZoneForDailyLog,
           untrackedLabel: copy.untrackedTime,
@@ -1650,6 +1696,20 @@ export function FocusDashboard({
     }
 
     applyAuthoritativeFocusSnapshot(normalizedEnvelope.data.server_now_utc, normalizedEnvelope.data.active_focus_session)
+    if (
+      shouldSyncDailyLogAfterIdleCloseRef.current &&
+      normalizedEnvelope.data.active_focus_session &&
+      isSessionRunningState(normalizedEnvelope.data.active_focus_session.session_state)
+    ) {
+      shouldSyncDailyLogAfterIdleCloseRef.current = false
+      runNonBlockingFocusSideEffect(async () => {
+        try {
+          await refreshBootstrapDerivedDataFromServer({ preserveRuntimeSession: true })
+        } catch (error) {
+          console.error('Failed to synchronize daily log after idle->working response', error)
+        }
+      })
+    }
     alignActiveTaskState(normalizedEnvelope.data.active_focus_session?.task_id ?? null)
     return normalizedEnvelope
   }
@@ -1751,87 +1811,122 @@ export function FocusDashboard({
     return tasksRefreshRequestInFlightRef.current
   }
 
-  const refreshBootstrapDerivedDataFromServer = async () => {
-    const refreshDailyLogFromServer = async () => {
-      const dateLocal = toIsoDateStringInTimeZone(new Date(), effectiveTimeZone)
+  const refreshBootstrapDerivedDataFromServer = async (
+    options: { preserveRuntimeSession?: boolean } = {},
+  ) => {
+    if (bootstrapDerivedRefreshRequestInFlightRef.current) {
+      return bootstrapDerivedRefreshRequestInFlightRef.current
+    }
 
-      try {
-        const dailyLog = await getFocusDailyLog({
-          date: dateLocal,
-          time_zone_name: effectiveTimeZone,
-        })
-        if (!dailyLog) {
-          onSignOut?.()
-          return false
-        }
+    const request = (async () => {
+      const refreshDailyLogFromServer = async () => {
+        const dateLocal = toIsoDateStringInTimeZone(new Date(), effectiveTimeZone)
 
-        console.log('[daily-log:get] response', dailyLog)
-        setDailyLogEntries(
-          adaptFocusDailyLogToUiEntries(dailyLog, {
-            timeZone: dailyLog.time_zone_name || effectiveTimeZone,
-            untrackedLabel: copy.untrackedTime,
-          }),
-        )
-
-        const trackedSeconds = dailyLog.focus_time_entries.reduce((total, entry) => {
-          if (typeof entry.elapsed_seconds !== 'number' || !Number.isFinite(entry.elapsed_seconds)) {
-            return total
+        try {
+          const dailyLog = await getFocusDailyLog({
+            date: dateLocal,
+            time_zone_name: effectiveTimeZone,
+          })
+          if (!dailyLog) {
+            onSignOut?.()
+            return false
           }
-          return total + Math.max(0, Math.floor(entry.elapsed_seconds))
-        }, 0)
 
-        setDashboardStatsState((current) => ({
-          ...current,
-          sessions: dailyLog.focus_time_entries.length,
-          totalTracked: formatSecondsCompact(trackedSeconds),
-        }))
+          applyOrderedDailyLogEntriesFromBackend(
+            'get_focus_daily_log',
+            adaptFocusDailyLogToUiEntries(dailyLog, {
+              timeZone: dailyLog.time_zone_name || effectiveTimeZone,
+              untrackedLabel: copy.untrackedTime,
+            }),
+          )
 
+          const trackedSeconds = dailyLog.focus_time_entries.reduce((total, entry) => {
+            if (typeof entry.elapsed_seconds !== 'number' || !Number.isFinite(entry.elapsed_seconds)) {
+              return total
+            }
+            return total + Math.max(0, Math.floor(entry.elapsed_seconds))
+          }, 0)
+
+          setDashboardStatsState((current) => ({
+            ...current,
+            sessions: dailyLog.focus_time_entries.length,
+            totalTracked: formatSecondsCompact(trackedSeconds),
+          }))
+
+          return true
+        } catch (error) {
+          if (error instanceof ApiHttpError && error.status === 404) {
+            return false
+          }
+
+          throw error
+        }
+      }
+
+      const didRefreshDailyLog = await refreshDailyLogFromServer()
+      if (didRefreshDailyLog) {
+        if (!options.preserveRuntimeSession) {
+          await Promise.all([refreshTasksFromServer(), syncActiveFocusSession()])
+        }
+        setSettingsHistoryReloadKey((current) => current + 1)
         return true
+      }
+
+      if (options.preserveRuntimeSession) {
+        return false
+      }
+
+      let refreshedBootstrap: Awaited<ReturnType<typeof getAppBootstrap>>
+      try {
+        refreshedBootstrap = await getAppBootstrap({ include: FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES })
       } catch (error) {
         if (error instanceof ApiHttpError && error.status === 404) {
           return false
         }
-
         throw error
       }
-    }
-
-    const didRefreshDailyLog = await refreshDailyLogFromServer()
-    if (didRefreshDailyLog) {
-      await Promise.all([refreshTasksFromServer(), syncActiveFocusSession()])
-      setSettingsHistoryReloadKey((current) => current + 1)
-      return true
-    }
-
-    let refreshedBootstrap: Awaited<ReturnType<typeof getAppBootstrap>>
-    try {
-      refreshedBootstrap = await getAppBootstrap({ include: FOCUS_DERIVED_BOOTSTRAP_REFRESH_INCLUDES })
-    } catch (error) {
-      if (error instanceof ApiHttpError && error.status === 404) {
+      if (!refreshedBootstrap) {
+        onSignOut?.()
         return false
       }
-      throw error
-    }
-    if (!refreshedBootstrap) {
-      onSignOut?.()
-      return false
-    }
 
-    setDailyLogEntries(
-      adaptBootstrapDailyLogToUiEntries(refreshedBootstrap, {
-        manualAdjustmentLabel: copy.manualAdjustment,
-        timeZone: refreshedBootstrap.preferences?.time_zone_name ?? effectiveTimeZone,
-        untrackedLabel: copy.untrackedTime,
-      }),
-    )
-    setDashboardStatsState(adaptBootstrapDashboardStatsToUi(refreshedBootstrap.dashboard_stats))
+      applyOrderedDailyLogEntriesFromBackend(
+        'bootstrap_fallback',
+        adaptBootstrapDailyLogToUiEntries(refreshedBootstrap, {
+          manualAdjustmentLabel: copy.manualAdjustment,
+          timeZone: refreshedBootstrap.preferences?.time_zone_name ?? effectiveTimeZone,
+          untrackedLabel: copy.untrackedTime,
+        }),
+      )
+      setDashboardStatsState(adaptBootstrapDashboardStatsToUi(refreshedBootstrap.dashboard_stats))
 
-    applyAuthoritativeFocusSnapshot(refreshedBootstrap.server_now_utc, refreshedBootstrap.active_focus_session)
-    alignActiveTaskState(refreshedBootstrap.active_focus_session?.task_id ?? null)
-    await refreshTasksFromServer()
+      const hasLocalRunningSession = Boolean(activeFocusSession && isSessionRunningState(activeFocusSession.session_state))
+      const bootstrapSessionIsRunning = Boolean(
+        refreshedBootstrap.active_focus_session &&
+        isSessionRunningState(refreshedBootstrap.active_focus_session.session_state),
+      )
+      // Avoid transient panel-mode flips: while local session is running, do not downgrade it from
+      // bootstrap fallback snapshots that are null/paused/stale.
+      const shouldPreserveLocalRunningSession = hasLocalRunningSession && !bootstrapSessionIsRunning
+      if (!shouldPreserveLocalRunningSession) {
+        applyAuthoritativeFocusSnapshot(refreshedBootstrap.server_now_utc, refreshedBootstrap.active_focus_session)
+      }
+      alignActiveTaskState(
+        (shouldPreserveLocalRunningSession
+          ? activeFocusSession?.task_id
+          : refreshedBootstrap.active_focus_session?.task_id) ?? null,
+      )
+      await refreshTasksFromServer()
 
-    setSettingsHistoryReloadKey((current) => current + 1)
-    return true
+      setSettingsHistoryReloadKey((current) => current + 1)
+      return true
+    })()
+
+    bootstrapDerivedRefreshRequestInFlightRef.current = request.finally(() => {
+      bootstrapDerivedRefreshRequestInFlightRef.current = null
+    })
+
+    return bootstrapDerivedRefreshRequestInFlightRef.current
   }
 
   const ensureDailyLogSnapshotFromPauseResponse = async (response: FocusSessionStateEnvelope) => {
@@ -2832,15 +2927,43 @@ export function FocusDashboard({
     }
 
     try {
+      const liveUntrackedDuration = formatLogDurationFromSeconds(
+        Math.max(0, Math.floor((Date.now() - activeUntrackedSession.startedAtMs) / 1000)),
+      )
+      const matchingBackendUntrackedEntryIndex = localizedDailyLogEntries.findIndex(
+        (entry) =>
+          !entry.taskId &&
+          entry.date === activeUntrackedSession.dateKey &&
+          entry.start === activeUntrackedSession.startLabel,
+      )
+
+      if (matchingBackendUntrackedEntryIndex >= 0) {
+        return sortLogEntriesByTime(
+          localizedDailyLogEntries.map((entry, index) =>
+            index === matchingBackendUntrackedEntryIndex
+              ? {
+                ...entry,
+                duration: liveUntrackedDuration,
+                activity: copy.untrackedTime,
+                tone: 'faded',
+                endedAtMs: Date.now(),
+              }
+              : entry,
+          ),
+        )
+      }
+
       return sortLogEntriesByTime([
         ...localizedDailyLogEntries,
         {
           id: 'log-live-untracked',
           date: activeUntrackedSession.dateKey,
           start: activeUntrackedSession.startLabel,
-          duration: formatLogDurationFromSeconds(Math.floor((Date.now() - activeUntrackedSession.startedAtMs) / 1000)),
+          duration: liveUntrackedDuration,
           activity: copy.untrackedTime,
           tone: 'faded',
+          startedAtMs: activeUntrackedSession.startedAtMs,
+          endedAtMs: Date.now(),
         },
       ])
     } catch {
@@ -3135,24 +3258,7 @@ export function FocusDashboard({
     }
 
     if (shouldAwaitBackendUntrackedClose) {
-      console.log('[daily-log:untracked] awaiting backend idle entry', {
-        started_at_ms: currentSession.startedAtMs,
-        ended_at_ms: endedAtMs,
-        elapsed_seconds_local: elapsedSeconds,
-      })
-      runNonBlockingFocusSideEffect(async () => {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(() => resolve(), 250)
-        })
-        try {
-          const refreshed = await refreshBootstrapDerivedDataFromServer()
-          console.log('[daily-log:untracked] backend refresh after idle->working close', {
-            refreshed,
-          })
-        } catch (error) {
-          console.error('Failed to refresh daily log after waiting backend idle entry close', error)
-        }
-      })
+      shouldSyncDailyLogAfterIdleCloseRef.current = true
       return
     }
 
@@ -3163,6 +3269,8 @@ export function FocusDashboard({
       duration: formatLogDurationFromSeconds(elapsedSeconds),
       activity: copy.untrackedTime,
       tone: 'faded',
+      startedAtMs: currentSession.startedAtMs,
+      endedAtMs,
     }
 
     setDailyLogEntries((currentEntries) => sortLogEntriesByTime([...currentEntries, nextEntry]))
@@ -3237,12 +3345,16 @@ export function FocusDashboard({
     }
 
     const durationLabel = formatLogDurationFromSeconds(elapsedSeconds)
+    const endedAtMs = Date.now()
+    const startedAtMs = Math.max(0, endedAtMs - elapsedSeconds * 1000)
     const nextEntry: LogEntry = {
       id: `log-focus-${crypto.randomUUID()}`,
       date: activeFocusSessionMeta.dateKey,
       start: activeFocusSessionMeta.startLabel,
       duration: durationLabel,
       taskId: activeTask.id,
+      startedAtMs,
+      endedAtMs,
     }
 
     setDailyLogEntries((currentEntries) => sortLogEntriesByTime([...currentEntries, nextEntry]))
@@ -3327,8 +3439,6 @@ export function FocusDashboard({
     }
     const elapsedBeforeSwitch = activeFocusSession ? sessionElapsedSeconds : 0
 
-    setWorkspaceGlowPulseKey((current) => current + 1)
-
     const shouldResumeSelectedTask =
       selectedTaskRuntimeState === 'paused' ||
       Boolean(
@@ -3336,15 +3446,9 @@ export function FocusDashboard({
         activeFocusSession.task_id === selectedTask.id &&
         !isSessionRunningState(activeFocusSession.session_state),
       )
-    console.log('[diagnostic:taskcard-play] decision', {
-      taskId: selectedTask.id,
-      runtimeState: selectedTaskRuntimeState,
-      runtimeMode: selectedTaskRuntimeMode,
-      requestedMode: requestedMode ?? null,
-      resolvedMode: nextMode,
-      shouldResumeSelectedTask,
-      expectedVersion: selectedTaskVersionForRuntimeCommand,
-    })
+    if (!shouldResumeSelectedTask) {
+      setWorkspaceGlowPulseKey((current) => current + 1)
+    }
     if (shouldResumeSelectedTask && selectedTaskVersionForRuntimeCommand !== null) {
       isFocusCommandInFlightRef.current = true
       const resumeEventAtUtc = new Date().toISOString()
@@ -3354,10 +3458,18 @@ export function FocusDashboard({
       const rollbackSession =
         (activeFocusSession && activeFocusSession.task_id === selectedTask.id ? activeFocusSession : null) ??
         (selectedTaskRuntimeSnapshot ? buildDerivedFocusSessionFromTask(selectedTaskRuntimeSnapshot) : null)
+      const rollbackElapsedFromPausedSession =
+        rollbackSession &&
+          rollbackSession.task_id === selectedTask.id &&
+          !isSessionRunningState(rollbackSession.session_state)
+          ? Math.max(0, Math.floor(rollbackSession.elapsed_seconds_total))
+          : null
+      const optimisticResumeElapsedSeed =
+        rollbackElapsedFromPausedSession !== null ? rollbackElapsedFromPausedSession : nextElapsedSeedSeconds
       const optimisticResumeElapsedSeconds =
         nextMode === 'timer' && nextTargetSeconds
-          ? Math.max(0, Math.min(Math.floor(nextTargetSeconds), Math.floor(nextElapsedSeedSeconds)))
-          : Math.max(0, Math.floor(nextElapsedSeedSeconds))
+          ? Math.max(0, Math.min(Math.floor(nextTargetSeconds), Math.floor(optimisticResumeElapsedSeed)))
+          : Math.max(0, Math.floor(optimisticResumeElapsedSeed))
 
       alignActiveTaskState(selectedTask.id)
       if (rollbackSession) {
@@ -3380,11 +3492,6 @@ export function FocusDashboard({
       }
 
       try {
-        console.log('[diagnostic:taskcard-play] request resume', {
-          task_id: selectedTask.id,
-          expected_version: selectedTaskVersionForRuntimeCommand,
-          event_at_utc: resumeEventAtUtc,
-        })
         const resumeResponse = await focusSessionCommand('resume', {
           task_id: selectedTask.id,
           expected_version: selectedTaskVersionForRuntimeCommand,
@@ -3453,11 +3560,6 @@ export function FocusDashboard({
           ) {
             try {
               const retryResumeAtUtc = new Date().toISOString()
-              console.log('[diagnostic:taskcard-play] request resume(retry_from_conflict)', {
-                task_id: selectedTask.id,
-                expected_version: conflictSession.version,
-                event_at_utc: retryResumeAtUtc,
-              })
               const retryResponse = await focusSessionCommand('resume', {
                 task_id: selectedTask.id,
                 expected_version: Math.max(1, Math.floor(conflictSession.version)),
@@ -3537,11 +3639,6 @@ export function FocusDashboard({
       isFocusCommandInFlightRef.current = true
       try {
         const startEventAtUtc = new Date().toISOString()
-        console.log('[diagnostic:taskcard-play] request start', {
-          task_id: selectedTask.id,
-          timer_mode: nextMode,
-          event_at_utc: startEventAtUtc,
-        })
         const response = await startFocusSession({
           task_id: selectedTask.id,
           timer_mode: nextMode,
@@ -4263,8 +4360,6 @@ export function FocusDashboard({
       })
       const rollbackLocalRunningState = isFocusRunning
       const fallbackStopReason = fallbackRuntimeState === 'paused' ? 'stopped_from_paused' : 'stopped'
-      const shouldLogStopwatchWorkingStopFallback =
-        fallbackRuntimeMode === 'stopwatch' && fallbackRuntimeState === 'working'
       isFocusCommandInFlightRef.current = true
       const optimisticStoppedAtUtc = new Date().toISOString()
       const rollbackElapsedSeconds = sessionElapsedSeconds
@@ -4276,17 +4371,6 @@ export function FocusDashboard({
         startTaskCooldown(fallbackTaskId)
       }
       try {
-        if (shouldLogStopwatchWorkingStopFallback) {
-          console.log('[diagnostic:stop-working-stopwatch] request', {
-            source: 'fallback',
-            task_id: fallbackTaskId,
-            expected_version: fallbackExpectedVersion,
-            event_at_utc: optimisticStoppedAtUtc,
-            stop_reason: fallbackStopReason,
-            runtime_state: fallbackRuntimeState,
-            runtime_mode: fallbackRuntimeMode,
-          })
-        }
         const response = await focusSessionCommand('stop', {
           task_id: fallbackTaskId,
           expected_version: fallbackExpectedVersion,
@@ -4305,17 +4389,6 @@ export function FocusDashboard({
         const createdTimeEntryId = response.data.created_time_entry_id ?? null
         if (createdTimeEntryId) {
           await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
-        }
-        if (shouldLogStopwatchWorkingStopFallback) {
-          console.log('[diagnostic:stop-working-stopwatch] response', {
-            source: 'fallback',
-            request_event_at_utc: optimisticStoppedAtUtc,
-            server_now_utc: response.data.server_now_utc,
-            effective_event_at_utc: response.data.effective_event_at_utc,
-            active_focus_session: response.data.active_focus_session,
-            stopped_session_summary: response.data.stopped_session_summary ?? null,
-            created_time_entry_id: response.data.created_time_entry_id ?? null,
-          })
         }
 
         applyFocusSessionEnvelope(response)
@@ -4374,8 +4447,6 @@ export function FocusDashboard({
     const rollbackSession = activeSessionForStop
     const rollbackElapsedSeconds = sessionElapsedSeconds
     const activeStopReason = activeSessionForStop.session_state === 'paused' ? 'stopped_from_paused' : 'stopped'
-    const shouldLogStopwatchWorkingStop =
-      activeSessionForStop.timer_mode === 'stopwatch' && activeSessionForStop.session_state === 'working'
     ensureTaskTrackedDurationAtLeast(activeSessionTaskId, optimisticTrackedAfterStopSeconds)
     applyAuthoritativeFocusSnapshot(optimisticStoppedAtUtc, null)
     setSessionElapsedSeconds(0)
@@ -4385,17 +4456,6 @@ export function FocusDashboard({
       startTaskCooldown(activeSessionTaskId)
     }
     try {
-      if (shouldLogStopwatchWorkingStop) {
-        console.log('[diagnostic:stop-working-stopwatch] request', {
-          source: 'active_session',
-          task_id: activeSessionTaskId,
-          expected_version: activeSessionForStop.version,
-          event_at_utc: optimisticStoppedAtUtc,
-          stop_reason: activeStopReason,
-          runtime_state: activeSessionForStop.session_state,
-          runtime_mode: activeSessionForStop.timer_mode,
-        })
-      }
       const response = await focusSessionCommand('stop', {
         task_id: activeSessionTaskId,
         expected_version: activeSessionForStop.version,
@@ -4414,17 +4474,6 @@ export function FocusDashboard({
       const createdTimeEntryId = response.data.created_time_entry_id ?? null
       if (createdTimeEntryId) {
         await handleCreatedTimeEntryInvalidation(createdTimeEntryId)
-      }
-      if (shouldLogStopwatchWorkingStop) {
-        console.log('[diagnostic:stop-working-stopwatch] response', {
-          source: 'active_session',
-          request_event_at_utc: optimisticStoppedAtUtc,
-          server_now_utc: response.data.server_now_utc,
-          effective_event_at_utc: response.data.effective_event_at_utc,
-          active_focus_session: response.data.active_focus_session,
-          stopped_session_summary: response.data.stopped_session_summary ?? null,
-          created_time_entry_id: response.data.created_time_entry_id ?? null,
-        })
       }
 
       applyFocusSessionEnvelope(response)
@@ -4805,7 +4854,6 @@ export function FocusDashboard({
         onConfirm={handleConfirmSignOut}
       />
       <SettingsModal
-        autoDetectTimeZone={autoDetectTimeZone}
         backgroundMusicVolume={backgroundMusicVolume}
         dashboardStats={dashboardStatsState}
         effectiveTimeZone={effectiveTimeZone}
@@ -4817,15 +4865,15 @@ export function FocusDashboard({
         onBackgroundMusicVolumeChange={handleBackgroundMusicVolumeChangePersist}
         onClose={handleCloseSettings}
         onLocaleChange={handleLocaleChangePersist}
-        onTimeZoneChange={handleTimeZoneChangePersist}
-        onToggleAutoDetectTimeZone={handleToggleAutoDetectTimeZonePersist}
+        onTimerAlarmVolumeChange={handleTimerAlarmVolumeChangePersist}
         onToggleTaskSwitchConfirmation={handleToggleTaskSwitchConfirmationPersist}
         onToggleUiInteractionSfx={handleToggleUiInteractionSfxPersist}
+        onUiInteractionSfxVolumeChange={handleUiInteractionSfxVolumeChangePersist}
         requireTaskSwitchConfirmation={requireTaskSwitchConfirmation}
-        selectedTimeZone={selectedTimeZone}
         tasks={localizedTaskList}
-        timeZoneOptions={timeZoneOptions}
+        timerAlarmVolume={timerAlarmVolume}
         uiInteractionSfxEnabled={uiInteractionSfxEnabled}
+        uiInteractionSfxVolume={uiInteractionSfxVolume}
       />
     </div >
   )
@@ -4927,6 +4975,24 @@ function localizeStaticTaskTitle(task: Task, locale: 'es' | 'en'): Task {
 
 function sortLogEntriesByTime(entries: LogEntry[]) {
   return [...entries].sort((a, b) => {
+    const startedAtMsA =
+      typeof a.startedAtMs === 'number' && Number.isFinite(a.startedAtMs) ? a.startedAtMs : Number.NaN
+    const startedAtMsB =
+      typeof b.startedAtMs === 'number' && Number.isFinite(b.startedAtMs) ? b.startedAtMs : Number.NaN
+    const hasPreciseStartedAtA = Number.isFinite(startedAtMsA)
+    const hasPreciseStartedAtB = Number.isFinite(startedAtMsB)
+    if (hasPreciseStartedAtA && hasPreciseStartedAtB && startedAtMsA !== startedAtMsB) {
+      return startedAtMsA - startedAtMsB
+    }
+
+    const endedAtMsA = typeof a.endedAtMs === 'number' && Number.isFinite(a.endedAtMs) ? a.endedAtMs : Number.NaN
+    const endedAtMsB = typeof b.endedAtMs === 'number' && Number.isFinite(b.endedAtMs) ? b.endedAtMs : Number.NaN
+    const hasPreciseEndedAtA = Number.isFinite(endedAtMsA)
+    const hasPreciseEndedAtB = Number.isFinite(endedAtMsB)
+    if (hasPreciseEndedAtA && hasPreciseEndedAtB && endedAtMsA !== endedAtMsB) {
+      return endedAtMsA - endedAtMsB
+    }
+
     const dateA = a.date ?? ''
     const dateB = b.date ?? ''
     if (dateA !== dateB) {
@@ -4935,7 +5001,13 @@ function sortLogEntriesByTime(entries: LogEntry[]) {
     }
 
     // Oldest time first (supports HH:MM:SS).
-    return parseStartLabelToSecondsOfDay(a.start) - parseStartLabelToSecondsOfDay(b.start)
+    const timeDiff = parseStartLabelToSecondsOfDay(a.start) - parseStartLabelToSecondsOfDay(b.start)
+    if (timeDiff !== 0) {
+      return timeDiff
+    }
+
+    // Stable deterministic order when date+time labels are equal.
+    return (a.id ?? '').localeCompare(b.id ?? '')
   })
 }
 

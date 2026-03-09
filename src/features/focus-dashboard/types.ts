@@ -31,6 +31,8 @@ export interface LogEntry {
   activity?: string
   taskId?: string
   tone?: LogTone
+  startedAtMs?: number
+  endedAtMs?: number
 }
 
 export interface SoundOption {

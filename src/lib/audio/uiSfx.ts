@@ -2,6 +2,7 @@ import { Howl, Howler } from 'howler'
 
 type UiSfxWindow = Window & {
   __focusFlowUiSfxInitialized__?: boolean
+  __focusFlowUiSfxListenersAttached__?: boolean
 }
 
 const UI_CLICK_SELECTOR = 'button, a[href], summary, input[type="button"], input[type="submit"]'
@@ -15,6 +16,15 @@ const TEXT_INPUT_TYPES = new Set([
   'tel',
   'number',
 ])
+const DEFAULT_UI_INTERACTION_SFX_VOLUME = 0.12
+const DEFAULT_BACKGROUND_MUSIC_VOLUME = 0.08
+const DEFAULT_TIMER_ALARM_VOLUME = 0.22
+const TYPING_VOLUME_MULTIPLIER = 0.5
+
+const UI_SFX_ENABLED_STORAGE_KEY = 'velor.settings.audio.ui_sfx_enabled'
+const UI_SFX_VOLUME_STORAGE_KEY = 'velor.settings.audio.ui_sfx_volume'
+const BACKGROUND_MUSIC_VOLUME_STORAGE_KEY = 'velor.settings.audio.background_music_volume'
+const TIMER_ALARM_VOLUME_STORAGE_KEY = 'velor.settings.audio.timer_alarm_volume'
 
 let clickHowl: Howl | null = null
 let typingHowl: Howl | null = null
@@ -24,7 +34,10 @@ let timerRingtoneFallbackHowl: Howl | null = null
 const backgroundMusicListeners = new Set<(isPlaying: boolean) => void>()
 const timerRingtoneListeners = new Set<(isPlaying: boolean) => void>()
 let uiInteractionSfxEnabled = true
-let backgroundMusicVolume = 0.08
+let uiInteractionSfxVolume = DEFAULT_UI_INTERACTION_SFX_VOLUME
+let backgroundMusicVolume = DEFAULT_BACKGROUND_MUSIC_VOLUME
+let timerAlarmVolume = DEFAULT_TIMER_ALARM_VOLUME
+let hasLoadedPersistedAudioSettings = false
 let backgroundMusicFadeStopTimeoutId: number | null = null
 let timerRingtoneFallbackStartTimeoutId: number | null = null
 let shouldResumeBackgroundMusicAfterTimerAlarm = false
@@ -43,16 +56,30 @@ const TIMER_RINGTONE_SRC_CANDIDATES = [
   '/ringtones/ringtone-1.mp3',
 ]
 
+const CLICK_SFX_SRC_CANDIDATES = [
+  '/sfx/click.mp3',
+  // Fallback tone if MP3 cannot be loaded.
+  createUiClickWavDataUri(),
+]
+
 export function initUiSfx() {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return
   }
 
   const uiWindow = window as UiSfxWindow
-  if (uiWindow.__focusFlowUiSfxInitialized__) {
+  if (
+    uiWindow.__focusFlowUiSfxInitialized__ &&
+    clickHowl &&
+    typingHowl &&
+    backgroundMusicHowl &&
+    timerRingtoneHowl &&
+    timerRingtoneFallbackHowl
+  ) {
     return
   }
-  uiWindow.__focusFlowUiSfxInitialized__ = true
+
+  ensurePersistedAudioSettingsLoaded()
 
   Howler.autoUnlock = true
   Howler.autoSuspend = true
@@ -62,14 +89,14 @@ export function initUiSfx() {
   }
 
   clickHowl = new Howl({
-    src: ['/sfx/click.mp3', createUiClickWavDataUri()],
-    volume: 0.12,
+    src: CLICK_SFX_SRC_CANDIDATES,
+    volume: uiInteractionSfxVolume,
     preload: true,
   })
 
   typingHowl = new Howl({
     src: [createTypingKeyWavDataUri()],
-    volume: 0.06,
+    volume: getTypingHowlVolume(uiInteractionSfxVolume),
     preload: true,
   })
 
@@ -88,7 +115,7 @@ export function initUiSfx() {
 
   timerRingtoneHowl = new Howl({
     src: TIMER_RINGTONE_SRC_CANDIDATES,
-    volume: 0.22,
+    volume: timerAlarmVolume,
     loop: true,
     preload: true,
     onplay: emitTimerRingtoneState,
@@ -101,7 +128,7 @@ export function initUiSfx() {
 
   timerRingtoneFallbackHowl = new Howl({
     src: [createTimerAlarmWavDataUri()],
-    volume: 0.22,
+    volume: timerAlarmVolume,
     loop: true,
     preload: true,
     onplay: emitTimerRingtoneState,
@@ -112,78 +139,88 @@ export function initUiSfx() {
     onloaderror: emitTimerRingtoneState,
   })
 
-  let lastPlayAt = 0
-  let lastTypeAt = 0
+  if (!uiWindow.__focusFlowUiSfxListenersAttached__) {
+    let lastPlayAt = 0
+    let lastTypeAt = 0
 
-  const onDocumentClick = (event: MouseEvent) => {
-    const target = event.target
-    if (!(target instanceof Element)) {
-      return
+    const onDocumentClick = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) {
+        return
+      }
+
+      if (target.closest('[data-sfx-click="off"]')) {
+        return
+      }
+
+      const interactive = target.closest(UI_CLICK_SELECTOR)
+      if (!(interactive instanceof HTMLElement)) {
+        return
+      }
+
+      if (interactive.matches(':disabled') || interactive.getAttribute('aria-disabled') === 'true') {
+        return
+      }
+
+      const now = performance.now()
+      if (now - lastPlayAt < 45) {
+        return
+      }
+      lastPlayAt = now
+
+      playUiClick()
     }
 
-    if (target.closest('[data-sfx-click="off"]')) {
-      return
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+        return
+      }
+
+      if (!shouldPlayTypingSfxForKey(event)) {
+        return
+      }
+
+      const target = event.target
+      if (!(target instanceof Element)) {
+        return
+      }
+
+      if (target.closest('[data-sfx-type="off"]')) {
+        return
+      }
+
+      if (!isEditableTarget(target)) {
+        return
+      }
+
+      const now = performance.now()
+      if (now - lastTypeAt < 16) {
+        return
+      }
+      lastTypeAt = now
+
+      playUiTyping()
     }
 
-    const interactive = target.closest(UI_CLICK_SELECTOR)
-    if (!(interactive instanceof HTMLElement)) {
-      return
-    }
-
-    if (interactive.matches(':disabled') || interactive.getAttribute('aria-disabled') === 'true') {
-      return
-    }
-
-    const now = performance.now()
-    if (now - lastPlayAt < 45) {
-      return
-    }
-    lastPlayAt = now
-
-    playUiClick()
+    document.addEventListener('click', onDocumentClick, true)
+    document.addEventListener('keydown', onDocumentKeyDown, true)
+    uiWindow.__focusFlowUiSfxListenersAttached__ = true
   }
 
-  const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
-      return
-    }
-
-    if (!shouldPlayTypingSfxForKey(event)) {
-      return
-    }
-
-    const target = event.target
-    if (!(target instanceof Element)) {
-      return
-    }
-
-    if (target.closest('[data-sfx-type="off"]')) {
-      return
-    }
-
-    if (!isEditableTarget(target)) {
-      return
-    }
-
-    const now = performance.now()
-    if (now - lastTypeAt < 16) {
-      return
-    }
-    lastTypeAt = now
-
-    playUiTyping()
-  }
-
-  document.addEventListener('click', onDocumentClick, true)
-  document.addEventListener('keydown', onDocumentKeyDown, true)
+  uiWindow.__focusFlowUiSfxInitialized__ = true
 }
 
 export function playUiClick() {
+  if (!clickHowl) {
+    initUiSfx()
+  }
+
   if (!clickHowl || !uiInteractionSfxEnabled) {
     return
   }
 
   try {
+    resumeHowlerAudioContextIfNeeded()
     clickHowl.stop()
     clickHowl.play()
   } catch {
@@ -192,11 +229,16 @@ export function playUiClick() {
 }
 
 export function playUiTyping() {
+  if (!typingHowl) {
+    initUiSfx()
+  }
+
   if (!typingHowl || !uiInteractionSfxEnabled) {
     return
   }
 
   try {
+    resumeHowlerAudioContextIfNeeded()
     typingHowl.stop()
     typingHowl.play()
   } catch {
@@ -237,6 +279,8 @@ export function getTimerRingtonePlaying() {
 }
 
 export function getBackgroundMusicVolume() {
+  ensurePersistedAudioSettingsLoaded()
+
   if (backgroundMusicHowl) {
     return clamp(backgroundMusicHowl.volume(), 0, 1)
   }
@@ -245,6 +289,8 @@ export function getBackgroundMusicVolume() {
 }
 
 export function setBackgroundMusicVolume(nextVolume: number) {
+  ensurePersistedAudioSettingsLoaded()
+
   const clampedVolume = clamp(Number.isFinite(nextVolume) ? nextVolume : backgroundMusicVolume, 0, 1)
   backgroundMusicVolume = clampedVolume
 
@@ -252,16 +298,68 @@ export function setBackgroundMusicVolume(nextVolume: number) {
     backgroundMusicHowl.volume(clampedVolume)
   }
 
+  persistVolumeSetting(BACKGROUND_MUSIC_VOLUME_STORAGE_KEY, clampedVolume)
   return clampedVolume
 }
 
 export function getUiInteractionSfxEnabled() {
+  ensurePersistedAudioSettingsLoaded()
   return uiInteractionSfxEnabled
 }
 
 export function setUiInteractionSfxEnabled(enabled: boolean) {
+  ensurePersistedAudioSettingsLoaded()
   uiInteractionSfxEnabled = Boolean(enabled)
+  persistBooleanSetting(UI_SFX_ENABLED_STORAGE_KEY, uiInteractionSfxEnabled)
   return uiInteractionSfxEnabled
+}
+
+export function getUiInteractionSfxVolume() {
+  ensurePersistedAudioSettingsLoaded()
+  return clamp(uiInteractionSfxVolume, 0, 1)
+}
+
+export function setUiInteractionSfxVolume(nextVolume: number) {
+  ensurePersistedAudioSettingsLoaded()
+
+  const clampedVolume = clamp(Number.isFinite(nextVolume) ? nextVolume : uiInteractionSfxVolume, 0, 1)
+  uiInteractionSfxVolume = clampedVolume
+
+  if (!clickHowl || !typingHowl) {
+    initUiSfx()
+  }
+
+  if (clickHowl) {
+    clickHowl.volume(clampedVolume)
+  }
+  if (typingHowl) {
+    typingHowl.volume(getTypingHowlVolume(clampedVolume))
+  }
+
+  persistVolumeSetting(UI_SFX_VOLUME_STORAGE_KEY, clampedVolume)
+  return clampedVolume
+}
+
+export function getTimerAlarmVolume() {
+  ensurePersistedAudioSettingsLoaded()
+  return clamp(timerAlarmVolume, 0, 1)
+}
+
+export function setTimerAlarmVolume(nextVolume: number) {
+  ensurePersistedAudioSettingsLoaded()
+
+  const clampedVolume = clamp(Number.isFinite(nextVolume) ? nextVolume : timerAlarmVolume, 0, 1)
+  timerAlarmVolume = clampedVolume
+
+  if (timerRingtoneHowl) {
+    timerRingtoneHowl.volume(clampedVolume)
+  }
+  if (timerRingtoneFallbackHowl) {
+    timerRingtoneFallbackHowl.volume(clampedVolume)
+  }
+
+  persistVolumeSetting(TIMER_ALARM_VOLUME_STORAGE_KEY, clampedVolume)
+  return clampedVolume
 }
 
 export function subscribeBackgroundMusicState(listener: (isPlaying: boolean) => void) {
@@ -431,6 +529,45 @@ function emitBackgroundMusicState() {
 function emitTimerRingtoneState() {
   const isPlaying = getTimerRingtonePlaying()
   timerRingtoneListeners.forEach((listener) => listener(isPlaying))
+}
+
+function ensurePersistedAudioSettingsLoaded() {
+  if (hasLoadedPersistedAudioSettings || typeof window === 'undefined') {
+    return
+  }
+
+  hasLoadedPersistedAudioSettings = true
+
+  const storedUiSfxEnabled = safeReadLocalStorage(UI_SFX_ENABLED_STORAGE_KEY)
+  if (storedUiSfxEnabled === '1' || storedUiSfxEnabled === '0') {
+    uiInteractionSfxEnabled = storedUiSfxEnabled === '1'
+  }
+
+  uiInteractionSfxVolume = readStoredVolumeSetting(UI_SFX_VOLUME_STORAGE_KEY, uiInteractionSfxVolume)
+  backgroundMusicVolume = readStoredVolumeSetting(BACKGROUND_MUSIC_VOLUME_STORAGE_KEY, backgroundMusicVolume)
+  timerAlarmVolume = readStoredVolumeSetting(TIMER_ALARM_VOLUME_STORAGE_KEY, timerAlarmVolume)
+}
+
+function readStoredVolumeSetting(storageKey: string, fallbackVolume: number) {
+  const raw = safeReadLocalStorage(storageKey)
+  if (raw === null) {
+    return fallbackVolume
+  }
+
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) {
+    return fallbackVolume
+  }
+
+  return clamp(parsed, 0, 1)
+}
+
+function persistVolumeSetting(storageKey: string, volume: number) {
+  safeWriteLocalStorage(storageKey, String(clamp(volume, 0, 1)))
+}
+
+function persistBooleanSetting(storageKey: string, value: boolean) {
+  safeWriteLocalStorage(storageKey, value ? '1' : '0')
 }
 
 function cancelPendingBackgroundMusicFadeStop() {
@@ -616,6 +753,50 @@ function writeAscii(target: Uint8Array, offset: number, value: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function getTypingHowlVolume(baseVolume: number) {
+  return clamp(baseVolume * TYPING_VOLUME_MULTIPLIER, 0, 1)
+}
+
+function resumeHowlerAudioContextIfNeeded() {
+  const howlerWithCtx = Howler as typeof Howler & {
+    ctx?: AudioContext
+  }
+  const ctx = howlerWithCtx.ctx
+  if (!ctx) {
+    return
+  }
+
+  if (ctx.state === 'suspended') {
+    void ctx.resume().catch(() => {
+      // Ignore resume errors due to platform restrictions.
+    })
+  }
+}
+
+function safeReadLocalStorage(key: string) {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function safeWriteLocalStorage(key: string, value: string) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Ignore storage quota/security restrictions.
+  }
 }
 
 function pseudoRandom(seed: number) {

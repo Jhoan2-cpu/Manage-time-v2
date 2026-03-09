@@ -33,17 +33,16 @@ type SettingsModalProps = {
   dashboardStats: DashboardStats
   onLocaleChange: (nextValue: 'es' | 'en') => void
   uiInteractionSfxEnabled: boolean
+  uiInteractionSfxVolume: number
   backgroundMusicVolume: number
+  timerAlarmVolume: number
   requireTaskSwitchConfirmation: boolean
   onToggleUiInteractionSfx: (nextValue: boolean) => void
+  onUiInteractionSfxVolumeChange: (nextValue: number) => void
   onBackgroundMusicVolumeChange: (nextValue: number) => void
+  onTimerAlarmVolumeChange: (nextValue: number) => void
   onToggleTaskSwitchConfirmation: (nextValue: boolean) => void
-  autoDetectTimeZone: boolean
-  selectedTimeZone: string
   effectiveTimeZone: string
-  timeZoneOptions: string[]
-  onToggleAutoDetectTimeZone: (nextValue: boolean) => void
-  onTimeZoneChange: (nextValue: string) => void
   onAuthExpired?: () => void
   historyReloadKey?: number
 }
@@ -59,17 +58,16 @@ export function SettingsModal({
   dashboardStats,
   onLocaleChange,
   uiInteractionSfxEnabled,
+  uiInteractionSfxVolume,
   backgroundMusicVolume,
+  timerAlarmVolume,
   requireTaskSwitchConfirmation,
   onToggleUiInteractionSfx,
+  onUiInteractionSfxVolumeChange,
   onBackgroundMusicVolumeChange,
+  onTimerAlarmVolumeChange,
   onToggleTaskSwitchConfirmation,
-  autoDetectTimeZone,
-  selectedTimeZone,
   effectiveTimeZone,
-  timeZoneOptions,
-  onToggleAutoDetectTimeZone,
-  onTimeZoneChange,
   onAuthExpired,
   historyReloadKey,
 }: SettingsModalProps) {
@@ -259,19 +257,17 @@ export function SettingsModal({
         <div className="app-scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
           <div className="mx-auto grid w-full max-w-7xl gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
             <SettingsPreferencesPanel
-              autoDetectTimeZone={autoDetectTimeZone}
               backgroundMusicVolume={backgroundMusicVolume}
-              effectiveTimeZone={effectiveTimeZone}
-              onLocaleChange={onLocaleChange}
               onBackgroundMusicVolumeChange={onBackgroundMusicVolumeChange}
-              onTimeZoneChange={onTimeZoneChange}
-              onToggleAutoDetectTimeZone={onToggleAutoDetectTimeZone}
+              onLocaleChange={onLocaleChange}
+              onTimerAlarmVolumeChange={onTimerAlarmVolumeChange}
               onToggleTaskSwitchConfirmation={onToggleTaskSwitchConfirmation}
               onToggleUiInteractionSfx={onToggleUiInteractionSfx}
+              onUiInteractionSfxVolumeChange={onUiInteractionSfxVolumeChange}
               requireTaskSwitchConfirmation={requireTaskSwitchConfirmation}
-              selectedTimeZone={selectedTimeZone}
-              timeZoneOptions={timeZoneOptions}
+              timerAlarmVolume={timerAlarmVolume}
               uiInteractionSfxEnabled={uiInteractionSfxEnabled}
+              uiInteractionSfxVolume={uiInteractionSfxVolume}
             />
 
             <section className="relative rounded-2xl bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_44%),linear-gradient(180deg,rgba(8,16,34,0.93),rgba(5,12,25,0.96))] p-4 shadow-[0_20px_55px_rgba(2,8,20,0.32),inset_0_1px_0_rgba(148,163,184,0.04)] sm:p-5">

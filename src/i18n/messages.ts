@@ -119,9 +119,17 @@
         label: 'Sonidos UI (Click + Escritura)',
         description: 'Reproduce sonidos cortos al hacer clic o escribir para tener respuesta de la interfaz.',
       },
+      uiSoundsVolume: {
+        label: 'Volumen Click + Escritura',
+        description: 'Ajusta el volumen de los sonidos de clic y escritura de la interfaz.',
+      },
       musicVolume: {
         label: 'Volumen de Música de Fondo',
         description: 'Controla el volumen de la música de fondo mientras trabajas.',
+      },
+      timerAlarmVolume: {
+        label: 'Volumen de Alarma',
+        description: 'Controla el volumen de la alarma cuando el temporizador llega a cero.',
       },
       taskSwitchConfirm: {
         label: 'Confirmar Cambio de Tarea',
@@ -266,9 +274,17 @@
         label: 'UI Sounds (Click + Typing)',
         description: 'Play short sounds when you click or type for interface feedback.',
       },
+      uiSoundsVolume: {
+        label: 'Click + Typing Volume',
+        description: 'Adjust the volume of click and typing interface sounds.',
+      },
       musicVolume: {
         label: 'Background Music Volume',
         description: 'Control the background music volume while you work.',
+      },
+      timerAlarmVolume: {
+        label: 'Alarm Volume',
+        description: 'Control the alarm volume when the timer reaches zero.',
       },
       taskSwitchConfirm: {
         label: 'Confirm Task Switch',

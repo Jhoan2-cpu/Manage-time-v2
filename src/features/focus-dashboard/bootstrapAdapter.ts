@@ -261,6 +261,13 @@ function adaptBootstrapDailyLogEntry(
           ? options.manualAdjustmentLabel
           : options.untrackedLabel
 
+  const startedAtMs = Number.isFinite(Date.parse(entry.started_at_utc))
+    ? Date.parse(entry.started_at_utc)
+    : Number.NEGATIVE_INFINITY
+  const endedAtMs = Number.isFinite(Date.parse(entry.ended_at_utc))
+    ? Date.parse(entry.ended_at_utc)
+    : Number.POSITIVE_INFINITY
+
   return {
     id: entry.id,
     date: resolveEntryDate(entry.started_at_utc, options.fallbackDate, options.timeZone),
@@ -269,6 +276,8 @@ function adaptBootstrapDailyLogEntry(
     taskId: hasTaskId ? entry.task_id!.trim() : undefined,
     activity,
     tone,
+    startedAtMs,
+    endedAtMs,
   }
 }
 

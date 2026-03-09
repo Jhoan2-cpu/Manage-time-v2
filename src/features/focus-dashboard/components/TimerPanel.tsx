@@ -114,8 +114,6 @@ export function TimerPanel({
   const previousTimerWholeSecondsRef = useRef<number | null>(null)
   const previousTimerMillisecondsRef = useRef<number | null>(null)
   const previousTimerWholeSecondsUiRef = useRef<number | null>(null)
-  const timerFirstSecondDiagnosticUntilMsRef = useRef(0)
-  const lastTimerBacktrackLogAtMsRef = useRef(0)
   const progressAnchorRef = useRef({ percent: 0, startedAtMs: 0 })
   const [smoothedProgressPercent, setSmoothedProgressPercent] = useState(0)
   const [stopwatchWholeSeconds, setStopwatchWholeSeconds] = useState(() => parseStopwatchLabelToSeconds(stopwatchLabel))
@@ -274,7 +272,6 @@ export function TimerPanel({
       previousTimerWholeSecondsRef.current = null
       previousTimerMillisecondsRef.current = null
       previousTimerWholeSecondsUiRef.current = null
-      timerFirstSecondDiagnosticUntilMsRef.current = 0
       return
     }
 
@@ -289,7 +286,6 @@ export function TimerPanel({
       previousTimerWholeSecondsRef.current = wholeSeconds
       previousTimerMillisecondsRef.current = null
       previousTimerWholeSecondsUiRef.current = null
-      timerFirstSecondDiagnosticUntilMsRef.current = 0
       return
     }
 
@@ -302,29 +298,14 @@ export function TimerPanel({
     if (shouldSetAnchor) {
       const nowMs = performance.now()
       timerAnchorMsRef.current = nowMs + wholeSeconds * 1000
-      timerFirstSecondDiagnosticUntilMsRef.current = nowMs + 1500
       previousTimerMillisecondsRef.current = null
       previousTimerWholeSecondsUiRef.current = wholeSeconds
-      console.log('[timerpanel:timer-ms] anchor set', {
-        taskId: activeTaskId,
-        wholeSeconds,
-        reason: 'start_or_resume_or_task_change',
-        nowMs,
-        anchorMs: timerAnchorMsRef.current,
-      })
     } else if (timerAnchorMsRef.current !== null) {
       const remainingMs = Math.max(0, timerAnchorMsRef.current - performance.now())
       const derivedWholeSeconds = Math.max(0, Math.ceil(remainingMs / 1000))
       if (Math.abs(wholeSeconds - derivedWholeSeconds) >= 2) {
         const nowMs = performance.now()
         timerAnchorMsRef.current = nowMs + wholeSeconds * 1000
-        console.log('[timerpanel:timer-ms] anchor resync', {
-          taskId: activeTaskId,
-          wholeSeconds,
-          derivedWholeSeconds,
-          nowMs,
-          anchorMs: timerAnchorMsRef.current,
-        })
       }
     }
 
@@ -357,27 +338,11 @@ export function TimerPanel({
         let nextMilliseconds = remainingMsCeil > 0 ? (remainingMsCeil - 1) % 1000 : 0
         const previousMs = previousTimerMillisecondsRef.current
         const previousWholeSecondsUi = previousTimerWholeSecondsUiRef.current
-        const isWithinFirstSecondAfterResume = nowMs <= timerFirstSecondDiagnosticUntilMsRef.current
         const didMillisecondBacktrackWithinSameUiSecond =
           previousMs !== null &&
           previousWholeSecondsUi !== null &&
           previousWholeSecondsUi === wholeSecondsUi &&
           nextMilliseconds > previousMs
-        if (isWithinFirstSecondAfterResume && didMillisecondBacktrackWithinSameUiSecond) {
-          if (nowMs - lastTimerBacktrackLogAtMsRef.current > 120) {
-            console.log('[timerpanel:timer-ms] first-second-backtrack', {
-              taskId: activeTask?.id ?? null,
-              wholeSecondsUi,
-              previousMs,
-              nextMs: nextMilliseconds,
-              remainingMs,
-              anchorMs,
-              nowMs,
-            })
-            lastTimerBacktrackLogAtMsRef.current = nowMs
-          }
-        }
-
         if (didMillisecondBacktrackWithinSameUiSecond && previousMs !== null) {
           // Keep countdown monotonic while the authoritative whole-second value catches up.
           nextMilliseconds = Math.max(0, previousMs - 1)

@@ -20,6 +20,8 @@ import {
 } from '../../lib/mock/mockBackend'
 import { roundElapsedSecondsBetweenMs } from './utils/time'
 
+let lastDailyLogBackendDebugSignature: string | null = null
+
 export type AppBootstrapInclude =
   | 'tasks'
   | 'preferences'
@@ -430,6 +432,25 @@ type TimeEntryCreatedEnvelope = {
   data: TimeEntryCreated
 }
 
+function logDailyLogBackendPayload(source: string, payload: unknown) {
+  let serialized = ''
+  try {
+    serialized = JSON.stringify(payload ?? null)
+  } catch {
+    serialized = String(payload ?? '')
+  }
+
+  if (lastDailyLogBackendDebugSignature === serialized) {
+    return
+  }
+  lastDailyLogBackendDebugSignature = serialized
+
+  console.log('[daily-log:backend] payload (historial del dia actual)', {
+    source,
+    data: payload ?? null,
+  })
+}
+
 export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
   if (isMockBackendEnabled()) {
     const data = mockGetAppBootstrap()
@@ -443,6 +464,7 @@ export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
     }
 
     const json = await parseJsonResponse<AppBootstrapEnvelope>(response, 'App bootstrap failed')
+    logDailyLogBackendPayload('getAppBootstrap.daily_log', json.data.daily_log ?? null)
     return json.data
   } catch (error) {
     if (
@@ -457,6 +479,7 @@ export async function getAppBootstrap(options: GetAppBootstrapOptions = {}) {
       }
 
       const fallbackJson = await parseJsonResponse<AppBootstrapEnvelope>(fallbackResponse, 'App bootstrap failed')
+      logDailyLogBackendPayload('getAppBootstrap.fallback.daily_log', fallbackJson.data.daily_log ?? null)
       return fallbackJson.data
     }
 
@@ -820,9 +843,6 @@ export async function focusSessionCommand(
     : endpoint === 'resume'
       ? normalizeResumePayload(networkPayloadBase as ResumeFocusSessionPayload)
     : networkPayloadBase
-  if (endpoint === 'pause') {
-    console.log('[focus-runtime:pause] request', networkPayload)
-  }
   const response = await requestFocusRuntime(endpoint, {
     method: 'POST',
     headers: {
@@ -842,17 +862,7 @@ export async function focusSessionCommand(
     return null
   }
 
-  const parsed = await parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
-  if (endpoint === 'pause') {
-    const dailyLogToday = (parsed.data as { daily_log_today?: unknown }).daily_log_today
-    console.log('[focus-runtime:pause] response', {
-      server_now_utc: parsed.data.server_now_utc,
-      effective_event_at_utc: parsed.data.effective_event_at_utc,
-      active_focus_session: parsed.data.active_focus_session,
-      daily_log_today: dailyLogToday ?? null,
-    })
-  }
-  return parsed
+  return parseJsonResponse<FocusSessionStateEnvelope>(response, `Focus session ${endpoint} failed`)
 }
 
 async function requestFocusRuntime(
@@ -1158,6 +1168,7 @@ export async function getFocusDailyLog(params: { date: string; time_zone_name: s
   }
 
   const json = await parseJsonResponse<FocusDailyLogEnvelope>(response, 'Focus daily log lookup failed')
+  logDailyLogBackendPayload('getFocusDailyLog', json.data)
   return json.data
 }
 
